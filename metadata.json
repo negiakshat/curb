@@ -1,0 +1,6 @@
+{
+  "name": "Curb",
+  "description": "AI-powered parking assistant that instantly scans parking signs, interprets rules, and manages timers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
