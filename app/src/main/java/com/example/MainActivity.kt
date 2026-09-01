@@ -47,11 +47,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.data.model.CurbNote
 import com.example.ui.navigation.Routes
 import com.example.ui.screens.AboutCurbScreen
 import com.example.ui.screens.AccountInfoScreen
 import com.example.ui.screens.ActivityScreen
 import com.example.ui.screens.AskCurbScreen
+import com.example.ui.screens.CurbProPaywallScreen
 import com.example.ui.screens.HelpSupportScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.NameSetupScreen
@@ -140,11 +142,16 @@ fun CurbApp(
     val activeSession by viewModel.activeSession.collectAsStateWithLifecycle()
     val recentScans by viewModel.allScans.collectAsStateWithLifecycle()
     val savedPlaces by viewModel.savedPlaces.collectAsStateWithLifecycle()
+    val allNotes by viewModel.allNotes.collectAsStateWithLifecycle()
     val currentScanResult by viewModel.currentScanResult.collectAsStateWithLifecycle()
     val isProcessingScan by viewModel.isProcessingScan.collectAsStateWithLifecycle()
     val processingStatusText by viewModel.processingStatusText.collectAsStateWithLifecycle()
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val isChatLoading by viewModel.isChatLoading.collectAsStateWithLifecycle()
+    val subscriptionState by viewModel.subscriptionState.collectAsStateWithLifecycle()
+    val scanUsageInfo by viewModel.scanUsageInfo.collectAsStateWithLifecycle()
+
+    val isUserPro = userProfile.isPro || subscriptionState.isPro
 
     val bottomNavItems = listOf(
         BottomNavItem.Home,
@@ -290,6 +297,7 @@ fun CurbApp(
                         userProfile = userProfile,
                         activeSession = activeSession,
                         recentScans = recentScans,
+                        usageInfo = scanUsageInfo,
                         onScanClicked = {
                             navController.navigate(Routes.SCAN)
                         },
@@ -314,6 +322,9 @@ fun CurbApp(
                         },
                         onProfileClicked = {
                             navController.navigate(Routes.YOU)
+                        },
+                        onUpgradeToProClicked = {
+                            navController.navigate(Routes.CURB_PRO_PAYWALL)
                         }
                     )
                 }
@@ -323,15 +334,40 @@ fun CurbApp(
                     ScanScreen(
                         isProcessing = isProcessingScan,
                         processingStatusText = processingStatusText,
+                        usageInfo = scanUsageInfo,
+                        isPro = isUserPro,
                         onCaptureImage = { bitmap ->
-                            viewModel.processCapturedImage(bitmap, locationName = "Mission Street") {
-                                navController.navigate(Routes.SCAN_OUTPUT)
-                            }
+                            viewModel.processCapturedImage(
+                                bitmap = bitmap,
+                                locationName = "Mission Street",
+                                onPaywallRequired = {
+                                    Toast.makeText(
+                                        context,
+                                        "You've used all 10 free scans for this month. Upgrade to Curb Pro for unlimited scans!",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    navController.navigate(Routes.CURB_PRO_PAYWALL)
+                                },
+                                onComplete = {
+                                    navController.navigate(Routes.SCAN_OUTPUT)
+                                }
+                            )
                         },
                         onPresetSelected = { preset ->
-                            viewModel.processPresetSign(preset) {
-                                navController.navigate(Routes.SCAN_OUTPUT)
-                            }
+                            viewModel.processPresetSign(
+                                preset = preset,
+                                onPaywallRequired = {
+                                    Toast.makeText(
+                                        context,
+                                        "You've used all 10 free scans for this month. Upgrade to Curb Pro for unlimited scans!",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    navController.navigate(Routes.CURB_PRO_PAYWALL)
+                                },
+                                onComplete = {
+                                    navController.navigate(Routes.SCAN_OUTPUT)
+                                }
+                            )
                         },
                         onBack = {
                             navController.popBackStack()
@@ -341,13 +377,23 @@ fun CurbApp(
 
                 // 07. SCAN OUTPUT
                 composable(Routes.SCAN_OUTPUT) {
-                    val currentScan = currentScanResult ?: recentScans.firstOrNull() ?: viewModel.userProfile.value.let {
-                        // Fallback result
-                        com.example.data.remote.GeminiService.generateIntelligentScanResult("Mission Street")
+                    val currentScan = currentScanResult ?: recentScans.firstOrNull() ?: com.example.data.remote.GeminiService.generateIntelligentScanResult("Mission Street")
+                    val currentScanNote = allNotes.firstOrNull {
+                        it.targetType == com.example.data.model.CurbNote.TARGET_SCAN_RESULT && it.targetId == currentScan.id
                     }
 
                     ScanOutputScreen(
                         scanResult = currentScan,
+                        note = currentScanNote,
+                        isPro = isUserPro,
+                        onSaveNote = { text ->
+                            viewModel.saveNote(com.example.data.model.CurbNote.TARGET_SCAN_RESULT, currentScan.id, text)
+                            Toast.makeText(context, "Note saved", Toast.LENGTH_SHORT).show()
+                        },
+                        onDeleteNote = {
+                            viewModel.deleteNote(com.example.data.model.CurbNote.TARGET_SCAN_RESULT, currentScan.id)
+                            Toast.makeText(context, "Note deleted", Toast.LENGTH_SHORT).show()
+                        },
                         onViewDetails = {
                             navController.navigate(Routes.PARKING_DETAILS)
                         },
@@ -370,6 +416,9 @@ fun CurbApp(
                         onRetake = {
                             navController.popBackStack()
                         },
+                        onUpgradeToPro = {
+                            navController.navigate(Routes.CURB_PRO_PAYWALL)
+                        },
                         onBack = {
                             navController.popBackStack()
                         }
@@ -379,9 +428,22 @@ fun CurbApp(
                 // 08. PARKING DETAILS
                 composable(Routes.PARKING_DETAILS) {
                     val currentScan = currentScanResult ?: recentScans.firstOrNull() ?: com.example.data.remote.GeminiService.generateIntelligentScanResult("Mission Street")
+                    val currentScanNote = allNotes.firstOrNull {
+                        it.targetType == com.example.data.model.CurbNote.TARGET_SCAN_RESULT && it.targetId == currentScan.id
+                    }
 
                     ParkingDetailsScreen(
                         scanResult = currentScan,
+                        note = currentScanNote,
+                        isPro = isUserPro,
+                        onSaveNote = { text ->
+                            viewModel.saveNote(com.example.data.model.CurbNote.TARGET_SCAN_RESULT, currentScan.id, text)
+                            Toast.makeText(context, "Note saved", Toast.LENGTH_SHORT).show()
+                        },
+                        onDeleteNote = {
+                            viewModel.deleteNote(com.example.data.model.CurbNote.TARGET_SCAN_RESULT, currentScan.id)
+                            Toast.makeText(context, "Note deleted", Toast.LENGTH_SHORT).show()
+                        },
                         onStartParkingSession = {
                             viewModel.startParkingSession(
                                 scanResultId = currentScan.id,
@@ -397,6 +459,9 @@ fun CurbApp(
                         },
                         onReportIssue = {
                             Toast.makeText(context, "Thank you! Parking report submitted for review.", Toast.LENGTH_LONG).show()
+                        },
+                        onUpgradeToPro = {
+                            navController.navigate(Routes.CURB_PRO_PAYWALL)
                         },
                         onBack = {
                             navController.popBackStack()
@@ -422,9 +487,13 @@ fun CurbApp(
                 composable(Routes.ACTIVITY) {
                     ActivityScreen(
                         scans = recentScans,
+                        isPro = isUserPro,
                         onScanClicked = { scan ->
                             viewModel.setCurrentScan(scan)
                             navController.navigate(Routes.SCAN_OUTPUT)
+                        },
+                        onUpgradeToPro = {
+                            navController.navigate(Routes.CURB_PRO_PAYWALL)
                         }
                     )
                 }
@@ -483,20 +552,53 @@ fun CurbApp(
                 // 14. PAYMENT & SUBSCRIPTION
                 composable(Routes.PAYMENT_SUBSCRIPTION) {
                     PaymentSubscriptionScreen(
-                        isPro = userProfile.isPro,
+                        isPro = isUserPro,
+                        usageInfo = scanUsageInfo,
+                        subscriptionState = subscriptionState,
                         onUpgradeToPro = {
-                            viewModel.upgradeToPro()
-                            Toast.makeText(context, "Upgraded to Curb Pro!", Toast.LENGTH_SHORT).show()
+                            navController.navigate(Routes.CURB_PRO_PAYWALL)
                         },
                         onRestorePurchases = {
-                            viewModel.restorePurchases()
-                            Toast.makeText(context, "Purchases restored", Toast.LENGTH_SHORT).show()
+                            viewModel.restoreSubscriptionPurchases { success, msg ->
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
                         },
                         onBack = { navController.popBackStack() }
                     )
                 }
 
-                // 15. HELP & SUPPORT
+                // 15. CURB PRO PAYWALL
+                composable(Routes.CURB_PRO_PAYWALL) {
+                    CurbProPaywallScreen(
+                        subscriptionState = subscriptionState,
+                        onPurchase = { activity, pkg ->
+                            viewModel.purchaseSubscription(
+                                activity = activity,
+                                packageInfo = pkg,
+                                onSuccess = {
+                                    Toast.makeText(context, "Welcome to Curb Pro!", Toast.LENGTH_SHORT).show()
+                                    navController.popBackStack()
+                                },
+                                onError = { err ->
+                                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        },
+                        onRestorePurchases = {
+                            viewModel.restoreSubscriptionPurchases { success, msg ->
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                if (success) {
+                                    navController.popBackStack()
+                                }
+                            }
+                        },
+                        onTermsClicked = { navController.navigate(Routes.TERMS_OF_SERVICE) },
+                        onPrivacyClicked = { navController.navigate(Routes.PRIVACY_POLICY) },
+                        onDismiss = { navController.popBackStack() }
+                    )
+                }
+
+                // 16. HELP & SUPPORT
                 composable(Routes.HELP_SUPPORT) {
                     HelpSupportScreen(
                         onPrivacyClicked = { navController.navigate(Routes.PRIVACY_POLICY) },
@@ -508,25 +610,27 @@ fun CurbApp(
                     )
                 }
 
-                // 16. PRIVACY POLICY
+                // 17. PRIVACY POLICY
                 composable(Routes.PRIVACY_POLICY) {
                     PrivacyPolicyScreen(onBack = { navController.popBackStack() })
                 }
 
-                // 17. TERMS OF SERVICE
+                // 18. TERMS OF SERVICE
                 composable(Routes.TERMS_OF_SERVICE) {
                     TermsOfServiceScreen(onBack = { navController.popBackStack() })
                 }
 
-                // 18. ABOUT CURB
+                // 19. ABOUT CURB
                 composable(Routes.ABOUT_CURB) {
                     AboutCurbScreen(onBack = { navController.popBackStack() })
                 }
 
-                // 19. SAVED PLACES
+                // 20. SAVED PLACES
                 composable(Routes.SAVED_PLACES) {
                     SavedPlacesScreen(
                         savedPlaces = savedPlaces,
+                        notes = allNotes,
+                        isPro = isUserPro,
                         onAddPlace = { name, address, note ->
                             viewModel.addSavedPlace(name, address, note)
                             Toast.makeText(context, "Place saved", Toast.LENGTH_SHORT).show()
@@ -535,16 +639,39 @@ fun CurbApp(
                             viewModel.deleteSavedPlace(id)
                             Toast.makeText(context, "Place removed", Toast.LENGTH_SHORT).show()
                         },
+                        onSaveNote = { targetType, targetId, text ->
+                            viewModel.saveNote(targetType, targetId, text)
+                            Toast.makeText(context, "Note saved", Toast.LENGTH_SHORT).show()
+                        },
+                        onDeleteNote = { targetType, targetId ->
+                            viewModel.deleteNote(targetType, targetId)
+                            Toast.makeText(context, "Note deleted", Toast.LENGTH_SHORT).show()
+                        },
                         onScanPlace = { place ->
-                            viewModel.processCapturedImage(null, locationName = place.name) {
-                                navController.navigate(Routes.SCAN_OUTPUT)
-                            }
+                            viewModel.processCapturedImage(
+                                bitmap = null,
+                                locationName = place.name,
+                                onPaywallRequired = {
+                                    Toast.makeText(
+                                        context,
+                                        "You've used all 10 free scans for this month. Upgrade to Curb Pro for unlimited scans!",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    navController.navigate(Routes.CURB_PRO_PAYWALL)
+                                },
+                                onComplete = {
+                                    navController.navigate(Routes.SCAN_OUTPUT)
+                                }
+                            )
+                        },
+                        onUpgradeToPro = {
+                            navController.navigate(Routes.CURB_PRO_PAYWALL)
                         },
                         onBack = { navController.popBackStack() }
                     )
                 }
 
-                // 20. PARKING TIMER
+                // 21. PARKING TIMER
                 composable(Routes.PARKING_TIMER) {
                     ParkingTimerScreen(
                         activeSession = activeSession,

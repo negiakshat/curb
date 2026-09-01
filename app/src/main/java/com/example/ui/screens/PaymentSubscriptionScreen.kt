@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,37 +20,55 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.local.ScanUsageInfo
+import com.example.data.remote.SubscriptionUiState
 import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbLogo
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.theme.BentoBeige
+import com.example.ui.theme.BentoBorder
+import com.example.ui.theme.BentoPeach
+import com.example.ui.theme.BentoPrimaryDark
+import com.example.ui.theme.BentoSand
+import com.example.ui.theme.BentoTextDark
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbBlack
 import com.example.ui.theme.CurbOnSurface
 import com.example.ui.theme.CurbOnSurfaceVariant
-import com.example.ui.theme.CurbSuccess
 import com.example.ui.theme.CurbSurface
 import com.example.ui.theme.CurbSurfaceVariant
 import com.example.ui.theme.CurbWhite
+import com.example.ui.theme.RadiusCard
+import com.example.ui.theme.RadiusNested
+import com.example.ui.theme.RadiusSmall
 
 @Composable
 fun PaymentSubscriptionScreen(
     isPro: Boolean,
+    usageInfo: ScanUsageInfo,
+    subscriptionState: SubscriptionUiState,
     onUpgradeToPro: () -> Unit,
     onRestorePurchases: () -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -92,62 +112,167 @@ fun PaymentSubscriptionScreen(
             Column {
                 // CURRENT PLAN CARD
                 CurbCard(
-                    cornerRadius = 24.dp,
+                    cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(20.dp)
                     ) {
-                        Column {
-                            Text(
-                                text = "Current Plan",
-                                fontSize = 13.sp,
-                                color = CurbOnSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = if (isPro) "Curb Pro" else "Curb Free Plan",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = CurbOnSurface
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Current Plan",
+                                    fontSize = 13.sp,
+                                    color = CurbOnSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (isPro) "Curb Pro" else "Curb Free Plan",
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CurbOnSurface
+                                )
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(RadiusSmall),
+                                color = if (isPro) BentoPrimaryDark else BentoSand
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    if (isPro) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = CurbWhite,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = if (isPro) "ACTIVE" else "FREE",
+                                        color = if (isPro) CurbWhite else BentoTextDark,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isPro) CurbBlack else CurbSurfaceVariant
-                        ) {
-                            Text(
-                                text = if (isPro) "ACTIVE" else "FREE",
-                                color = if (isPro) CurbWhite else CurbOnSurfaceVariant,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // USAGE INFO
+                        if (!isPro) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(BentoBeige, RoundedCornerShape(RadiusNested))
+                                    .padding(14.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Monthly AI Scans",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = CurbOnSurface
+                                    )
+                                    Text(
+                                        text = "${usageInfo.scansUsed} / ${usageInfo.monthlyLimit} used",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BentoPrimaryDark
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                LinearProgressIndicator(
+                                    progress = { usageInfo.fractionUsed },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = if (usageInfo.isLimitReached) CurbBlack else BentoPrimaryDark,
+                                    trackColor = BentoBorder
+                                )
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Text(
+                                    text = "${usageInfo.displayText} this month • Resets automatically next month",
+                                    fontSize = 11.sp,
+                                    color = CurbOnSurfaceVariant
+                                )
+                            }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(BentoSand, RoundedCornerShape(RadiusNested))
+                                    .padding(12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(BentoPrimaryDark),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = null,
+                                        tint = BentoPeach,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "Unlimited AI sign scans unlocked",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = CurbOnSurface
+                                    )
+                                    Text(
+                                        text = "Full Pro access active with real-time assistance",
+                                        fontSize = 11.sp,
+                                        color = CurbOnSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 // PRO FEATURES CARD
                 CurbCard(
-                    cornerRadius = 24.dp,
+                    cornerRadius = RadiusCard,
                     backgroundColor = CurbSurfaceVariant
                 ) {
-                    Column(modifier = Modifier.padding(24.dp)) {
+                    Column(modifier = Modifier.padding(20.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            CurbLogo(symbolSize = 24.dp, fontSize = 18)
+                            CurbLogo(symbolSize = 22.dp, fontSize = 16)
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = CurbBlack
+                                shape = RoundedCornerShape(RadiusSmall),
+                                color = BentoPrimaryDark
                             ) {
                                 Text(
                                     text = "PRO",
@@ -159,24 +284,33 @@ fun PaymentSubscriptionScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        val pricingSummary = if (subscriptionState.packages.isNotEmpty()) {
+                            val weekly = subscriptionState.packages.find { it.id.contains("weekly") }?.priceString ?: "$2.99"
+                            val monthly = subscriptionState.packages.find { it.id.contains("monthly") }?.priceString ?: "$4.99"
+                            val annual = subscriptionState.packages.find { it.id.contains("annual") }?.priceString ?: "$29.99"
+                            "$weekly/wk • $monthly/mo • $annual/yr"
+                        } else {
+                            "$2.99 / week • $4.99 / month • $29.99 / year"
+                        }
 
                         Text(
-                            text = "$4.99 / month or $39.99 / year",
-                            fontSize = 18.sp,
+                            text = pricingSummary,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = CurbOnSurface
                         )
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
                         ProFeatureItem(text = "Unlimited multi-sign AI photo scans")
-                        Spacer(modifier = Modifier.height(10.dp))
-                        ProFeatureItem(text = "Instant contradictory sign resolution")
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ProFeatureItem(text = "Advanced AI parking assistance & conflict resolution")
+                        Spacer(modifier = Modifier.height(8.dp))
                         ProFeatureItem(text = "Smart parking timer expiration reminders")
-                        Spacer(modifier = Modifier.height(10.dp))
-                        ProFeatureItem(text = "24/7 dedicated Ask Curb AI Assistant")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ProFeatureItem(text = "Full Curb Pro experience & priority processing")
                     }
                 }
             }
@@ -187,6 +321,24 @@ fun PaymentSubscriptionScreen(
                         text = "Upgrade to Curb Pro",
                         onClick = onUpgradeToPro,
                         testTag = "upgrade_pro_button"
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                } else {
+                    CurbPrimaryButton(
+                        text = "Manage Subscription",
+                        onClick = {
+                            try {
+                                val intent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://play.google.com/store/account/subscriptions")
+                                )
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                // Ignore if browser/store cannot be launched
+                            }
+                        },
+                        testTag = "manage_subscription_button"
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -219,7 +371,7 @@ private fun ProFeatureItem(text: String) {
         Box(
             modifier = Modifier
                 .size(20.dp)
-                .background(CurbBlack, CircleShape),
+                .background(BentoPrimaryDark, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -231,7 +383,7 @@ private fun ProFeatureItem(text: String) {
         }
         Text(
             text = text,
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             color = CurbOnSurface
         )
     }

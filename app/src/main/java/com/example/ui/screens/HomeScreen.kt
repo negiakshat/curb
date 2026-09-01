@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.local.ScanUsageInfo
 import com.example.data.model.ActiveParkingSession
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
@@ -90,6 +91,7 @@ fun HomeScreen(
     userProfile: UserProfile,
     activeSession: ActiveParkingSession?,
     recentScans: List<ScanResult>,
+    usageInfo: ScanUsageInfo = ScanUsageInfo(0),
     onScanClicked: () -> Unit,
     onParkingTimerClicked: () -> Unit,
     onSavedPlacesClicked: () -> Unit,
@@ -97,7 +99,8 @@ fun HomeScreen(
     onAskCurbClicked: () -> Unit,
     onScanResultClicked: (ScanResult) -> Unit,
     onNotificationsClicked: () -> Unit,
-    onProfileClicked: () -> Unit
+    onProfileClicked: () -> Unit,
+    onUpgradeToProClicked: () -> Unit = {}
 ) {
     val greeting = remember {
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
@@ -242,11 +245,30 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            BentoPillBadge(
-                                text = "AI SCANNER",
-                                backgroundColor = BentoWhite.copy(alpha = 0.85f),
-                                textColor = BentoPrimary
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                BentoPillBadge(
+                                    text = "AI SCANNER",
+                                    backgroundColor = BentoWhite.copy(alpha = 0.85f),
+                                    textColor = BentoPrimary
+                                )
+
+                                if (userProfile.isPro) {
+                                    BentoPillBadge(
+                                        text = "PRO • UNLIMITED",
+                                        backgroundColor = BentoPrimaryDark,
+                                        textColor = BentoPeach
+                                    )
+                                } else {
+                                    BentoPillBadge(
+                                        text = usageInfo.displayText.uppercase(),
+                                        backgroundColor = if (usageInfo.isLimitReached) CurbErrorContainer else BentoSand,
+                                        textColor = if (usageInfo.isLimitReached) CurbError else BentoPrimary
+                                    )
+                                }
+                            }
 
                             Box(
                                 modifier = Modifier

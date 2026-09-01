@@ -15,6 +15,7 @@ object Routes {
     const val ACCOUNT_INFO = "account_info"
     const val NOTIFICATIONS = "notifications"
     const val PAYMENT_SUBSCRIPTION = "payment_subscription"
+    const val CURB_PRO_PAYWALL = "curb_pro_paywall"
     const val HELP_SUPPORT = "help_support"
     const val PRIVACY_POLICY = "privacy_policy"
     const val TERMS_OF_SERVICE = "terms_of_service"

@@ -69,3 +69,33 @@ interface SavedPlaceDao {
     @Query("DELETE FROM saved_places")
     suspend fun clearAllSavedPlaces()
 }
+
+@Dao
+interface NoteDao {
+    @Query("SELECT * FROM curb_notes")
+    fun getAllNotes(): Flow<List<CurbNoteEntity>>
+
+    @Query("SELECT * FROM curb_notes WHERE targetType = :targetType AND targetId = :targetId LIMIT 1")
+    fun getNoteFlow(targetType: String, targetId: Long): Flow<CurbNoteEntity?>
+
+    @Query("SELECT * FROM curb_notes WHERE targetType = :targetType AND targetId = :targetId LIMIT 1")
+    suspend fun getNote(targetType: String, targetId: Long): CurbNoteEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdateNote(note: CurbNoteEntity): Long
+
+    @Query("DELETE FROM curb_notes WHERE targetType = :targetType AND targetId = :targetId")
+    suspend fun deleteNoteByTarget(targetType: String, targetId: Long)
+
+    @Query("DELETE FROM curb_notes WHERE id = :id")
+    suspend fun deleteNoteById(id: Long)
+
+    @Query("DELETE FROM curb_notes WHERE targetType = 'SAVED_PLACE' AND targetId = :placeId")
+    suspend fun deleteNoteForSavedPlace(placeId: Long)
+
+    @Query("DELETE FROM curb_notes WHERE targetType = 'SCAN_RESULT' AND targetId = :scanId")
+    suspend fun deleteNoteForScanResult(scanId: Long)
+
+    @Query("DELETE FROM curb_notes")
+    suspend fun clearAllNotes()
+}

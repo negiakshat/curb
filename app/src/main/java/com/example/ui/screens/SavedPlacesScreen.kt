@@ -22,8 +22,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
@@ -44,9 +46,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.CurbNote
 import com.example.data.model.SavedPlace
 import com.example.ui.components.CurbCard
+import com.example.ui.components.CurbNoteDialog
+import com.example.ui.components.CurbNoteSection
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.components.CurbProFeatureBottomSheet
 import com.example.ui.theme.RadiusCard
 import com.example.ui.theme.RadiusChip
 import com.example.ui.theme.RadiusHero
@@ -64,15 +70,31 @@ import com.example.ui.theme.CurbWhite
 @Composable
 fun SavedPlacesScreen(
     savedPlaces: List<SavedPlace>,
+    notes: List<CurbNote> = emptyList(),
+    isPro: Boolean = false,
     onAddPlace: (String, String, String) -> Unit,
     onDeletePlace: (Long) -> Unit,
+    onSaveNote: (targetType: String, targetId: Long, text: String) -> Unit = { _, _, _ -> },
+    onDeleteNote: (targetType: String, targetId: Long) -> Unit = { _, _ -> },
     onScanPlace: (SavedPlace) -> Unit,
+    onUpgradeToPro: () -> Unit = {},
     onBack: () -> Unit
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
+    var showProSheet by remember { mutableStateOf(false) }
+    var showNotesProSheet by remember { mutableStateOf(false) }
+    var editingPlaceIdForNote by remember { mutableStateOf<Long?>(null) }
     var newPlaceName by remember { mutableStateOf("") }
     var newPlaceAddress by remember { mutableStateOf("") }
     var newPlaceNote by remember { mutableStateOf("") }
+
+    val handleAddRequest = {
+        if (!isPro && savedPlaces.size >= 3) {
+            showProSheet = true
+        } else {
+            showAddDialog = true
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -111,7 +133,7 @@ fun SavedPlacesScreen(
                 }
 
                 IconButton(
-                    onClick = { showAddDialog = true },
+                    onClick = handleAddRequest,
                     modifier = Modifier.testTag("add_place_top_button")
                 ) {
                     Icon(
@@ -172,72 +194,94 @@ fun SavedPlacesScreen(
                     }
                 } else {
                     items(savedPlaces) { place ->
+                        val placeNote = notes.firstOrNull {
+                            it.targetType == CurbNote.TARGET_SAVED_PLACE && it.targetId == place.id
+                        }
+
                         CurbCard(
                             cornerRadius = RadiusCard,
                             backgroundColor = CurbSurface,
                             onClick = { onScanPlace(place) }
                         ) {
-                            Row(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(18.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                    .padding(18.dp)
                             ) {
                                 Row(
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                    modifier = Modifier.weight(1f)
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .background(CurbSurfaceVariant, CircleShape),
-                                        contentAlignment = Alignment.Center
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                        modifier = Modifier.weight(1f)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.LocationOn,
-                                            contentDescription = null,
-                                            tint = CurbBlack,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-
-                                    Column {
-                                        Text(
-                                            text = place.name,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = CurbOnSurface
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = place.address,
-                                            fontSize = 13.sp,
-                                            color = CurbOnSurfaceVariant
-                                        )
-                                        if (place.parkingNote.isNotBlank()) {
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                text = place.parkingNote,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = CurbBlack
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .background(CurbSurfaceVariant, CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.LocationOn,
+                                                contentDescription = null,
+                                                tint = CurbBlack,
+                                                modifier = Modifier.size(22.dp)
                                             )
                                         }
+
+                                        Column {
+                                            Text(
+                                                text = place.name,
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = CurbOnSurface
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = place.address,
+                                                fontSize = 13.sp,
+                                                color = CurbOnSurfaceVariant
+                                            )
+                                            if (place.parkingNote.isNotBlank()) {
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = place.parkingNote,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = CurbBlack
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    IconButton(
+                                        onClick = { onDeletePlace(place.id) },
+                                        modifier = Modifier.testTag("delete_place_${place.id}")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DeleteOutline,
+                                            contentDescription = "Delete",
+                                            tint = CurbOnSurfaceVariant
+                                        )
                                     }
                                 }
 
-                                IconButton(
-                                    onClick = { onDeletePlace(place.id) },
-                                    modifier = Modifier.testTag("delete_place_${place.id}")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DeleteOutline,
-                                        contentDescription = "Delete",
-                                        tint = CurbOnSurfaceVariant
-                                    )
-                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // NOTES SECTION FOR THIS SAVED PLACE
+                                CurbNoteSection(
+                                    note = placeNote,
+                                    isPro = isPro,
+                                    onAddOrEditNote = {
+                                        editingPlaceIdForNote = place.id
+                                    },
+                                    onProLocked = {
+                                        showNotesProSheet = true
+                                    }
+                                )
                             }
                         }
                     }
@@ -247,7 +291,7 @@ fun SavedPlacesScreen(
 
         // ADD PLACE FAB
         FloatingActionButton(
-            onClick = { showAddDialog = true },
+            onClick = handleAddRequest,
             containerColor = CurbBlack,
             contentColor = CurbWhite,
             shape = CircleShape,
@@ -261,6 +305,51 @@ fun SavedPlacesScreen(
                 contentDescription = "Add Place"
             )
         }
+    }
+
+    if (showProSheet) {
+        CurbProFeatureBottomSheet(
+            title = "Unlock Unlimited Saved Places",
+            supportingText = "Save as many parking locations as you need with Curb Pro.",
+            icon = Icons.Default.Bookmark,
+            onGetPro = onUpgradeToPro,
+            onDismiss = { showProSheet = false }
+        )
+    }
+
+    if (showNotesProSheet) {
+        CurbProFeatureBottomSheet(
+            title = "Save Notes with Curb Pro",
+            supportingText = "Keep personal reminders with your saved places and parking scans.",
+            icon = Icons.Default.Edit,
+            onGetPro = onUpgradeToPro,
+            onDismiss = { showNotesProSheet = false }
+        )
+    }
+
+    if (editingPlaceIdForNote != null) {
+        val targetPlaceId = editingPlaceIdForNote!!
+        val currentNote = notes.firstOrNull {
+            it.targetType == CurbNote.TARGET_SAVED_PLACE && it.targetId == targetPlaceId
+        }
+
+        CurbNoteDialog(
+            initialText = currentNote?.text ?: "",
+            isEditing = currentNote != null,
+            onSave = { newText ->
+                onSaveNote(CurbNote.TARGET_SAVED_PLACE, targetPlaceId, newText)
+                editingPlaceIdForNote = null
+            },
+            onDelete = if (currentNote != null) {
+                {
+                    onDeleteNote(CurbNote.TARGET_SAVED_PLACE, targetPlaceId)
+                    editingPlaceIdForNote = null
+                }
+            } else null,
+            onDismiss = {
+                editingPlaceIdForNote = null
+            }
+        )
     }
 
     if (showAddDialog) {
@@ -301,11 +390,16 @@ fun SavedPlacesScreen(
                 TextButton(
                     onClick = {
                         if (newPlaceName.isNotBlank()) {
-                            onAddPlace(newPlaceName, newPlaceAddress, newPlaceNote)
-                            newPlaceName = ""
-                            newPlaceAddress = ""
-                            newPlaceNote = ""
-                            showAddDialog = false
+                            if (!isPro && savedPlaces.size >= 3) {
+                                showAddDialog = false
+                                showProSheet = true
+                            } else {
+                                onAddPlace(newPlaceName, newPlaceAddress, newPlaceNote)
+                                newPlaceName = ""
+                                newPlaceAddress = ""
+                                newPlaceNote = ""
+                                showAddDialog = false
+                            }
                         }
                     }
                 ) {

@@ -48,3 +48,16 @@ data class SavedPlaceEntity(
     val parkingNote: String,
     val timestamp: Long = System.currentTimeMillis()
 )
+
+@Entity(
+    tableName = "curb_notes",
+    indices = [androidx.room.Index(value = ["targetType", "targetId"], unique = true)]
+)
+data class CurbNoteEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val targetType: String,
+    val targetId: Long,
+    val text: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)

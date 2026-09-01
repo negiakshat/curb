@@ -82,6 +82,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.example.data.local.ScanUsageInfo
 import com.example.data.model.SampleSignPreset
 import com.example.data.remote.GeminiService
 import com.example.ui.components.CurbPrimaryButton
@@ -106,6 +107,8 @@ import java.nio.ByteBuffer
 fun ScanScreen(
     isProcessing: Boolean,
     processingStatusText: String,
+    usageInfo: ScanUsageInfo = ScanUsageInfo(0),
+    isPro: Boolean = false,
     onCaptureImage: (Bitmap?) -> Unit,
     onPresetSelected: (SampleSignPreset) -> Unit = {},
     onBack: () -> Unit
@@ -436,7 +439,7 @@ fun ScanScreen(
 
             Surface(
                 shape = RoundedCornerShape(RadiusChip),
-                color = CurbBlack.copy(alpha = 0.55f),
+                color = CurbBlack.copy(alpha = 0.65f),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
             ) {
                 Row(
@@ -447,10 +450,10 @@ fun ScanScreen(
                     Box(
                         modifier = Modifier
                             .size(8.dp)
-                            .background(CurbSuccess, CircleShape)
+                            .background(if (isPro || !usageInfo.isLimitReached) CurbSuccess else Color(0xFFFF5252), CircleShape)
                     )
                     Text(
-                        text = "AI Sign Detection Active",
+                        text = if (isPro) "Curb Pro • Unlimited" else usageInfo.displayText,
                         color = CurbWhite,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold

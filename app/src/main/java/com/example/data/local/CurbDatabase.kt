@@ -9,15 +9,17 @@ import androidx.room.RoomDatabase
     entities = [
         ScanResultEntity::class,
         ParkingSessionEntity::class,
-        SavedPlaceEntity::class
+        SavedPlaceEntity::class,
+        CurbNoteEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class CurbDatabase : RoomDatabase() {
     abstract fun scanDao(): ScanDao
     abstract fun parkingSessionDao(): ParkingSessionDao
     abstract fun savedPlaceDao(): SavedPlaceDao
+    abstract fun noteDao(): NoteDao
 
     companion object {
         @Volatile

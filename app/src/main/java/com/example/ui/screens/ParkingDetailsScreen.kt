@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,24 +25,37 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.CurbNote
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
 import com.example.ui.components.CurbCard
+import com.example.ui.components.CurbNoteDialog
+import com.example.ui.components.CurbNoteSection
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.components.CurbProFeatureBottomSheet
 import com.example.ui.components.CurbVerdictBadge
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbBlack
@@ -54,10 +69,20 @@ import com.example.ui.theme.CurbWhite
 @Composable
 fun ParkingDetailsScreen(
     scanResult: ScanResult,
+    note: CurbNote? = null,
+    isPro: Boolean = false,
+    onSaveNote: (String) -> Unit = {},
+    onDeleteNote: () -> Unit = {},
     onStartParkingSession: () -> Unit,
     onReportIssue: () -> Unit,
+    onUpgradeToPro: () -> Unit = {},
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    var showExportProSheet by remember { mutableStateOf(false) }
+    var showNotesProSheet by remember { mutableStateOf(false) }
+    var showNoteDialog by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -70,24 +95,44 @@ fun ParkingDetailsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier.testTag("details_back_button")
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = CurbOnSurface
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.testTag("details_back_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = CurbOnSurface
+                    )
+                }
+                Text(
+                    text = "Parking details",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CurbOnSurface
                 )
             }
-            Text(
-                text = "Parking details",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = CurbOnSurface
-            )
+
+            IconButton(
+                onClick = {
+                    if (isPro) {
+                        exportSingleScanDetails(context, scanResult)
+                    } else {
+                        showExportProSheet = true
+                    }
+                },
+                modifier = Modifier.testTag("details_export_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.FileDownload,
+                    contentDescription = "Export Spot",
+                    tint = CurbBlack
+                )
+            }
         }
 
         LazyColumn(
@@ -244,6 +289,29 @@ fun ParkingDetailsScreen(
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
+            // SECTION 3.5: PERSONAL NOTE
+            item {
+                Text(
+                    text = "Personal note",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CurbOnSurface
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                CurbNoteSection(
+                    note = note,
+                    isPro = isPro,
+                    onAddOrEditNote = {
+                        showNoteDialog = true
+                    },
+                    onProLocked = {
+                        showNotesProSheet = true
+                    }
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+
             // SECTION 4: SIGNS SCANNED
             if (scanResult.detectedSigns.isNotEmpty()) {
                 item {
@@ -360,6 +428,72 @@ fun ParkingDetailsScreen(
             }
         }
     }
+
+    if (showExportProSheet) {
+        CurbProFeatureBottomSheet(
+            title = "Export with Curb Pro",
+            supportingText = "Keep and share your parking records whenever you need them.",
+            icon = Icons.Default.FileDownload,
+            onGetPro = onUpgradeToPro,
+            onDismiss = { showExportProSheet = false }
+        )
+    }
+
+    if (showNotesProSheet) {
+        CurbProFeatureBottomSheet(
+            title = "Save Notes with Curb Pro",
+            supportingText = "Keep personal reminders with your saved places and parking scans.",
+            icon = Icons.Default.Edit,
+            onGetPro = onUpgradeToPro,
+            onDismiss = { showNotesProSheet = false }
+        )
+    }
+
+    if (showNoteDialog) {
+        CurbNoteDialog(
+            initialText = note?.text ?: "",
+            isEditing = note != null,
+            onSave = { newText ->
+                onSaveNote(newText)
+                showNoteDialog = false
+            },
+            onDelete = if (note != null) {
+                {
+                    onDeleteNote()
+                    showNoteDialog = false
+                }
+            } else null,
+            onDismiss = {
+                showNoteDialog = false
+            }
+        )
+    }
+}
+
+private fun exportSingleScanDetails(context: Context, scan: ScanResult) {
+    val builder = StringBuilder()
+    builder.append("CURB SPOT REPORT: ${scan.locationName}\n")
+    builder.append("City/State: ${scan.cityState}\n")
+    builder.append("Verdict: ${scan.verdict.name} (${scan.verdict.displayTitle})\n")
+    builder.append("Allowed Until: ${scan.allowedUntilTime} (${scan.timeRemaining})\n")
+    builder.append("Zone Type: ${scan.zoneType}\n")
+    builder.append("Payment: ${scan.paymentInfo}\n")
+    builder.append("Vehicle Rule: ${scan.vehicleApplicability}\n\n")
+    if (scan.parkingRules.isNotEmpty()) {
+        builder.append("Parking Rules:\n")
+        scan.parkingRules.forEach { rule ->
+            builder.append("• $rule\n")
+        }
+        builder.append("\n")
+    }
+    builder.append("AI Explanation:\n${scan.explanation}\n")
+
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, "Curb Parking Spot: ${scan.locationName}")
+        putExtra(Intent.EXTRA_TEXT, builder.toString())
+    }
+    context.startActivity(Intent.createChooser(intent, "Share Parking Spot Details"))
 }
 
 @Composable

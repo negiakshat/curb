@@ -154,3 +154,17 @@ data class SampleSignPreset(
     val explanation: String,
     val detectedSigns: List<DetectedSign>
 )
+
+data class CurbNote(
+    val id: Long = 0,
+    val targetType: String, // "SAVED_PLACE" or "SCAN_RESULT"
+    val targetId: Long,
+    val text: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+) {
+    companion object {
+        const val TARGET_SAVED_PLACE = "SAVED_PLACE"
+        const val TARGET_SCAN_RESULT = "SCAN_RESULT"
+    }
+}

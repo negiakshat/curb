@@ -2,10 +2,12 @@ package com.example.data.repository
 
 import android.content.Context
 import com.example.data.local.CurbDatabase
+import com.example.data.local.CurbNoteEntity
 import com.example.data.local.ParkingSessionEntity
 import com.example.data.local.SavedPlaceEntity
 import com.example.data.local.ScanResultEntity
 import com.example.data.model.ActiveParkingSession
+import com.example.data.model.CurbNote
 import com.example.data.model.DetectedSign
 import com.example.data.model.SavedPlace
 import com.example.data.model.ScanResult
@@ -21,6 +23,7 @@ class CurbRepository(context: Context) {
     private val scanDao = database.scanDao()
     private val parkingSessionDao = database.parkingSessionDao()
     private val savedPlaceDao = database.savedPlaceDao()
+    private val noteDao = database.noteDao()
 
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     private val stringListType = Types.newParameterizedType(List::class.java, String::class.java)
@@ -40,6 +43,41 @@ class CurbRepository(context: Context) {
         entities.map { entityToSavedPlace(it) }
     }
 
+    val allNotes: Flow<List<CurbNote>> = noteDao.getAllNotes().map { entities ->
+        entities.map { entityToCurbNote(it) }
+    }
+
+    fun getNoteFlow(targetType: String, targetId: Long): Flow<CurbNote?> {
+        return noteDao.getNoteFlow(targetType, targetId).map { it?.let { entityToCurbNote(it) } }
+    }
+
+    suspend fun getNote(targetType: String, targetId: Long): CurbNote? {
+        val entity = noteDao.getNote(targetType, targetId)
+        return entity?.let { entityToCurbNote(it) }
+    }
+
+    suspend fun saveNote(targetType: String, targetId: Long, text: String): Long {
+        val existing = noteDao.getNote(targetType, targetId)
+        val now = System.currentTimeMillis()
+        val entity = CurbNoteEntity(
+            id = existing?.id ?: 0,
+            targetType = targetType,
+            targetId = targetId,
+            text = text.trim(),
+            createdAt = existing?.createdAt ?: now,
+            updatedAt = now
+        )
+        return noteDao.insertOrUpdateNote(entity)
+    }
+
+    suspend fun deleteNote(targetType: String, targetId: Long) {
+        noteDao.deleteNoteByTarget(targetType, targetId)
+    }
+
+    suspend fun deleteNoteById(id: Long) {
+        noteDao.deleteNoteById(id)
+    }
+
     suspend fun getScanById(id: Long): ScanResult? {
         val entity = scanDao.getScanById(id)
         return entity?.let { entityToScanResult(it) }
@@ -52,6 +90,7 @@ class CurbRepository(context: Context) {
 
     suspend fun deleteScan(id: Long) {
         scanDao.deleteScanById(id)
+        noteDao.deleteNoteForScanResult(id)
     }
 
     suspend fun startParkingSession(
@@ -106,12 +145,14 @@ class CurbRepository(context: Context) {
 
     suspend fun deleteSavedPlace(id: Long) {
         savedPlaceDao.deletePlaceById(id)
+        noteDao.deleteNoteForSavedPlace(id)
     }
 
     suspend fun clearAllData() {
         scanDao.clearAllScans()
         parkingSessionDao.clearAllSessions()
         savedPlaceDao.clearAllSavedPlaces()
+        noteDao.clearAllNotes()
     }
 
     suspend fun seedInitialDataIfEmpty() {
@@ -230,6 +271,17 @@ class CurbRepository(context: Context) {
             address = entity.address,
             parkingNote = entity.parkingNote,
             timestamp = entity.timestamp
+        )
+    }
+
+    private fun entityToCurbNote(entity: CurbNoteEntity): CurbNote {
+        return CurbNote(
+            id = entity.id,
+            targetType = entity.targetType,
+            targetId = entity.targetId,
+            text = entity.text,
+            createdAt = entity.createdAt,
+            updatedAt = entity.updatedAt
         )
     }
 }
