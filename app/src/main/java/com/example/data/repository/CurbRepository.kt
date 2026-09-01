@@ -108,8 +108,47 @@ class CurbRepository(context: Context) {
         savedPlaceDao.deletePlaceById(id)
     }
 
+    suspend fun clearAllData() {
+        scanDao.clearAllScans()
+        parkingSessionDao.clearAllSessions()
+        savedPlaceDao.clearAllSavedPlaces()
+    }
+
     suspend fun seedInitialDataIfEmpty() {
-        // We can seed standard initial history to demonstrate the 12 Scans / 85% clear rate or clean initial scans
+        addSavedPlace(SavedPlace(name = "Home", address = "742 Evergreen Terrace", parkingNote = "Residential permit required after 6 PM"))
+        addSavedPlace(SavedPlace(name = "Work / Office", address = "500 Howard Street", parkingNote = "2-hour metered parking 8 AM - 6 PM"))
+        addSavedPlace(SavedPlace(name = "Downtown", address = "Market & 4th St", parkingNote = "Tow-away zone 4 PM - 6 PM weekdays"))
+
+        val sampleScan1 = ScanResult(
+            locationName = "Mission Street",
+            cityState = "San Francisco, CA",
+            verdict = ScanVerdict.ALLOWED,
+            statusChipText = "Updated just now",
+            allowedUntilTime = "6:00 PM",
+            timeRemaining = "2h 15m remaining",
+            parkingRules = listOf(
+                "2 Hour Parking: 8:00 AM – 6:00 PM, Mon – Fri",
+                "Street Cleaning: Tuesday & Thursday, 8:00 AM – 10:00 AM",
+                "No restrictions on weekends and city holidays"
+            ),
+            explanation = "Based on the signs you scanned, 2-hour parking is permitted between 8:00 AM and 6:00 PM on weekdays. Street sweeping is not active today."
+        )
+        saveScan(sampleScan1)
+
+        val sampleScan2 = ScanResult(
+            locationName = "Broadway",
+            cityState = "San Francisco, CA",
+            verdict = ScanVerdict.RESTRICTED,
+            statusChipText = "Restricted now",
+            allowedUntilTime = "No parking permitted",
+            timeRemaining = "0m",
+            parkingRules = listOf(
+                "TOW-AWAY NO STOPPING: 4:00 PM – 6:00 PM, Mon – Fri",
+                "Commercial Loading Only: 9:00 AM – 4:00 PM"
+            ),
+            explanation = "Parking is restricted. This spot is in an active commute tow-away lane from 4:00 PM to 6:00 PM."
+        )
+        saveScan(sampleScan2)
     }
 
     private fun entityToScanResult(entity: ScanResultEntity): ScanResult {

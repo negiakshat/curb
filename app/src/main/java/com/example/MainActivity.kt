@@ -233,8 +233,14 @@ fun CurbApp(
                 composable(Routes.SPLASH) {
                     SplashScreen(
                         onSplashFinished = {
-                            navController.navigate(Routes.WELCOME) {
-                                popUpTo(Routes.SPLASH) { inclusive = true }
+                            if (viewModel.isOnboardingAndPermissionsCompleted()) {
+                                navController.navigate(Routes.HOME) {
+                                    popUpTo(Routes.SPLASH) { inclusive = true }
+                                }
+                            } else {
+                                navController.navigate(Routes.WELCOME) {
+                                    popUpTo(Routes.SPLASH) { inclusive = true }
+                                }
                             }
                         }
                     )
@@ -245,6 +251,13 @@ fun CurbApp(
                     WelcomeScreen(
                         onGetStarted = {
                             navController.navigate(Routes.NAME_SETUP)
+                        },
+                        onContinueAsGuest = {
+                            viewModel.startGuestSession {
+                                navController.navigate(Routes.HOME) {
+                                    popUpTo(Routes.WELCOME) { inclusive = true }
+                                }
+                            }
                         },
                         onTermsClicked = {
                             navController.navigate(Routes.TERMS_OF_SERVICE)
@@ -431,7 +444,15 @@ fun CurbApp(
                         onNotificationsClicked = { navController.navigate(Routes.NOTIFICATIONS) },
                         onPaymentSubscriptionClicked = { navController.navigate(Routes.PAYMENT_SUBSCRIPTION) },
                         onHelpSupportClicked = { navController.navigate(Routes.HELP_SUPPORT) },
-                        onAboutCurbClicked = { navController.navigate(Routes.ABOUT_CURB) }
+                        onAboutCurbClicked = { navController.navigate(Routes.ABOUT_CURB) },
+                        onLogoutClicked = {
+                            viewModel.logout {
+                                Toast.makeText(context, "Logged out. Session cleared.", Toast.LENGTH_SHORT).show()
+                                navController.navigate(Routes.WELCOME) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            }
+                        }
                     )
                 }
 
@@ -442,6 +463,14 @@ fun CurbApp(
                         onSaveProfile = { name, gender, email ->
                             viewModel.updateAccount(name, gender, email)
                             Toast.makeText(context, "Account updated", Toast.LENGTH_SHORT).show()
+                        },
+                        onDeleteAccount = {
+                            viewModel.logout {
+                                Toast.makeText(context, "Account deleted & session wiped.", Toast.LENGTH_SHORT).show()
+                                navController.navigate(Routes.WELCOME) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            }
                         },
                         onBack = { navController.popBackStack() }
                     )

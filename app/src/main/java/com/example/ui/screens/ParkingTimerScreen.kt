@@ -86,6 +86,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ActiveParkingSession
+import com.example.ui.theme.RadiusCard
+import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusHero
+import com.example.ui.theme.RadiusNested
+import com.example.ui.theme.RadiusSmall
 import com.example.ui.theme.BentoBorder
 import com.example.ui.theme.BentoCanvas
 import com.example.ui.theme.BentoPeach
@@ -295,9 +300,9 @@ fun ParkingTimerScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(32.dp))
+                        .clip(RoundedCornerShape(RadiusHero))
                         .testTag("timer_hero_card"),
-                    shape = RoundedCornerShape(32.dp),
+                    shape = RoundedCornerShape(RadiusHero),
                     colors = CardDefaults.cardColors(containerColor = TimerCardBg),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -500,10 +505,10 @@ fun ParkingTimerScreen(
                                 }
 
                                 Surface(
-                                    shape = RoundedCornerShape(16.dp),
+                                    shape = RoundedCornerShape(RadiusChip),
                                     color = TimerCardBg,
                                     border = BorderStroke(1.dp, BentoBorder),
-                                    modifier = Modifier.clip(RoundedCornerShape(16.dp))
+                                    modifier = Modifier.clip(RoundedCornerShape(RadiusChip))
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -535,9 +540,9 @@ fun ParkingTimerScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(28.dp))
+                        .clip(RoundedCornerShape(RadiusCard))
                         .testTag("timer_details_card"),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(RadiusCard),
                     colors = CardDefaults.cardColors(containerColor = TimerCardBg),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -708,8 +713,8 @@ fun ParkingTimerScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(32.dp)),
-                    shape = RoundedCornerShape(32.dp),
+                        .clip(RoundedCornerShape(RadiusHero)),
+                    shape = RoundedCornerShape(RadiusHero),
                     colors = CardDefaults.cardColors(containerColor = TimerCardBg),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)

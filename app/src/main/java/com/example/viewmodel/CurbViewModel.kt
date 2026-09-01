@@ -4,6 +4,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.local.SessionPreferences
 import com.example.data.model.ActiveParkingSession
 import com.example.data.model.ChatMessage
 import com.example.data.model.SampleSignPreset
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
 
 class CurbViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = CurbRepository(application)
+    private val sessionPreferences = SessionPreferences(application)
 
     val allScans: StateFlow<List<ScanResult>> = repository.allScans
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -33,10 +35,10 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     val savedPlaces: StateFlow<List<SavedPlace>> = repository.savedPlaces
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _userProfile = MutableStateFlow(UserProfile(name = "Alex"))
+    private val _userProfile = MutableStateFlow(sessionPreferences.getUserProfile())
     val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
 
-    private val _onboardingCompleted = MutableStateFlow(false)
+    private val _onboardingCompleted = MutableStateFlow(sessionPreferences.isOnboardingAndPermissionsCompleted())
     val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted.asStateFlow()
 
     private val _currentScanResult = MutableStateFlow<ScanResult?>(null)
@@ -51,7 +53,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(
         listOf(
             ChatMessage(
-                text = "Hello Alex. I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
+                text = "Hello ${sessionPreferences.getUserProfile().name}. I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
                 isUser = false
             )
         )
@@ -65,57 +67,104 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     val showNotificationDialog: StateFlow<Boolean> = _showNotificationDialog.asStateFlow()
 
     init {
-        seedInitialSampleData()
+        // Only seed sample data if first run and onboarding has not been started yet
+        if (!sessionPreferences.isLoggedIn && !sessionPreferences.isOnboardingCompleted) {
+            viewModelScope.launch {
+                repository.seedInitialDataIfEmpty()
+            }
+        }
     }
 
-    private fun seedInitialSampleData() {
-        viewModelScope.launch {
-            // Seed sample places if none
-            repository.addSavedPlace(SavedPlace(name = "Home", address = "742 Evergreen Terrace", parkingNote = "Residential permit required after 6 PM"))
-            repository.addSavedPlace(SavedPlace(name = "Work / Office", address = "500 Howard Street", parkingNote = "2-hour metered parking 8 AM - 6 PM"))
-            repository.addSavedPlace(SavedPlace(name = "Downtown", address = "Market & 4th St", parkingNote = "Tow-away zone 4 PM - 6 PM weekdays"))
-
-            // Seed initial sample recent scans to match the product prompt specification
-            val sampleScan1 = ScanResult(
-                locationName = "Mission Street",
-                cityState = "San Francisco, CA",
-                verdict = ScanVerdict.ALLOWED,
-                statusChipText = "Updated just now",
-                allowedUntilTime = "6:00 PM",
-                timeRemaining = "2h 15m remaining",
-                parkingRules = listOf(
-                    "2 Hour Parking: 8:00 AM – 6:00 PM, Mon – Fri",
-                    "Street Cleaning: Tuesday & Thursday, 8:00 AM – 10:00 AM",
-                    "No restrictions on weekends and city holidays"
-                ),
-                explanation = "Based on the signs you scanned, 2-hour parking is permitted between 8:00 AM and 6:00 PM on weekdays. Street sweeping is not active today."
-            )
-            repository.saveScan(sampleScan1)
-
-            val sampleScan2 = ScanResult(
-                locationName = "Broadway",
-                cityState = "San Francisco, CA",
-                verdict = ScanVerdict.RESTRICTED,
-                statusChipText = "Restricted now",
-                allowedUntilTime = "No parking permitted",
-                timeRemaining = "0m",
-                parkingRules = listOf(
-                    "TOW-AWAY NO STOPPING: 4:00 PM – 6:00 PM, Mon – Fri",
-                    "Commercial Loading Only: 9:00 AM – 4:00 PM"
-                ),
-                explanation = "Parking is restricted. This spot is in an active commute tow-away lane from 4:00 PM to 6:00 PM."
-            )
-            repository.saveScan(sampleScan2)
-        }
+    fun isOnboardingAndPermissionsCompleted(): Boolean {
+        return sessionPreferences.isOnboardingAndPermissionsCompleted()
     }
 
     fun setUserName(name: String) {
         val trimmed = name.trim().ifEmpty { "Alex" }
-        _userProfile.value = _userProfile.value.copy(name = trimmed)
+        val updated = _userProfile.value.copy(name = trimmed)
+        _userProfile.value = updated
+        sessionPreferences.saveUserProfile(updated)
     }
 
-    fun completeOnboarding() {
+    fun completeOnboarding(name: String? = null, isGuest: Boolean = false) {
+        if (!name.isNullOrBlank()) {
+            setUserName(name)
+        }
+        sessionPreferences.isOnboardingCompleted = true
+        sessionPreferences.isPermissionsCompleted = true
+        sessionPreferences.isLoggedIn = true
+        sessionPreferences.isGuest = isGuest
+        sessionPreferences.saveUserProfile(_userProfile.value)
         _onboardingCompleted.value = true
+    }
+
+    fun startGuestSession(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            // 1. Wipe Room Database completely so no previous user/guest history persists
+            repository.clearAllData()
+
+            // 2. Reset SharedPreferences completely
+            sessionPreferences.clearSession()
+
+            // 3. Setup fresh guest state
+            val guestProfile = UserProfile(
+                name = "Guest",
+                gender = "Not specified",
+                email = "guest@curbapp.com",
+                isPro = false,
+                pushNotificationsEnabled = true
+            )
+            _userProfile.value = guestProfile
+            sessionPreferences.isOnboardingCompleted = true
+            sessionPreferences.isPermissionsCompleted = true
+            sessionPreferences.isLoggedIn = true
+            sessionPreferences.isGuest = true
+            sessionPreferences.saveUserProfile(guestProfile)
+
+            // 4. Reset in-memory View Model state
+            _currentScanResult.value = null
+            _isProcessingScan.value = false
+            _processingStatusText.value = "Reading parking signs…"
+            _chatMessages.value = listOf(
+                ChatMessage(
+                    text = "Hello! I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
+                    isUser = false
+                )
+            )
+            _isChatLoading.value = false
+            _showNotificationDialog.value = false
+            _onboardingCompleted.value = true
+
+            onComplete()
+        }
+    }
+
+    fun logout(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            // 1. Wipe all local database tables (scans, active sessions, saved spots)
+            repository.clearAllData()
+
+            // 2. Clear all SharedPreferences session & onboarding states
+            sessionPreferences.clearSession()
+
+            // 3. Reset in-memory ViewModel states to pristine defaults
+            val defaultProfile = UserProfile(name = "Alex", email = "alex@curbapp.com")
+            _userProfile.value = defaultProfile
+            _currentScanResult.value = null
+            _isProcessingScan.value = false
+            _processingStatusText.value = "Reading parking signs…"
+            _chatMessages.value = listOf(
+                ChatMessage(
+                    text = "Hello Alex. I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
+                    isUser = false
+                )
+            )
+            _isChatLoading.value = false
+            _showNotificationDialog.value = false
+            _onboardingCompleted.value = false
+
+            onComplete()
+        }
     }
 
     fun processCapturedImage(bitmap: Bitmap?, locationName: String = "Mission Street", onComplete: () -> Unit) {
@@ -221,7 +270,9 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun togglePushNotifications(enabled: Boolean) {
-        _userProfile.value = _userProfile.value.copy(pushNotificationsEnabled = enabled)
+        val updated = _userProfile.value.copy(pushNotificationsEnabled = enabled)
+        _userProfile.value = updated
+        sessionPreferences.saveUserProfile(updated)
     }
 
     fun setShowNotificationDialog(show: Boolean) {
@@ -229,19 +280,25 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateAccount(name: String, gender: String, email: String) {
-        _userProfile.value = _userProfile.value.copy(
+        val updated = _userProfile.value.copy(
             name = name.trim().ifEmpty { _userProfile.value.name },
             gender = gender,
             email = email.trim().ifEmpty { _userProfile.value.email }
         )
+        _userProfile.value = updated
+        sessionPreferences.saveUserProfile(updated)
     }
 
     fun upgradeToPro() {
-        _userProfile.value = _userProfile.value.copy(isPro = true)
+        val updated = _userProfile.value.copy(isPro = true)
+        _userProfile.value = updated
+        sessionPreferences.saveUserProfile(updated)
     }
 
     fun restorePurchases() {
-        _userProfile.value = _userProfile.value.copy(isPro = true)
+        val updated = _userProfile.value.copy(isPro = true)
+        _userProfile.value = updated
+        sessionPreferences.saveUserProfile(updated)
     }
 
     fun addSavedPlace(name: String, address: String, note: String) {

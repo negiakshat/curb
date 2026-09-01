@@ -27,6 +27,7 @@ import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
 import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbSegmentedStatusBar
+import com.example.ui.theme.RadiusCard
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbOnSurface
 import com.example.ui.theme.CurbOnSurfaceVariant
@@ -69,7 +70,7 @@ fun ActivityScreen(
 
                 // COMPACT ANALYTICS BANNER
                 CurbCard(
-                    cornerRadius = 20.dp,
+                    cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
@@ -110,7 +111,7 @@ fun ActivityScreen(
                         .padding(horizontal = 24.dp, vertical = 20.dp)
                 ) {
                     CurbCard(
-                        cornerRadius = 20.dp,
+                        cornerRadius = RadiusCard,
                         backgroundColor = CurbSurface
                     ) {
                         Column(

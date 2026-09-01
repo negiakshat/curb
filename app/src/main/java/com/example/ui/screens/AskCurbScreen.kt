@@ -47,6 +47,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ChatMessage
 import com.example.ui.components.CurbLogo
+import com.example.ui.theme.RadiusCard
+import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusHero
+import com.example.ui.theme.RadiusNested
+import com.example.ui.theme.RadiusSmall
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbBlack
 import com.example.ui.theme.CurbOnSurface
@@ -112,7 +117,7 @@ fun AskCurbScreen(
             }
 
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(RadiusSmall),
                 color = CurbSurfaceVariant
             ) {
                 Text(
@@ -171,7 +176,7 @@ fun AskCurbScreen(
             ) {
                 items(suggestedPrompts) { prompt ->
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(RadiusChip),
                         color = CurbSurfaceVariant,
                         modifier = Modifier
                             .clickable {
@@ -212,7 +217,7 @@ fun AskCurbScreen(
                 modifier = Modifier
                     .weight(1f)
                     .testTag("chat_input_field"),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(RadiusHero),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = CurbBlack,
                     unfocusedBorderColor = CurbOutline,
@@ -276,10 +281,10 @@ private fun ChatBubble(message: ChatMessage) {
 
         Surface(
             shape = RoundedCornerShape(
-                topStart = 18.dp,
-                topEnd = 18.dp,
-                bottomStart = if (isUser) 18.dp else 4.dp,
-                bottomEnd = if (isUser) 4.dp else 18.dp
+                topStart = RadiusNested,
+                topEnd = RadiusNested,
+                bottomStart = if (isUser) RadiusNested else 4.dp,
+                bottomEnd = if (isUser) 4.dp else RadiusNested
             ),
             color = if (isUser) CurbBlack else CurbSurfaceVariant,
             modifier = Modifier.fillMaxWidth(if (isUser) 0.8f else 0.88f)

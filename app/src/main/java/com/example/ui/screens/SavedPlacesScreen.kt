@@ -47,6 +47,10 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.SavedPlace
 import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.theme.RadiusCard
+import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusHero
+import com.example.ui.theme.RadiusNested
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbBlack
 import com.example.ui.theme.CurbError
@@ -133,7 +137,7 @@ fun SavedPlacesScreen(
                                 .padding(vertical = 40.dp)
                         ) {
                             CurbCard(
-                                cornerRadius = 20.dp,
+                                cornerRadius = RadiusCard,
                                 backgroundColor = CurbSurface
                             ) {
                                 Column(
@@ -169,7 +173,7 @@ fun SavedPlacesScreen(
                 } else {
                     items(savedPlaces) { place ->
                         CurbCard(
-                            cornerRadius = 20.dp,
+                            cornerRadius = RadiusCard,
                             backgroundColor = CurbSurface,
                             onClick = { onScanPlace(place) }
                         ) {
@@ -262,6 +266,8 @@ fun SavedPlacesScreen(
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
+            shape = RoundedCornerShape(RadiusCard),
+            containerColor = CurbSurface,
             title = { Text("Add Saved Place", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -270,6 +276,7 @@ fun SavedPlacesScreen(
                         onValueChange = { newPlaceName = it },
                         label = { Text("Place Name (e.g. Home, Office)") },
                         singleLine = true,
+                        shape = RoundedCornerShape(RadiusNested),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -277,6 +284,7 @@ fun SavedPlacesScreen(
                         onValueChange = { newPlaceAddress = it },
                         label = { Text("Address / Cross Street") },
                         singleLine = true,
+                        shape = RoundedCornerShape(RadiusNested),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -284,6 +292,7 @@ fun SavedPlacesScreen(
                         onValueChange = { newPlaceNote = it },
                         label = { Text("Parking Note (e.g. Permit A)") },
                         singleLine = true,
+                        shape = RoundedCornerShape(RadiusNested),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

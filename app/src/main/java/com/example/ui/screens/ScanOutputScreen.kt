@@ -53,6 +53,11 @@ import com.example.ui.theme.CurbSurface
 import com.example.ui.theme.CurbSurfaceVariant
 import com.example.ui.theme.CurbWarning
 import com.example.ui.theme.CurbWarningContainer
+import com.example.ui.theme.RadiusCard
+import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusHero
+import com.example.ui.theme.RadiusNested
+import com.example.ui.theme.RadiusSmall
 import com.example.ui.theme.CurbWhite
 
 @Composable
@@ -219,7 +224,7 @@ fun ScanOutputScreen(
 
                 // STATUS CHIP
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(RadiusChip),
                     color = CurbSurfaceVariant
                 ) {
                     Text(
@@ -238,7 +243,7 @@ fun ScanOutputScreen(
             if (scanResult.verdict == ScanVerdict.ALLOWED) {
                 item {
                     CurbCard(
-                        cornerRadius = 24.dp,
+                        cornerRadius = RadiusCard,
                         backgroundColor = CurbSurface
                     ) {
                         Column(modifier = Modifier.padding(20.dp)) {
@@ -279,7 +284,7 @@ fun ScanOutputScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     CurbCard(
-                        cornerRadius = 20.dp,
+                        cornerRadius = RadiusCard,
                         backgroundColor = CurbSurface
                     ) {
                         Column(modifier = Modifier.padding(18.dp)) {
@@ -308,7 +313,7 @@ fun ScanOutputScreen(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 CurbCard(
-                    cornerRadius = 20.dp,
+                    cornerRadius = RadiusCard,
                     backgroundColor = CurbSurfaceVariant
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
@@ -338,7 +343,7 @@ fun ScanOutputScreen(
                 items(scanResult.detectedSigns) { sign ->
                     Box(modifier = Modifier.padding(bottom = 8.dp)) {
                         CurbCard(
-                            cornerRadius = 16.dp,
+                            cornerRadius = RadiusNested,
                             backgroundColor = CurbSurface
                         ) {
                             Row(

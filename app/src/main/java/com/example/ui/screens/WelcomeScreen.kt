@@ -39,6 +39,7 @@ import com.example.ui.theme.CurbSurfaceVariant
 @Composable
 fun WelcomeScreen(
     onGetStarted: () -> Unit,
+    onContinueAsGuest: () -> Unit = onGetStarted,
     onTermsClicked: () -> Unit,
     onPrivacyClicked: () -> Unit
 ) {
@@ -113,7 +114,21 @@ fun WelcomeScreen(
                 testTag = "get_started_button"
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            androidx.compose.material3.TextButton(
+                onClick = onContinueAsGuest,
+                modifier = Modifier.testTag("continue_as_guest_button")
+            ) {
+                Text(
+                    text = "Continue as Guest",
+                    color = CurbBlack,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             Row(
                 horizontalArrangement = Arrangement.Center,

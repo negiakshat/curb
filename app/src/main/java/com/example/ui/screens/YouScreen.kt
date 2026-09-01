@@ -20,15 +20,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.PersonOutline
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,8 +46,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserProfile
 import com.example.ui.components.CurbCard
+import com.example.ui.theme.RadiusCard
+import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusHero
+import com.example.ui.theme.RadiusNested
+import com.example.ui.theme.RadiusSmall
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbBlack
+import com.example.ui.theme.CurbError
 import com.example.ui.theme.CurbOnSurface
 import com.example.ui.theme.CurbOnSurfaceVariant
 import com.example.ui.theme.CurbSurface
@@ -55,8 +68,11 @@ fun YouScreen(
     onNotificationsClicked: () -> Unit,
     onPaymentSubscriptionClicked: () -> Unit,
     onHelpSupportClicked: () -> Unit,
-    onAboutCurbClicked: () -> Unit
+    onAboutCurbClicked: () -> Unit,
+    onLogoutClicked: () -> Unit = {}
 ) {
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -82,7 +98,7 @@ fun YouScreen(
 
                 // PROFILE HEADER CARD
                 CurbCard(
-                    cornerRadius = 24.dp,
+                    cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface,
                     onClick = onAccountInfoClicked
                 ) {
@@ -126,7 +142,7 @@ fun YouScreen(
 
                                     if (userProfile.isPro) {
                                         Surface(
-                                            shape = RoundedCornerShape(6.dp),
+                                            shape = RoundedCornerShape(RadiusSmall),
                                             color = CurbBlack
                                         ) {
                                             Text(
@@ -171,7 +187,7 @@ fun YouScreen(
 
                 // GROUPED SETTINGS MENU (Account Info, Notifications, Payment & Subscription, Help & Support, About Curb AI)
                 CurbCard(
-                    cornerRadius = 24.dp,
+                    cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface
                 ) {
                     Column(modifier = Modifier.padding(vertical = 6.dp)) {
@@ -209,10 +225,58 @@ fun YouScreen(
                             onClick = onAboutCurbClicked,
                             testTag = "setting_about_curb"
                         )
+                        SettingsDivider()
+                        SettingsRow(
+                            icon = Icons.AutoMirrored.Filled.Logout,
+                            title = "Log Out / Reset Session",
+                            onClick = { showLogoutDialog = true },
+                            tint = CurbError,
+                            textColor = CurbError,
+                            testTag = "setting_logout"
+                        )
                     }
                 }
             }
         }
+    }
+
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = {
+                Text(
+                    text = "Log Out of Session?",
+                    fontWeight = FontWeight.Bold,
+                    color = CurbOnSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "Logging out will clear all active parking timers, text history, scan logs, and cached guest session data from this device.",
+                    color = CurbOnSurfaceVariant,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutDialog = false
+                        onLogoutClicked()
+                    },
+                    modifier = Modifier.testTag("confirm_logout_button")
+                ) {
+                    Text("Log Out", color = CurbError, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showLogoutDialog = false }
+                ) {
+                    Text("Cancel", color = CurbOnSurfaceVariant)
+                }
+            },
+            containerColor = CurbSurface
+        )
     }
 }
 
@@ -221,6 +285,8 @@ private fun SettingsRow(
     icon: ImageVector,
     title: String,
     onClick: () -> Unit,
+    tint: androidx.compose.ui.graphics.Color = CurbBlack,
+    textColor: androidx.compose.ui.graphics.Color = CurbOnSurface,
     testTag: String = ""
 ) {
     Row(
@@ -245,7 +311,7 @@ private fun SettingsRow(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = CurbBlack,
+                    tint = tint,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -253,7 +319,7 @@ private fun SettingsRow(
                 text = title,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = CurbOnSurface
+                color = textColor
             )
         }
 

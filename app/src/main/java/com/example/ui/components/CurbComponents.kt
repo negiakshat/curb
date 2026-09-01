@@ -67,6 +67,12 @@ import com.example.ui.theme.CurbWarning
 import com.example.ui.theme.CurbWarningContainer
 import com.example.ui.theme.CurbWhite
 
+import com.example.ui.theme.RadiusCard
+import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusHero
+import com.example.ui.theme.RadiusNested
+import com.example.ui.theme.RadiusSmall
+
 @Composable
 fun CurbPrimaryButton(
     text: String,
@@ -82,10 +88,10 @@ fun CurbPrimaryButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(54.dp)
             .testTag(testTag),
         enabled = enabled,
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(RadiusHero),
         colors = ButtonDefaults.buttonColors(
             containerColor = backgroundColor,
             contentColor = contentColor,
@@ -137,10 +143,10 @@ fun CurbSecondaryButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(54.dp)
             .testTag(testTag),
         enabled = enabled,
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(RadiusHero),
         border = BorderStroke(1.dp, borderColor),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = backgroundColor,
@@ -174,7 +180,7 @@ fun CurbSecondaryButton(
 @Composable
 fun CurbCard(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 28.dp,
+    cornerRadius: Dp = RadiusCard,
     backgroundColor: Color = BentoSand,
     borderColor: Color = BentoBorder,
     onClick: (() -> Unit)? = null,
@@ -207,7 +213,7 @@ fun BentoPillBadge(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(RadiusChip),
         color = backgroundColor
     ) {
         Text(
@@ -250,7 +256,7 @@ fun CurbVerdictBadge(
 
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(RadiusChip),
         color = bgColor
     ) {
         Row(

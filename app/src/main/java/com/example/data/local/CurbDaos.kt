@@ -50,6 +50,9 @@ interface ParkingSessionDao {
 
     @Query("UPDATE parking_sessions SET isActive = 0")
     suspend fun endAllSessions()
+
+    @Query("DELETE FROM parking_sessions")
+    suspend fun clearAllSessions()
 }
 
 @Dao
@@ -62,4 +65,7 @@ interface SavedPlaceDao {
 
     @Query("DELETE FROM saved_places WHERE id = :id")
     suspend fun deletePlaceById(id: Long)
+
+    @Query("DELETE FROM saved_places")
+    suspend fun clearAllSavedPlaces()
 }

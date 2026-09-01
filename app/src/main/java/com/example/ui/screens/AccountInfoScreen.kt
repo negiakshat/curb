@@ -54,6 +54,7 @@ import com.example.ui.theme.CurbSurfaceVariant
 fun AccountInfoScreen(
     userProfile: UserProfile,
     onSaveProfile: (String, String, String) -> Unit,
+    onDeleteAccount: () -> Unit = {},
     onBack: () -> Unit
 ) {
     var name by remember { mutableStateOf(userProfile.name) }
@@ -218,8 +219,7 @@ fun AccountInfoScreen(
                 TextButton(
                     onClick = {
                         showDeleteDialog = false
-                        onSaveProfile("Alex", "Not specified", "alex@example.com")
-                        onBack()
+                        onDeleteAccount()
                     }
                 ) {
                     Text("Delete", color = CurbError, fontWeight = FontWeight.Bold)

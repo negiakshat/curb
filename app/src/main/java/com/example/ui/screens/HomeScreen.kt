@@ -75,6 +75,11 @@ import com.example.ui.theme.CurbSuccess
 import com.example.ui.theme.CurbSuccessContainer
 import com.example.ui.theme.CurbWarning
 import com.example.ui.theme.CurbWarningContainer
+import com.example.ui.theme.RadiusCard
+import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusHero
+import com.example.ui.theme.RadiusNested
+import com.example.ui.theme.RadiusSmall
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -219,10 +224,10 @@ fun HomeScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(32.dp))
+                        .clip(RoundedCornerShape(RadiusHero))
                         .clickable { onScanClicked() }
                         .testTag("scan_this_spot_card"),
-                    shape = RoundedCornerShape(32.dp),
+                    shape = RoundedCornerShape(RadiusHero),
                     colors = CardDefaults.cardColors(containerColor = BentoPeach),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -239,7 +244,7 @@ fun HomeScreen(
                         ) {
                             BentoPillBadge(
                                 text = "AI SCANNER",
-                                backgroundColor = BentoWhite.copy(alpha = 0.8f),
+                                backgroundColor = BentoWhite.copy(alpha = 0.85f),
                                 textColor = BentoPrimary
                             )
 
@@ -281,9 +286,9 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(18.dp))
 
                         Surface(
-                            shape = RoundedCornerShape(24.dp),
+                            shape = RoundedCornerShape(RadiusCard),
                             color = BentoPrimary,
-                            modifier = Modifier.clip(RoundedCornerShape(24.dp))
+                            modifier = Modifier.clip(RoundedCornerShape(RadiusCard))
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -323,16 +328,17 @@ fun HomeScreen(
                 Card(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(28.dp))
+                        .height(168.dp)
+                        .clip(RoundedCornerShape(RadiusCard))
                         .clickable { onParkingTimerClicked() }
                         .testTag("bento_active_parking_tile"),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(RadiusCard),
                     colors = CardDefaults.cardColors(containerColor = BentoPrimaryDark),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .padding(18.dp),
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -365,41 +371,39 @@ fun HomeScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        if (activeSession != null && activeSession.isActive && activeSession.remainingMillis > 0) {
-                            Text(
-                                text = activeSession.remainingFormatted,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BentoPeach
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = activeSession.locationName,
-                                fontSize = 12.sp,
-                                color = BentoWhite.copy(alpha = 0.8f),
-                                maxLines = 1
-                            )
-                        } else {
-                            Text(
-                                text = "Active Timer",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BentoWhite
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "No active session",
-                                fontSize = 12.sp,
-                                color = BentoWhite.copy(alpha = 0.65f)
-                            )
+                        Column {
+                            if (activeSession != null && activeSession.isActive && activeSession.remainingMillis > 0) {
+                                Text(
+                                    text = activeSession.remainingFormatted,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BentoPeach
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = activeSession.locationName,
+                                    fontSize = 12.sp,
+                                    color = BentoWhite.copy(alpha = 0.8f),
+                                    maxLines = 1
+                                )
+                            } else {
+                                Text(
+                                    text = "Active Timer",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BentoWhite
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "No active session",
+                                    fontSize = 12.sp,
+                                    color = BentoWhite.copy(alpha = 0.65f)
+                                )
+                            }
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
-
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(RadiusChip),
                             color = BentoWhite.copy(alpha = 0.15f)
                         ) {
                             Text(
@@ -418,17 +422,18 @@ fun HomeScreen(
                 Card(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(28.dp))
+                        .height(168.dp)
+                        .clip(RoundedCornerShape(RadiusCard))
                         .clickable { onSavedPlacesClicked() }
                         .testTag("bento_saved_places_tile"),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(RadiusCard),
                     colors = CardDefaults.cardColors(containerColor = BentoSand),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .padding(18.dp),
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -447,27 +452,25 @@ fun HomeScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Column {
+                            Text(
+                                text = "Saved Spots",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BentoTextPrimary
+                            )
 
-                        Text(
-                            text = "Saved Spots",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = BentoTextPrimary
-                        )
+                            Spacer(modifier = Modifier.height(2.dp))
 
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        Text(
-                            text = "Quick access pins",
-                            fontSize = 12.sp,
-                            color = BentoTextSecondary
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = "Quick access pins",
+                                fontSize = 12.sp,
+                                color = BentoTextSecondary
+                            )
+                        }
 
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(RadiusChip),
                             color = BentoWhite,
                             border = BorderStroke(1.dp, BentoBorder)
                         ) {
@@ -498,18 +501,20 @@ fun HomeScreen(
                 Card(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(28.dp))
+                        .height(168.dp)
+                        .clip(RoundedCornerShape(RadiusCard))
                         .clickable { onAskCurbClicked() }
                         .testTag("bento_ask_curb_tile"),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(RadiusCard),
                     colors = CardDefaults.cardColors(containerColor = BentoBeige),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp)
+                            .fillMaxSize()
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         Box(
                             modifier = Modifier
@@ -526,27 +531,25 @@ fun HomeScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Column {
+                            Text(
+                                text = "Ask Curb AI",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BentoTextPrimary
+                            )
 
-                        Text(
-                            text = "Ask Curb AI",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = BentoTextPrimary
-                        )
+                            Spacer(modifier = Modifier.height(2.dp))
 
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        Text(
-                            text = "Instant sign advice",
-                            fontSize = 12.sp,
-                            color = BentoTextSecondary
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = "Instant sign advice",
+                                fontSize = 12.sp,
+                                color = BentoTextSecondary
+                            )
+                        }
 
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(RadiusChip),
                             color = BentoPeach
                         ) {
                             Text(
@@ -565,18 +568,20 @@ fun HomeScreen(
                 Card(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(28.dp))
+                        .height(168.dp)
+                        .clip(RoundedCornerShape(RadiusCard))
                         .clickable { onActivityClicked() }
                         .testTag("bento_activity_tile"),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(RadiusCard),
                     colors = CardDefaults.cardColors(containerColor = BentoSand),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp)
+                            .fillMaxSize()
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         Box(
                             modifier = Modifier
@@ -593,27 +598,25 @@ fun HomeScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Column {
+                            Text(
+                                text = "Activity Log",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BentoTextPrimary
+                            )
 
-                        Text(
-                            text = "Activity Log",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = BentoTextPrimary
-                        )
+                            Spacer(modifier = Modifier.height(2.dp))
 
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        Text(
-                            text = "${recentScans.size} spots scanned",
-                            fontSize = 12.sp,
-                            color = BentoTextSecondary
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = "${recentScans.size} spots scanned",
+                                fontSize = 12.sp,
+                                color = BentoTextSecondary
+                            )
+                        }
 
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(RadiusChip),
                             color = BentoWhite,
                             border = BorderStroke(1.dp, BentoBorder)
                         ) {
