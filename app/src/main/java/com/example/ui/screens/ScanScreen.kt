@@ -107,7 +107,7 @@ fun ScanScreen(
     isProcessing: Boolean,
     processingStatusText: String,
     onCaptureImage: (Bitmap?) -> Unit,
-    onPresetSelected: (SampleSignPreset) -> Unit,
+    onPresetSelected: (SampleSignPreset) -> Unit = {},
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -173,17 +173,6 @@ fun ScanScreen(
             repeatMode = RepeatMode.Restart
         ),
         label = "radar_wave"
-    )
-
-    // 4. Bounding Box Glow Pulse
-    val borderAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.95f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1100, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "bounding_glow"
     )
 
     Box(
@@ -420,145 +409,6 @@ fun ScanScreen(
                     strokeWidth = 3.dp.toPx()
                 )
             }
-
-            // AI DETECTED SIGN BOUNDING BOXES (Standardized RadiusNested = 16.dp)
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(vertical = 16.dp, horizontal = 12.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Detected Sign 1: Time Limit
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(86.dp)
-                        .border(
-                            BorderStroke(
-                                2.dp,
-                                Color.White.copy(alpha = borderAlpha)
-                            ),
-                            RoundedCornerShape(RadiusNested)
-                        )
-                        .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(RadiusNested))
-                        .padding(14.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(RadiusSmall),
-                                    color = Color.White.copy(alpha = 0.9f)
-                                ) {
-                                    Text(
-                                        text = "Sign 1: Time Limit",
-                                        color = CurbBlack,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(RadiusSmall),
-                                    color = CurbSuccess.copy(alpha = 0.85f)
-                                ) {
-                                    Text(
-                                        text = "99.1% Confidence",
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            Text(
-                                text = "2 HOUR PARKING • 8 AM - 6 PM",
-                                color = CurbWhite,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Detected Sign 2: Street Cleaning
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(86.dp)
-                        .border(
-                            BorderStroke(
-                                2.dp,
-                                Color.White.copy(alpha = borderAlpha)
-                            ),
-                            RoundedCornerShape(RadiusNested)
-                        )
-                        .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(RadiusNested))
-                        .padding(14.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(RadiusSmall),
-                                    color = Color.White.copy(alpha = 0.9f)
-                                ) {
-                                    Text(
-                                        text = "Sign 2: Street Cleaning",
-                                        color = CurbBlack,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(RadiusSmall),
-                                    color = BentoPeach
-                                ) {
-                                    Text(
-                                        text = "Rule Tracked",
-                                        color = BentoPrimary,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            Text(
-                                text = "NO PARKING • TUE & THU 8-10 AM",
-                                color = CurbWhite,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
         }
 
         // TOP CONTROLS (Back / Close & Help "?")
@@ -623,62 +473,15 @@ fun ScanScreen(
             }
         }
 
-        // BOTTOM CAPTURE CONTROLS & PRESET REALISTIC SIGNS
+        // BOTTOM CAPTURE CONTROLS
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 20.dp),
+                .padding(bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Preset Sign Quick Selector (Convenient testing selector with equal RadiusChip)
-            Text(
-                text = "Sample test signs:",
-                color = CurbWhite.copy(alpha = 0.75f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(GeminiService.PRESET_SIGNS) { preset ->
-                    Surface(
-                        shape = RoundedCornerShape(RadiusChip),
-                        color = CurbBlack.copy(alpha = 0.75f),
-                        border = BorderStroke(1.dp, CurbWhite.copy(alpha = 0.4f)),
-                        modifier = Modifier
-                            .clickable { onPresetSelected(preset) }
-                            .testTag("preset_sign_${preset.id}")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = BentoPeach,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = preset.title.split("—").firstOrNull()?.trim() ?: preset.title,
-                                color = CurbWhite,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
             // Main Shutter Button & Symmetrical Gallery / Flash Controls
             Row(
                 modifier = Modifier

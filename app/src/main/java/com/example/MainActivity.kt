@@ -252,13 +252,6 @@ fun CurbApp(
                         onGetStarted = {
                             navController.navigate(Routes.NAME_SETUP)
                         },
-                        onContinueAsGuest = {
-                            viewModel.startGuestSession {
-                                navController.navigate(Routes.HOME) {
-                                    popUpTo(Routes.WELCOME) { inclusive = true }
-                                }
-                            }
-                        },
                         onTermsClicked = {
                             navController.navigate(Routes.TERMS_OF_SERVICE)
                         },
