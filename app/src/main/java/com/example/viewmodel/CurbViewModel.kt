@@ -197,33 +197,26 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startGuestSession(onComplete: () -> Unit = {}) {
         viewModelScope.launch {
-            // 1. Wipe Room Database completely so no previous user/guest history persists
-            repository.clearAllData()
+            // Logout semantics: end the current session ONLY. Local Curb data
+            // (Saved Places, Scan History, Notes, Parking Sessions, User Profile)
+            // is intentionally preserved across logout/login so the user keeps
+            // their Curb content. We only flip the auth flags and reset
+            // ephemeral in-memory UI state.
 
-            // 2. Reset SharedPreferences completely
-            sessionPreferences.clearSession()
+            // 1. Reset monthly usage counters (not destructive to user data)
             scanUsageManager.resetUsage()
             chatUsageManager.resetUsage()
 
-            // 3. Setup fresh guest state
-            val guestProfile = UserProfile(
-                name = "Guest",
-                gender = "Not specified",
-                email = "",
-                isPro = false,
-                pushNotificationsEnabled = true
-            )
-            _userProfile.value = guestProfile
-            _isJudgeProActive.value = false
+            // 2. Set session/auth flags for guest mode
             sessionPreferences.isOnboardingCompleted = true
             sessionPreferences.isPermissionsCompleted = true
             sessionPreferences.isLoggedIn = true
             sessionPreferences.isGuest = true
-            sessionPreferences.saveUserProfile(guestProfile)
-            _scanUsageInfo.value = scanUsageManager.getUsageInfo(false)
-            _chatUsageInfo.value = chatUsageManager.getUsageInfo(false)
 
-            // 4. Reset in-memory View Model state
+            // 3. Mark session as logged-out for the gating flow
+            _onboardingCompleted.value = true
+
+            // 4. Reset ephemeral in-memory UI state only
             _currentScanResult.value = null
             _isProcessingScan.value = false
             _processingStatusText.value = "Reading parking signs…"
@@ -235,7 +228,6 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             )
             _isChatLoading.value = false
             _showNotificationDialog.value = false
-            _onboardingCompleted.value = true
 
             onComplete()
         }
@@ -243,32 +235,36 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout(onComplete: () -> Unit = {}) {
         viewModelScope.launch {
-            // 1. Wipe all local database tables (scans, active sessions, saved spots)
-            repository.clearAllData()
+            // Curb is local-first. Logging out MUST end the auth/session only.
+            // It must NEVER delete legitimate user content (Saved Places,
+            // Scan History, Notes, Parking Sessions, the saved UserProfile).
+            //
+            // What logout DOES do:
+            //   - Flip auth/session flags so the splash flow routes to
+            //     WELCOME / NAME_SETUP next time.
+            //   - Reset ephemeral in-memory UI state (current scan, chat
+            //     thread, processing indicators, notification dialog).
+            //
+            // What logout does NOT do (anymore):
+            //   - repository.clearAllData()    // was wiping Saved Places + History
+            //   - sessionPreferences.clearSession()  // was wiping user profile
 
-            // 2. Clear all SharedPreferences session & onboarding states
-            sessionPreferences.clearSession()
-            scanUsageManager.resetUsage()
-            chatUsageManager.resetUsage()
+            sessionPreferences.isLoggedIn = false
+            sessionPreferences.isOnboardingCompleted = false
+            sessionPreferences.isPermissionsCompleted = false
 
-            // 3. Reset in-memory ViewModel states to pristine defaults
-            val defaultProfile = UserProfile(name = "Alex", email = "")
-            _userProfile.value = defaultProfile
-            _isJudgeProActive.value = false
+            _onboardingCompleted.value = false
             _currentScanResult.value = null
             _isProcessingScan.value = false
             _processingStatusText.value = "Reading parking signs…"
             _chatMessages.value = listOf(
                 ChatMessage(
-                    text = "Hello Alex. I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
+                    text = "Hello. I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
                     isUser = false
                 )
             )
             _isChatLoading.value = false
             _showNotificationDialog.value = false
-            _onboardingCompleted.value = false
-            _scanUsageInfo.value = scanUsageManager.getUsageInfo(false)
-            _chatUsageInfo.value = chatUsageManager.getUsageInfo(false)
 
             onComplete()
         }
