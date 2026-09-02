@@ -83,18 +83,28 @@ class SubscriptionService(private val context: Context) {
         )
 
         /**
-         * Validates whether a given API key is a genuine RevenueCat Public API key
-         * and not a template/dummy/placeholder string.
+         * Validates whether a given API key is a usable RevenueCat Public API key
+         * and not an empty, placeholder, or dummy key string.
          */
-        fun isRealRevenueCatKey(key: String?): Boolean {
+        fun isConfigurableKey(key: String?): Boolean {
             if (key.isNullOrBlank()) return false
-            val lower = key.lowercase()
-            if (lower.contains("placeholder") || lower.contains("default_value") || lower.contains("test_curb") || lower.contains("your_key")) {
+            val trimmed = key.trim()
+            val lower = trimmed.lowercase()
+            if (lower == "revenuecat_public_api_key" ||
+                lower.contains("placeholder") ||
+                lower.contains("default_value") ||
+                lower.contains("your_key") ||
+                lower.contains("curb_pro") ||
+                lower.contains("dummy") ||
+                lower.contains("test")
+            ) {
                 return false
             }
-            if (key == "REVENUECAT_PUBLIC_API_KEY") return false
-            // RevenueCat Google public API keys start with "goog_" followed by a long alphanumeric string
-            return (key.startsWith("goog_") || key.startsWith("rcb_")) && key.length > 20
+            // RevenueCat Android public keys must start with 'goog_' or 'amzn_' and typically contain 30+ characters
+            if (!trimmed.startsWith("goog_") && !trimmed.startsWith("amzn_")) {
+                return false
+            }
+            return trimmed.length >= 24
         }
     }
 
@@ -118,9 +128,9 @@ class SubscriptionService(private val context: Context) {
                 ""
             }
 
-            // Only attempt RevenueCat SDK configuration if a valid live key is supplied
-            if (!isRealRevenueCatKey(apiKey)) {
-                Log.d(TAG, "RevenueCat public API key is not configured or is a placeholder. Initializing in fallback demo mode.")
+            // Only attempt RevenueCat SDK configuration if a valid key is supplied
+            if (!isConfigurableKey(apiKey)) {
+                Log.d(TAG, "RevenueCat public API key is not configured or is a placeholder.")
                 _subscriptionState.value = _subscriptionState.value.copy(
                     isConfigured = false,
                     packages = DEFAULT_PACKAGES,
@@ -129,15 +139,47 @@ class SubscriptionService(private val context: Context) {
                 return
             }
 
-            // Set log level to WARN to prevent noisy logcat output on unsupported environments
-            Purchases.logLevel = LogLevel.WARN
+            // Set custom log handler to gracefully catch and handle Billing unavailable logs on emulators/test environments
+            Purchases.logHandler = object : com.revenuecat.purchases.LogHandler {
+                override fun v(tag: String, msg: String) {
+                    Log.v(TAG, msg)
+                }
+
+                override fun d(tag: String, msg: String) {
+                    Log.d(TAG, msg)
+                }
+
+                override fun i(tag: String, msg: String) {
+                    Log.i(TAG, msg)
+                }
+
+                override fun w(tag: String, msg: String) {
+                    Log.w(TAG, msg)
+                }
+
+                override fun e(tag: String, msg: String, tr: Throwable?) {
+                    if (msg.contains("BILLING_UNAVAILABLE") ||
+                        msg.contains("Billing is not available") ||
+                        msg.contains("PurchaseNotAllowedError") ||
+                        msg.contains("API Key is not recognized") ||
+                        msg.contains("The specified API Key is not recognized")
+                    ) {
+                        Log.d(TAG, "Store billing diagnostic: $msg")
+                    } else if (tr != null) {
+                        Log.e(TAG, msg, tr)
+                    } else {
+                        Log.e(TAG, msg)
+                    }
+                }
+            }
 
             if (!Purchases.isConfigured) {
                 Purchases.configure(
                     PurchasesConfiguration.Builder(context, apiKey)
+                        .showInAppMessagesAutomatically(false)
                         .build()
                 )
-                Log.d(TAG, "RevenueCat initialized with anonymous app user ID.")
+                Log.d(TAG, "RevenueCat initialized successfully with anonymous app user ID.")
             }
 
             _subscriptionState.value = _subscriptionState.value.copy(isConfigured = true)
@@ -266,25 +308,23 @@ class SubscriptionService(private val context: Context) {
         onError: (String) -> Unit
     ) {
         if (!Purchases.isConfigured) {
-            // Live RevenueCat key is not set, simulate activation or notify user
+            val msg = "Store billing is currently unavailable on this device. If you are demoing the app, please use promo code CURB26X."
             _subscriptionState.value = _subscriptionState.value.copy(
-                isPro = true,
-                successMessage = "Curb Pro activated!"
+                isLoading = false,
+                errorMessage = msg
             )
-            onProStatusChanged?.invoke(true)
-            onSuccess()
+            onError(msg)
             return
         }
 
         val rawPkg = packageInfo.rawPackage
         if (rawPkg == null) {
-            // Fallback package tapped when live offerings aren't available from Play Store
+            val msg = "This package is currently unavailable from the store. Please try again."
             _subscriptionState.value = _subscriptionState.value.copy(
-                isPro = true,
-                successMessage = "Curb Pro activated!"
+                isLoading = false,
+                errorMessage = msg
             )
-            onProStatusChanged?.invoke(true)
-            onSuccess()
+            onError(msg)
             return
         }
 
@@ -311,7 +351,11 @@ class SubscriptionService(private val context: Context) {
                             onProStatusChanged?.invoke(true)
                             onSuccess()
                         } else {
-                            onError("Purchase completed, but 'pro_access' entitlement was not activated.")
+                            val errorMsg = "Purchase completed, but the 'pro_access' entitlement was not active."
+                            _subscriptionState.value = _subscriptionState.value.copy(
+                                errorMessage = errorMsg
+                            )
+                            onError(errorMsg)
                         }
                     }
 
@@ -353,12 +397,12 @@ class SubscriptionService(private val context: Context) {
         onError: (String) -> Unit
     ) {
         if (!Purchases.isConfigured) {
+            val msg = "Store service is unavailable to restore purchases."
             _subscriptionState.value = _subscriptionState.value.copy(
-                isPro = true,
-                successMessage = "Purchases restored for Curb Pro."
+                isLoading = false,
+                errorMessage = msg
             )
-            onProStatusChanged?.invoke(true)
-            onSuccess(true)
+            onError(msg)
             return
         }
 

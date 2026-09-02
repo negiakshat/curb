@@ -5,6 +5,8 @@ import android.app.Application
 import android.graphics.Bitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.local.ChatUsageInfo
+import com.example.data.local.ChatUsageManager
 import com.example.data.local.ScanUsageInfo
 import com.example.data.local.ScanUsageManager
 import com.example.data.local.SessionPreferences
@@ -31,10 +33,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+sealed class PromoCodeResult {
+    data object Success : PromoCodeResult()
+    data class Error(val message: String) : PromoCodeResult()
+}
+
 class CurbViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = CurbRepository(application)
     private val sessionPreferences = SessionPreferences(application)
     private val scanUsageManager = ScanUsageManager(application)
+    private val chatUsageManager = ChatUsageManager(application)
     val subscriptionService = SubscriptionService(application)
     val locationService = LocationService(application)
 
@@ -59,12 +67,24 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     private val _userProfile = MutableStateFlow(sessionPreferences.getUserProfile())
     val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
 
+    private val _isJudgeProActive = MutableStateFlow(sessionPreferences.isJudgeProActive)
+    val isJudgeProActive: StateFlow<Boolean> = _isJudgeProActive.asStateFlow()
+
     val subscriptionState: StateFlow<SubscriptionUiState> = subscriptionService.subscriptionState
 
     private val _scanUsageInfo = MutableStateFlow(
-        scanUsageManager.getUsageInfo(_userProfile.value.isPro || subscriptionState.value.isPro)
+        scanUsageManager.getUsageInfo(
+            sessionPreferences.getUserProfile().isPro || sessionPreferences.isJudgeProActive
+        )
     )
     val scanUsageInfo: StateFlow<ScanUsageInfo> = _scanUsageInfo.asStateFlow()
+
+    private val _chatUsageInfo = MutableStateFlow(
+        chatUsageManager.getUsageInfo(
+            sessionPreferences.getUserProfile().isPro || sessionPreferences.isJudgeProActive
+        )
+    )
+    val chatUsageInfo: StateFlow<ChatUsageInfo> = _chatUsageInfo.asStateFlow()
 
     private val _onboardingCompleted = MutableStateFlow(sessionPreferences.isOnboardingAndPermissionsCompleted())
     val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted.asStateFlow()
@@ -97,12 +117,11 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     init {
         // Initialize RevenueCat with anonymous app user ID
         subscriptionService.initialize { isProActive ->
-            if (isProActive != _userProfile.value.isPro) {
-                val updated = _userProfile.value.copy(isPro = isProActive)
-                _userProfile.value = updated
-                sessionPreferences.saveUserProfile(updated)
-                _scanUsageInfo.value = scanUsageManager.getUsageInfo(isProActive)
-            }
+            val updated = _userProfile.value.copy(isPro = isProActive)
+            _userProfile.value = updated
+            sessionPreferences.saveUserProfile(updated)
+            _scanUsageInfo.value = scanUsageManager.getUsageInfo(isUserPro())
+            _chatUsageInfo.value = chatUsageManager.getUsageInfo(isUserPro())
         }
 
         // Fetch location if permission is already granted
@@ -123,15 +142,34 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun isUserPro(): Boolean {
-        return _userProfile.value.isPro || subscriptionState.value.isPro
+        return _userProfile.value.isPro || subscriptionState.value.isPro || _isJudgeProActive.value
+    }
+
+    fun applyPromoCode(code: String): PromoCodeResult {
+        val trimmed = code.trim().uppercase()
+        return if (trimmed == "CURB26X") {
+            _isJudgeProActive.value = true
+            sessionPreferences.isJudgeProActive = true
+            _scanUsageInfo.value = scanUsageManager.getUsageInfo(true)
+            _chatUsageInfo.value = chatUsageManager.getUsageInfo(true)
+            PromoCodeResult.Success
+        } else {
+            PromoCodeResult.Error("Invalid promo code.")
+        }
     }
 
     fun canPerformScan(): Boolean {
         return scanUsageManager.canPerformScan(isUserPro())
     }
 
+    fun canSendChatMessage(): Boolean {
+        return chatUsageManager.canSendMessage(isUserPro())
+    }
+
     fun refreshUsageInfo() {
-        _scanUsageInfo.value = scanUsageManager.getUsageInfo(isUserPro())
+        val pro = isUserPro()
+        _scanUsageInfo.value = scanUsageManager.getUsageInfo(pro)
+        _chatUsageInfo.value = chatUsageManager.getUsageInfo(pro)
     }
 
     fun isOnboardingAndPermissionsCompleted(): Boolean {
@@ -165,6 +203,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             // 2. Reset SharedPreferences completely
             sessionPreferences.clearSession()
             scanUsageManager.resetUsage()
+            chatUsageManager.resetUsage()
 
             // 3. Setup fresh guest state
             val guestProfile = UserProfile(
@@ -175,12 +214,14 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                 pushNotificationsEnabled = true
             )
             _userProfile.value = guestProfile
+            _isJudgeProActive.value = false
             sessionPreferences.isOnboardingCompleted = true
             sessionPreferences.isPermissionsCompleted = true
             sessionPreferences.isLoggedIn = true
             sessionPreferences.isGuest = true
             sessionPreferences.saveUserProfile(guestProfile)
             _scanUsageInfo.value = scanUsageManager.getUsageInfo(false)
+            _chatUsageInfo.value = chatUsageManager.getUsageInfo(false)
 
             // 4. Reset in-memory View Model state
             _currentScanResult.value = null
@@ -208,10 +249,12 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             // 2. Clear all SharedPreferences session & onboarding states
             sessionPreferences.clearSession()
             scanUsageManager.resetUsage()
+            chatUsageManager.resetUsage()
 
             // 3. Reset in-memory ViewModel states to pristine defaults
             val defaultProfile = UserProfile(name = "Alex", email = "")
             _userProfile.value = defaultProfile
+            _isJudgeProActive.value = false
             _currentScanResult.value = null
             _isProcessingScan.value = false
             _processingStatusText.value = "Reading parking signs…"
@@ -225,6 +268,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             _showNotificationDialog.value = false
             _onboardingCompleted.value = false
             _scanUsageInfo.value = scanUsageManager.getUsageInfo(false)
+            _chatUsageInfo.value = chatUsageManager.getUsageInfo(false)
 
             onComplete()
         }
@@ -349,6 +393,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                 _userProfile.value = updated
                 sessionPreferences.saveUserProfile(updated)
                 _scanUsageInfo.value = scanUsageManager.getUsageInfo(true)
+                _chatUsageInfo.value = chatUsageManager.getUsageInfo(true)
                 onSuccess()
             },
             onError = onError
@@ -365,6 +410,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                     _userProfile.value = updated
                     sessionPreferences.saveUserProfile(updated)
                     _scanUsageInfo.value = scanUsageManager.getUsageInfo(true)
+                    _chatUsageInfo.value = chatUsageManager.getUsageInfo(true)
                     onResult(true, "Your Curb Pro subscription has been restored.")
                 } else {
                     onResult(false, "No active Curb Pro purchase was found.")
@@ -416,19 +462,42 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun sendChatMessage(query: String) {
+    fun sendChatMessage(
+        query: String,
+        onLimitReached: () -> Unit = {}
+    ) {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return
+        if (_isChatLoading.value) return
+
+        val userIsPro = isUserPro()
+        if (!chatUsageManager.canSendMessage(userIsPro)) {
+            _chatUsageInfo.value = chatUsageManager.getUsageInfo(userIsPro)
+            onLimitReached()
+            return
+        }
 
         val userMsg = ChatMessage(text = trimmed, isUser = true)
         _chatMessages.value = _chatMessages.value + userMsg
         _isChatLoading.value = true
 
+        // Increment usage allowance counter once request is submitted
+        _chatUsageInfo.value = chatUsageManager.incrementUsage(userIsPro)
+
         viewModelScope.launch {
-            val responseText = GeminiService.askParkingAssistant(trimmed, _chatMessages.value)
-            val aiMsg = ChatMessage(text = responseText, isUser = false)
-            _chatMessages.value = _chatMessages.value + aiMsg
-            _isChatLoading.value = false
+            try {
+                val responseText = GeminiService.askParkingAssistant(trimmed, _chatMessages.value)
+                val aiMsg = ChatMessage(text = responseText, isUser = false)
+                _chatMessages.value = _chatMessages.value + aiMsg
+            } catch (e: Exception) {
+                val errMsg = ChatMessage(
+                    text = "I'm having trouble connecting right now. Please try again in a moment.",
+                    isUser = false
+                )
+                _chatMessages.value = _chatMessages.value + errMsg
+            } finally {
+                _isChatLoading.value = false
+            }
         }
     }
 

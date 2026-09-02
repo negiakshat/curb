@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -49,14 +50,17 @@ fun WelcomeScreen(
     onPrivacyClicked: () -> Unit
 ) {
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .background(CurbWhite)
     ) {
-        // FULL SCREEN BACKGROUND IMAGE
+        // FULL SCREEN BACKGROUND IMAGE WITH PRESERVED PROPORTIONS & RATIO
         Image(
             painter = painterResource(id = R.drawable.welcome_bg),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
+            contentScale = ContentScale.FillWidth,
+            alignment = Alignment.BottomCenter
         )
 
         // CONTENT OVERLAY
@@ -157,7 +161,7 @@ fun WelcomeScreen(
                         )
 
                         Icon(
-                            imageVector = Icons.Default.ArrowForward,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = "Get Started",
                             tint = CurbWhite,
                             modifier = Modifier

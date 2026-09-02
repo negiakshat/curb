@@ -18,7 +18,12 @@ class SessionPreferences(context: Context) {
         private const val KEY_USER_EMAIL = "key_user_email"
         private const val KEY_IS_PRO = "key_is_pro"
         private const val KEY_PUSH_NOTIFICATIONS = "key_push_notifications"
+        private const val KEY_JUDGE_PRO_ACCESS = "key_judge_pro_access"
     }
+
+    var isJudgeProActive: Boolean
+        get() = prefs.getBoolean(KEY_JUDGE_PRO_ACCESS, false)
+        set(value) = prefs.edit().putBoolean(KEY_JUDGE_PRO_ACCESS, value).apply()
 
     var isOnboardingCompleted: Boolean
         get() = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)

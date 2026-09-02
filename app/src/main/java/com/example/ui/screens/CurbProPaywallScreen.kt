@@ -26,9 +26,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -39,7 +43,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,57 +57,58 @@ import androidx.compose.ui.unit.sp
 import com.example.data.remote.SubscriptionPackageInfo
 import com.example.data.remote.SubscriptionUiState
 import com.example.ui.components.CurbCard
-import com.example.ui.components.CurbLogo
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.components.CurbProSuccessDialog
 import com.example.ui.theme.BentoBorder
 import com.example.ui.theme.BentoBorderStrong
 import com.example.ui.theme.BentoPeach
 import com.example.ui.theme.BentoPrimaryDark
 import com.example.ui.theme.BentoSand
 import com.example.ui.theme.BentoTextDark
-import com.example.ui.theme.BentoTextSecondary
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbBlack
+import com.example.ui.theme.CurbError
 import com.example.ui.theme.CurbOnSurface
 import com.example.ui.theme.CurbOnSurfaceVariant
 import com.example.ui.theme.CurbSurface
-import com.example.ui.theme.CurbSurfaceVariant
 import com.example.ui.theme.CurbWhite
 import com.example.ui.theme.RadiusCard
 import com.example.ui.theme.RadiusNested
-import com.example.ui.theme.RadiusSmall
-import kotlinx.coroutines.launch
+import com.example.viewmodel.PromoCodeResult
+
+private enum class PaywallSuccessType {
+    REAL_PURCHASE,
+    JUDGE_PROMO,
+    RESTORE_SUCCESS
+}
 
 @Composable
 fun CurbProPaywallScreen(
     subscriptionState: SubscriptionUiState,
-    onPurchase: (Activity, SubscriptionPackageInfo) -> Unit,
-    onRestorePurchases: () -> Unit,
+    onPurchase: (Activity, SubscriptionPackageInfo, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit,
+    onRestorePurchases: (onResult: (Boolean, String) -> Unit) -> Unit,
+    onApplyPromoCode: (String) -> PromoCodeResult,
     onTermsClicked: () -> Unit,
     onPrivacyClicked: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
-    val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     val packages = subscriptionState.packages
-    // Default selection to the best value (annual) option or first package
     var selectedPackageId by remember(packages) {
         val annualPkg = packages.find { it.isBestValue }
         mutableStateOf(annualPkg?.id ?: packages.firstOrNull()?.id ?: "annual")
     }
 
+    var successDialogType by remember { mutableStateOf<PaywallSuccessType?>(null) }
+    var promoCodeInput by remember { mutableStateOf("") }
+    var promoCodeError by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(subscriptionState.errorMessage) {
         subscriptionState.errorMessage?.let { error ->
             snackbarHostState.showSnackbar(error)
-        }
-    }
-
-    LaunchedEffect(subscriptionState.successMessage) {
-        subscriptionState.successMessage?.let { msg ->
-            snackbarHostState.showSnackbar(msg)
         }
     }
 
@@ -129,7 +133,7 @@ fun CurbProPaywallScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Spacer(modifier = Modifier.width(40.dp))
-                    
+
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = BentoSand,
@@ -182,18 +186,13 @@ fun CurbProPaywallScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "CURB PRO",
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Black,
-                            color = CurbOnSurface,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
+                    Text(
+                        text = "CURB PRO",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Black,
+                        color = CurbOnSurface,
+                        letterSpacing = 0.5.sp
+                    )
 
                     Spacer(modifier = Modifier.height(6.dp))
 
@@ -206,7 +205,7 @@ fun CurbProPaywallScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
             // BENEFITS LIST CARD
@@ -230,8 +229,8 @@ fun CurbProPaywallScreen(
                             subtitle = "Complex multi-sign conflict resolution & real-time answers."
                         )
                         PaywallBenefitItem(
-                            title = "Full Curb Pro experience",
-                            subtitle = "Smart expiration countdowns, priority AI processing & saved spots."
+                            title = "Full scan history & saved places",
+                            subtitle = "Keep all your scan reports and manage unlimited saved parking spots."
                         )
                     }
                 }
@@ -272,7 +271,92 @@ fun CurbProPaywallScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            // PROMO CODE SECTION
+            item {
+                CurbCard(
+                    cornerRadius = RadiusNested,
+                    backgroundColor = BentoSand.copy(alpha = 0.55f)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Have a promo code?",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BentoTextDark
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = promoCodeInput,
+                                onValueChange = {
+                                    promoCodeInput = it
+                                    if (promoCodeError != null) promoCodeError = null
+                                },
+                                placeholder = {
+                                    Text("Enter promo code", fontSize = 13.sp, color = CurbOnSurfaceVariant)
+                                },
+                                singleLine = true,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("paywall_promo_input"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = BentoPrimaryDark,
+                                    unfocusedBorderColor = BentoBorder,
+                                    focusedContainerColor = CurbWhite,
+                                    unfocusedContainerColor = CurbWhite
+                                )
+                            )
+
+                            Button(
+                                onClick = {
+                                    val result = onApplyPromoCode(promoCodeInput)
+                                    if (result is PromoCodeResult.Success) {
+                                        promoCodeError = null
+                                        successDialogType = PaywallSuccessType.JUDGE_PROMO
+                                    } else if (result is PromoCodeResult.Error) {
+                                        promoCodeError = result.message
+                                    }
+                                },
+                                enabled = promoCodeInput.isNotBlank() && !subscriptionState.isLoading,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = BentoPrimaryDark,
+                                    contentColor = CurbWhite
+                                ),
+                                modifier = Modifier.testTag("paywall_promo_apply_button")
+                            ) {
+                                Text("Apply", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        }
+
+                        if (promoCodeError != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = promoCodeError ?: "",
+                                color = CurbError,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.testTag("paywall_promo_error")
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
             // ACTIONS
@@ -284,10 +368,19 @@ fun CurbProPaywallScreen(
                     val selectedPackage = packages.find { it.id == selectedPackageId } ?: packages.firstOrNull()
 
                     CurbPrimaryButton(
-                        text = if (subscriptionState.isLoading) "Connecting to Store…" else "Get Curb Pro",
+                        text = if (subscriptionState.isLoading) "Processing…" else "Get Curb Pro",
                         onClick = {
                             if (activity != null && selectedPackage != null && !subscriptionState.isLoading) {
-                                onPurchase(activity, selectedPackage)
+                                onPurchase(
+                                    activity,
+                                    selectedPackage,
+                                    {
+                                        successDialogType = PaywallSuccessType.REAL_PURCHASE
+                                    },
+                                    { error ->
+                                        // Error handled via snackbar
+                                    }
+                                )
                             }
                         },
                         enabled = !subscriptionState.isLoading && selectedPackage != null,
@@ -309,7 +402,16 @@ fun CurbProPaywallScreen(
                     }
 
                     TextButton(
-                        onClick = onRestorePurchases,
+                        onClick = {
+                            if (!subscriptionState.isLoading) {
+                                onRestorePurchases { success, msg ->
+                                    if (success) {
+                                        successDialogType = PaywallSuccessType.RESTORE_SUCCESS
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !subscriptionState.isLoading,
                         modifier = Modifier.testTag("paywall_restore_purchases_button")
                     ) {
                         Text(
@@ -358,11 +460,12 @@ fun CurbProPaywallScreen(
             }
         }
 
+        // LOADING OVERLAY
         if (subscriptionState.isLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.25f)),
+                    .background(Color.Black.copy(alpha = 0.35f)),
                 contentAlignment = Alignment.Center
             ) {
                 Surface(
@@ -381,7 +484,7 @@ fun CurbProPaywallScreen(
                             strokeWidth = 2.5.dp
                         )
                         Text(
-                            text = "Processing…",
+                            text = "Connecting to Store…",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             color = CurbOnSurface
@@ -397,6 +500,18 @@ fun CurbProPaywallScreen(
                 .align(Alignment.BottomCenter)
                 .padding(16.dp)
         )
+
+        // SUCCESS CELEBRATION MODAL WITH CONFETTI
+        successDialogType?.let { type ->
+            CurbProSuccessDialog(
+                isJudgeCode = type == PaywallSuccessType.JUDGE_PROMO,
+                isRestore = type == PaywallSuccessType.RESTORE_SUCCESS,
+                onContinue = {
+                    successDialogType = null
+                    onDismiss()
+                }
+            )
+        }
     }
 }
 

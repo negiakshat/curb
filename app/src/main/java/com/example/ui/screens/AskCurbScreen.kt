@@ -26,6 +26,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,8 +45,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.local.ChatUsageInfo
 import com.example.data.model.ChatMessage
 import com.example.ui.components.CurbLogo
 import com.example.ui.theme.RadiusCard
@@ -58,6 +62,7 @@ import com.example.ui.theme.CurbOnSurface
 import com.example.ui.theme.CurbOnSurfaceVariant
 import com.example.ui.theme.CurbOutline
 import com.example.ui.theme.CurbSurface
+import com.example.ui.theme.CurbSurfacePeach
 import com.example.ui.theme.CurbSurfaceVariant
 import com.example.ui.theme.CurbWhite
 
@@ -65,7 +70,10 @@ import com.example.ui.theme.CurbWhite
 fun AskCurbScreen(
     messages: List<ChatMessage>,
     isLoading: Boolean,
+    usageInfo: ChatUsageInfo = ChatUsageInfo(messagesUsedToday = 0),
+    isPro: Boolean = false,
     onSendMessage: (String) -> Unit,
+    onUpgradeToPro: () -> Unit = {},
     onBack: () -> Unit
 ) {
     var inputText by remember { mutableStateOf("") }
@@ -118,14 +126,16 @@ fun AskCurbScreen(
 
             Surface(
                 shape = RoundedCornerShape(RadiusSmall),
-                color = CurbSurfaceVariant
+                color = if (!isPro && usageInfo.isLimitReached) CurbSurfacePeach else CurbSurfaceVariant
             ) {
                 Text(
-                    text = "AI Assistant",
+                    text = if (isPro) "AI Assistant" else usageInfo.displayText,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = CurbBlack,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier
+                        .padding(horizontal = 9.dp, vertical = 4.dp)
+                        .testTag("chat_usage_indicator")
                 )
             }
         }
@@ -165,90 +175,138 @@ fun AskCurbScreen(
             }
         }
 
-        // SUGGESTED PROMPTS
-        if (messages.size <= 2) {
-            LazyRow(
+        if (!isPro && usageInfo.isLimitReached) {
+            // POLISHED LIMIT REACHED STATE
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 6.dp),
-                contentPadding = PaddingValues(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+                    .testTag("chat_limit_reached_card"),
+                shape = RoundedCornerShape(RadiusCard),
+                color = CurbSurfacePeach
             ) {
-                items(suggestedPrompts) { prompt ->
-                    Surface(
-                        shape = RoundedCornerShape(RadiusChip),
-                        color = CurbSurfaceVariant,
-                        modifier = Modifier
-                            .clickable {
-                                onSendMessage(prompt)
-                            }
-                            .testTag("suggested_prompt_$prompt")
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Curb AI daily limit reached",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CurbBlack
+                    )
+                    Text(
+                        text = "You've used all 15 Curb AI questions for today. Your limit resets tomorrow.",
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        color = CurbOnSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Button(
+                        onClick = onUpgradeToPro,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CurbBlack,
+                            contentColor = CurbWhite
+                        ),
+                        shape = RoundedCornerShape(RadiusHero),
+                        modifier = Modifier.testTag("chat_upgrade_pro_button")
                     ) {
                         Text(
-                            text = prompt,
+                            text = "Get Curb Pro",
                             fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = CurbBlack,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
-        }
-
-        // INPUT FIELD & SEND BUTTON
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            OutlinedTextField(
-                value = inputText,
-                onValueChange = { inputText = it },
-                placeholder = {
-                    Text(
-                        text = "Ask anything about parking…",
-                        color = CurbOnSurfaceVariant,
-                        fontSize = 14.sp
-                    )
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag("chat_input_field"),
-                shape = RoundedCornerShape(RadiusHero),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = CurbBlack,
-                    unfocusedBorderColor = CurbOutline,
-                    focusedContainerColor = CurbSurface,
-                    unfocusedContainerColor = CurbSurface,
-                    focusedTextColor = CurbOnSurface,
-                    unfocusedTextColor = CurbOnSurface
-                ),
-                maxLines = 3
-            )
-
-            IconButton(
-                onClick = {
-                    if (inputText.isNotBlank()) {
-                        val text = inputText
-                        inputText = ""
-                        onSendMessage(text)
+        } else {
+            // SUGGESTED PROMPTS
+            if (messages.size <= 2) {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(suggestedPrompts) { prompt ->
+                        Surface(
+                            shape = RoundedCornerShape(RadiusChip),
+                            color = CurbSurfaceVariant,
+                            modifier = Modifier
+                                .clickable(enabled = !isLoading) {
+                                    onSendMessage(prompt)
+                                }
+                                .testTag("suggested_prompt_$prompt")
+                        ) {
+                            Text(
+                                text = prompt,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = CurbBlack,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                        }
                     }
-                },
-                enabled = inputText.isNotBlank(),
+                }
+            }
+
+            // INPUT FIELD & SEND BUTTON
+            Row(
                 modifier = Modifier
-                    .size(48.dp)
-                    .background(if (inputText.isNotBlank()) CurbBlack else CurbSurfaceVariant, CircleShape)
-                    .testTag("chat_send_button")
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send",
-                    tint = if (inputText.isNotBlank()) CurbWhite else CurbOnSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    placeholder = {
+                        Text(
+                            text = "Ask anything about parking…",
+                            color = CurbOnSurfaceVariant,
+                            fontSize = 14.sp
+                        )
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("chat_input_field"),
+                    shape = RoundedCornerShape(RadiusHero),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CurbBlack,
+                        unfocusedBorderColor = CurbOutline,
+                        focusedContainerColor = CurbSurface,
+                        unfocusedContainerColor = CurbSurface,
+                        focusedTextColor = CurbOnSurface,
+                        unfocusedTextColor = CurbOnSurface
+                    ),
+                    maxLines = 3
                 )
+
+                IconButton(
+                    onClick = {
+                        if (inputText.isNotBlank() && !isLoading) {
+                            val text = inputText
+                            inputText = ""
+                            onSendMessage(text)
+                        }
+                    },
+                    enabled = inputText.isNotBlank() && !isLoading,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(if (inputText.isNotBlank() && !isLoading) CurbBlack else CurbSurfaceVariant, CircleShape)
+                        .testTag("chat_send_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "Send",
+                        tint = if (inputText.isNotBlank() && !isLoading) CurbWhite else CurbOnSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }

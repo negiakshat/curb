@@ -149,9 +149,11 @@ fun CurbApp(
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val isChatLoading by viewModel.isChatLoading.collectAsStateWithLifecycle()
     val subscriptionState by viewModel.subscriptionState.collectAsStateWithLifecycle()
+    val isJudgeProActive by viewModel.isJudgeProActive.collectAsStateWithLifecycle()
     val scanUsageInfo by viewModel.scanUsageInfo.collectAsStateWithLifecycle()
+    val chatUsageInfo by viewModel.chatUsageInfo.collectAsStateWithLifecycle()
 
-    val isUserPro = userProfile.isPro || subscriptionState.isPro
+    val isUserPro = userProfile.isPro || subscriptionState.isPro || isJudgeProActive
 
     val bottomNavItems = listOf(
         BottomNavItem.Home,
@@ -473,8 +475,13 @@ fun CurbApp(
                     AskCurbScreen(
                         messages = chatMessages,
                         isLoading = isChatLoading,
+                        usageInfo = chatUsageInfo,
+                        isPro = isUserPro,
                         onSendMessage = { query ->
                             viewModel.sendChatMessage(query)
+                        },
+                        onUpgradeToPro = {
+                            navController.navigate(Routes.CURB_PRO_PAYWALL)
                         },
                         onBack = {
                             navController.popBackStack()
@@ -501,6 +508,7 @@ fun CurbApp(
                 composable(Routes.YOU) {
                     YouScreen(
                         userProfile = userProfile,
+                        isPro = isUserPro,
                         onAccountInfoClicked = { navController.navigate(Routes.ACCOUNT_INFO) },
                         onNotificationsClicked = { navController.navigate(Routes.NOTIFICATIONS) },
                         onPaymentSubscriptionClicked = { navController.navigate(Routes.PAYMENT_SUBSCRIPTION) },
@@ -557,10 +565,13 @@ fun CurbApp(
                         onUpgradeToPro = {
                             navController.navigate(Routes.CURB_PRO_PAYWALL)
                         },
-                        onRestorePurchases = {
+                        onRestorePurchases = { onResult ->
                             viewModel.restoreSubscriptionPurchases { success, msg ->
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                onResult(success, msg)
                             }
+                        },
+                        onApplyPromoCode = { code ->
+                            viewModel.applyPromoCode(code)
                         },
                         onBack = { navController.popBackStack() }
                     )
@@ -570,26 +581,25 @@ fun CurbApp(
                 composable(Routes.CURB_PRO_PAYWALL) {
                     CurbProPaywallScreen(
                         subscriptionState = subscriptionState,
-                        onPurchase = { activity, pkg ->
+                        onPurchase = { activity, pkg, onSuccess, onError ->
                             viewModel.purchaseSubscription(
                                 activity = activity,
                                 packageInfo = pkg,
                                 onSuccess = {
-                                    Toast.makeText(context, "Welcome to Curb Pro!", Toast.LENGTH_SHORT).show()
-                                    navController.popBackStack()
+                                    onSuccess()
                                 },
                                 onError = { err ->
-                                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                    onError(err)
                                 }
                             )
                         },
-                        onRestorePurchases = {
+                        onRestorePurchases = { onResult ->
                             viewModel.restoreSubscriptionPurchases { success, msg ->
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                if (success) {
-                                    navController.popBackStack()
-                                }
+                                onResult(success, msg)
                             }
+                        },
+                        onApplyPromoCode = { code ->
+                            viewModel.applyPromoCode(code)
                         },
                         onTermsClicked = { navController.navigate(Routes.TERMS_OF_SERVICE) },
                         onPrivacyClicked = { navController.navigate(Routes.PRIVACY_POLICY) },

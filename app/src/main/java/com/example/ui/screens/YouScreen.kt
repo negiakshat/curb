@@ -64,6 +64,7 @@ import java.util.Locale
 @Composable
 fun YouScreen(
     userProfile: UserProfile,
+    isPro: Boolean = userProfile.isPro,
     onAccountInfoClicked: () -> Unit,
     onNotificationsClicked: () -> Unit,
     onPaymentSubscriptionClicked: () -> Unit,
@@ -140,7 +141,7 @@ fun YouScreen(
                                         color = CurbOnSurface
                                     )
 
-                                    if (userProfile.isPro) {
+                                    if (isPro) {
                                         Surface(
                                             shape = RoundedCornerShape(RadiusSmall),
                                             color = CurbBlack
