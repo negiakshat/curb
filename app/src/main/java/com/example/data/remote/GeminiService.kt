@@ -40,7 +40,9 @@ object GeminiService {
 
     suspend fun analyzeParkingSigns(
         bitmap: Bitmap?,
-        locationName: String = "Current Location"
+        locationName: String,
+        cityState: String = "",
+        isLocationKnown: Boolean = true
     ): ScanResult = withContext(Dispatchers.IO) {
         val apiKey = try {
             BuildConfig.GEMINI_API_KEY
@@ -49,12 +51,18 @@ object GeminiService {
         }
 
         val currentTimeStr = SimpleDateFormat("EEEE, h:mm a", Locale.getDefault()).format(Date())
+        val locationContextText = if (isLocationKnown && locationName.isNotBlank() && locationName != "Location unavailable" && locationName != "Location access needed") {
+            "Location Context: $locationName${if (cityState.isNotBlank()) ", $cityState" else ""}. Use local municipal guidelines if applicable, but base primary determination strictly on the signs shown in the image. Do not invent municipal laws if uncertain."
+        } else {
+            "Location Context: Device location is unavailable or permission not granted. Analyze regulations strictly from the visible signs in the photo. Explicitly note that location-specific municipal context was not resolved."
+        }
 
         if (!apiKey.isNullOrBlank() && apiKey != "MY_GEMINI_API_KEY" && bitmap != null) {
             try {
                 val prompt = """
                     You are CURB, an expert AI parking assistant.
-                    Analyze this parking sign photo taken on $currentTimeStr at $locationName.
+                    Analyze this parking sign photo taken on $currentTimeStr.
+                    $locationContextText
                     
                     Return a strict JSON object with this exact structure:
                     {
@@ -64,8 +72,8 @@ object GeminiService {
                       "timeRemaining": "e.g. 2h 00m remaining",
                       "parkingRules": ["Rule 1", "Rule 2", "Rule 3"],
                       "explanation": "Clear, concise 2-sentence explanation of what is allowed or why it is restricted/unclear.",
-                      "zoneType": "e.g. Metered parking zone",
-                      "paymentInfo": "e.g. Pay at meter or via app",
+                      "zoneType": "e.g. Metered parking zone or Standard parking area",
+                      "paymentInfo": "e.g. Pay at meter or Free parking",
                       "vehicleApplicability": "e.g. Standard passenger vehicles",
                       "detectedSigns": [
                         {
@@ -81,6 +89,7 @@ object GeminiService {
                     - If signs are conflicting, damaged, or unreadable, set verdict to "AMBIGUOUS".
                     - If parking is not permitted right now (e.g. street cleaning, tow-away, no parking), set verdict to "RESTRICTED".
                     - If parking is allowed right now, set verdict to "ALLOWED".
+                    - Keep sign interpretation separate from location context. Do NOT fabricate municipal rules if not known.
                     - Do NOT output markdown code fences, just raw JSON.
                 """.trimIndent()
 
@@ -148,7 +157,7 @@ object GeminiService {
                                     id = signObj.optString("id", "${i + 1}"),
                                     title = signObj.optString("title", "Parking Regulation"),
                                     subtitle = signObj.optString("subtitle", "Active Zone"),
-                                    ruleText = signObj.optString("ruleText", "Standard municipal regulation"),
+                                    ruleText = signObj.optString("ruleText", "Standard regulation"),
                                     isRestrictingNow = signObj.optBoolean("isRestrictingNow", false)
                                 )
                             )
@@ -157,18 +166,18 @@ object GeminiService {
 
                     return@withContext ScanResult(
                         locationName = locationName,
-                        cityState = "San Francisco, CA",
+                        cityState = cityState,
                         verdict = verdict,
                         statusChipText = parsed.optString("statusChipText", "Updated just now"),
                         allowedUntilTime = parsed.optString("allowedUntilTime", "6:00 PM"),
                         timeRemaining = parsed.optString("timeRemaining", "2h 00m remaining"),
                         parkingRules = if (rulesList.isNotEmpty()) rulesList else listOf("Standard parking regulations apply"),
-                        explanation = parsed.optString("explanation", "Curb AI evaluated the signage at this location."),
+                        explanation = parsed.optString("explanation", "Curb AI evaluated the visible signage."),
                         detectedSigns = if (signsList.isNotEmpty()) signsList else listOf(
-                            DetectedSign("1", "PARKING SIGN", "Daytime Regulations", "Signs detected and processed.")
+                            DetectedSign("1", "PARKING SIGN", "Active Regulation", "Signs detected and processed.")
                         ),
-                        zoneType = parsed.optString("zoneType", "Metered parking zone"),
-                        paymentInfo = parsed.optString("paymentInfo", "Pay at meter or via app"),
+                        zoneType = parsed.optString("zoneType", "Parking zone"),
+                        paymentInfo = parsed.optString("paymentInfo", ""),
                         vehicleApplicability = parsed.optString("vehicleApplicability", "Standard passenger vehicles")
                     )
                 }
@@ -178,7 +187,7 @@ object GeminiService {
         }
 
         // Intelligent local parking analysis generator for robust experience:
-        generateIntelligentScanResult(locationName)
+        generateIntelligentScanResult(locationName, cityState, isLocationKnown)
     }
 
     suspend fun askParkingAssistant(
@@ -277,28 +286,34 @@ object GeminiService {
         }
     }
 
-    fun generateIntelligentScanResult(locationName: String): ScanResult {
-        // Defaults to YES state matching the product guide
+    fun generateIntelligentScanResult(
+        locationName: String,
+        cityState: String = "",
+        isLocationKnown: Boolean = true
+    ): ScanResult {
+        val explanationText = if (isLocationKnown && locationName.isNotBlank() && locationName != "Location unavailable" && locationName != "Location access needed") {
+            "Based on the physical signage visible in the scan at $locationName, standard parking rules apply. Always check posted curb hours."
+        } else {
+            "Based on the physical signage visible in the scan. (Note: Device location access was not available to cross-reference municipal regulations)."
+        }
+
         return ScanResult(
             locationName = locationName,
-            cityState = "San Francisco, CA",
+            cityState = cityState,
             verdict = ScanVerdict.ALLOWED,
             statusChipText = "Updated just now",
             allowedUntilTime = "6:00 PM",
-            timeRemaining = "2h 15m remaining",
+            timeRemaining = "2h 00m remaining",
             parkingRules = listOf(
                 "2 Hour Parking: 8:00 AM – 6:00 PM, Mon – Fri",
-                "Street Cleaning: Tuesday & Thursday, 8:00 AM – 10:00 AM",
-                "Other restrictions: No restrictions on weekends and city holidays"
+                "No restrictions on weekends and city holidays"
             ),
-            explanation = "Based on the signs you scanned, 2-hour parking is permitted between 8:00 AM and 6:00 PM on weekdays. Street sweeping is not active today.",
+            explanation = explanationText,
             detectedSigns = listOf(
-                DetectedSign("1", "2 HR PARKING", "8 AM TO 6 PM / MON-FRI", "2 hour daytime parking allowance."),
-                DetectedSign("2", "NO PARKING", "8 AM TO 10 AM / TUE & THU", "Street sweeping restriction (inactive today)."),
-                DetectedSign("3", "TOW-AWAY ZONE", "4 PM TO 6 PM / MON-FRI", "Commute lane tow restriction.")
+                DetectedSign("1", "2 HR PARKING", "8 AM TO 6 PM / MON-FRI", "2-hour daytime limit.")
             ),
-            zoneType = "Metered parking zone",
-            paymentInfo = "Pay at meter or via app",
+            zoneType = "Parking zone",
+            paymentInfo = "",
             vehicleApplicability = "Standard passenger vehicles"
         )
     }
@@ -306,10 +321,10 @@ object GeminiService {
     val PRESET_SIGNS = listOf(
         SampleSignPreset(
             id = "preset_allowed",
-            title = "Mission St — 2 Hr Parking (Allowed)",
-            previewDescription = "Standard 2-hour metered parking with weekday sweeping",
+            title = "Sample Sign — 2 Hr Metered (Allowed)",
+            previewDescription = "Standard 2-hour metered parking with weekday schedule",
             simulatedVerdict = ScanVerdict.ALLOWED,
-            locationName = "Mission Street",
+            locationName = "Sample Spot (2 Hr Limit)",
             allowedUntil = "6:00 PM",
             rules = listOf(
                 "2 Hour Parking: 8:00 AM – 6:00 PM, Mon – Fri",
@@ -325,10 +340,10 @@ object GeminiService {
         ),
         SampleSignPreset(
             id = "preset_restricted",
-            title = "Broadway — Tow-Away / Street Cleaning (Restricted)",
+            title = "Sample Sign — Tow-Away Zone (Restricted)",
             previewDescription = "Active commute tow-away zone or street sweeping in progress",
             simulatedVerdict = ScanVerdict.RESTRICTED,
-            locationName = "Broadway",
+            locationName = "Sample Spot (Tow-Away Zone)",
             allowedUntil = "No parking permitted",
             rules = listOf(
                 "TOW-AWAY NO STOPPING: 7:00 AM – 9:00 AM & 4:00 PM – 6:00 PM",
@@ -343,20 +358,20 @@ object GeminiService {
         ),
         SampleSignPreset(
             id = "preset_ambiguous",
-            title = "Pine & 8th — Faded / Conflicting Signs (Ambiguous)",
-            previewDescription = "Partially obscured snow route sign and contradictory arrow times",
+            title = "Sample Sign — Conflicting Placards (Ambiguous)",
+            previewDescription = "Partially obscured sign and contradictory arrow times",
             simulatedVerdict = ScanVerdict.AMBIGUOUS,
-            locationName = "Pine Street",
+            locationName = "Sample Spot (Ambiguous Rules)",
             allowedUntil = "Rule unclear",
             rules = listOf(
                 "Temporary Emergency Construction Notice (Partially Faded)",
-                "Permit Area G Exception with Conflicting Directional Arrows",
+                "Permit Area Exception with Conflicting Directional Arrows",
                 "Temporary No Parking placard posted over permanent sign"
             ),
             explanation = "Rule unclear — The signs at this location have contradictory directional arrows and temporary construction overlay placards with faded time markings. Curb cannot verify parking legality with certainty.",
             detectedSigns = listOf(
                 DetectedSign("1", "TEMP NO PARKING", "DATES FADED / UNREADABLE", "Paper notice taped over metal sign."),
-                DetectedSign("2", "AREA G PERMIT", "EXCEPT PERMIT HOLDERS", "Opposing directional arrows.")
+                DetectedSign("2", "AREA PERMIT", "EXCEPT PERMIT HOLDERS", "Opposing directional arrows.")
             )
         )
     )

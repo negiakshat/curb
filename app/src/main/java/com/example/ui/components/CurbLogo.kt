@@ -77,20 +77,21 @@ fun CurbLogo(
     symbolSize: Dp = 28.dp,
     fontSize: Int = 22,
     showWordmark: Boolean = true,
-    tint: Color = CurbBlack
+    tint: Color = CurbBlack,
+    wordmark: String = "CURB"
 ) {
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         CurbIconSymbol(size = symbolSize, tint = tint)
         if (showWordmark) {
             Text(
-                text = "CURB",
+                text = wordmark,
                 fontSize = fontSize.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp,
                 fontFamily = FontFamily.SansSerif,
                 color = tint
             )

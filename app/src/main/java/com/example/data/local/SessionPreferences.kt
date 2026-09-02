@@ -52,11 +52,10 @@ class SessionPreferences(context: Context) {
 
     fun getUserProfile(): UserProfile {
         val defaultName = if (isGuest) "Guest" else "Alex"
-        val defaultEmail = if (isGuest) "guest@curbapp.com" else "alex@curbapp.com"
         return UserProfile(
             name = prefs.getString(KEY_USER_NAME, defaultName) ?: defaultName,
             gender = prefs.getString(KEY_USER_GENDER, "Not specified") ?: "Not specified",
-            email = prefs.getString(KEY_USER_EMAIL, defaultEmail) ?: defaultEmail,
+            email = prefs.getString(KEY_USER_EMAIL, "") ?: "",
             isPro = prefs.getBoolean(KEY_IS_PRO, false),
             pushNotificationsEnabled = prefs.getBoolean(KEY_PUSH_NOTIFICATIONS, true)
         )

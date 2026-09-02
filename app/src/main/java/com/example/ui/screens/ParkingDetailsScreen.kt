@@ -270,7 +270,7 @@ fun ParkingDetailsScreen(
                         SpotInfoRow(
                             icon = Icons.Default.LocationOn,
                             label = "Location",
-                            value = "${scanResult.locationName}, ${scanResult.cityState}"
+                            value = if (scanResult.cityState.isNotBlank()) "${scanResult.locationName}, ${scanResult.cityState}" else scanResult.locationName
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         SpotInfoRow(

@@ -497,7 +497,7 @@ fun ParkingTimerScreen(
                                             color = TimerTextDark
                                         )
                                         Text(
-                                            text = "San Francisco, CA 94105",
+                                            text = if (activeSession.notes.isNotBlank()) activeSession.notes else "Active parking spot",
                                             fontSize = 12.sp,
                                             color = TimerTextMuted
                                         )
@@ -1154,7 +1154,7 @@ fun ParkingTimerScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "${activeSession.locationName} • San Francisco, CA 94105",
+                    text = if (activeSession.notes.isNotBlank()) "${activeSession.locationName} • ${activeSession.notes}" else activeSession.locationName,
                     fontSize = 13.sp,
                     color = TimerTextMuted
                 )

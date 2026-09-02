@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.ScanUsageInfo
 import com.example.data.local.ScanUsageManager
 import com.example.data.local.SessionPreferences
+import com.example.data.location.LocationService
+import com.example.data.location.UserLocationResult
 import com.example.data.model.ActiveParkingSession
 import com.example.data.model.ChatMessage
 import com.example.data.model.CurbNote
@@ -34,6 +36,13 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionPreferences = SessionPreferences(application)
     private val scanUsageManager = ScanUsageManager(application)
     val subscriptionService = SubscriptionService(application)
+    val locationService = LocationService(application)
+
+    private val _userLocationState = MutableStateFlow<UserLocationResult>(
+        if (locationService.hasLocationPermission()) UserLocationResult.Unavailable("Checking location…")
+        else UserLocationResult.PermissionRequired()
+    )
+    val userLocationState: StateFlow<UserLocationResult> = _userLocationState.asStateFlow()
 
     val allScans: StateFlow<List<ScanResult>> = repository.allScans
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -96,11 +105,20 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Only seed sample data if first run and onboarding has not been started yet
-        if (!sessionPreferences.isLoggedIn && !sessionPreferences.isOnboardingCompleted) {
-            viewModelScope.launch {
-                repository.seedInitialDataIfEmpty()
+        // Fetch location if permission is already granted
+        if (locationService.hasLocationPermission()) {
+            refreshLocation()
+        }
+    }
+
+    fun refreshLocation() {
+        viewModelScope.launch {
+            if (!locationService.hasLocationPermission()) {
+                _userLocationState.value = UserLocationResult.PermissionRequired()
+                return@launch
             }
+            val result = locationService.fetchCurrentLocation()
+            _userLocationState.value = result
         }
     }
 
@@ -152,7 +170,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             val guestProfile = UserProfile(
                 name = "Guest",
                 gender = "Not specified",
-                email = "guest@curbapp.com",
+                email = "",
                 isPro = false,
                 pushNotificationsEnabled = true
             )
@@ -192,7 +210,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             scanUsageManager.resetUsage()
 
             // 3. Reset in-memory ViewModel states to pristine defaults
-            val defaultProfile = UserProfile(name = "Alex", email = "alex@curbapp.com")
+            val defaultProfile = UserProfile(name = "Alex", email = "")
             _userProfile.value = defaultProfile
             _currentScanResult.value = null
             _isProcessingScan.value = false
@@ -214,7 +232,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     fun processCapturedImage(
         bitmap: Bitmap?,
-        locationName: String = "Mission Street",
+        explicitLocationName: String? = null,
+        explicitCityState: String? = null,
         onPaywallRequired: () -> Unit,
         onComplete: () -> Unit
     ) {
@@ -227,11 +246,41 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isProcessingScan.value = true
             _processingStatusText.value = "Reading parking signs…"
-            delay(900)
+            delay(800)
             _processingStatusText.value = "Understanding the rules…"
-            delay(900)
+            delay(800)
 
-            val result = GeminiService.analyzeParkingSigns(bitmap, locationName)
+            // Resolve location context
+            val (resolvedLocName, resolvedCityState, isKnown) = if (!explicitLocationName.isNullOrBlank()) {
+                // User explicitly selected a saved place or custom spot
+                Triple(explicitLocationName, explicitCityState ?: "", true)
+            } else {
+                // Use actual device location if available, otherwise attempt fresh fetch
+                val currentLoc = if (_userLocationState.value !is UserLocationResult.Success && locationService.hasLocationPermission()) {
+                    locationService.fetchCurrentLocation().also { _userLocationState.value = it }
+                } else {
+                    _userLocationState.value
+                }
+
+                when (currentLoc) {
+                    is UserLocationResult.Success -> {
+                        Triple(currentLoc.locationName, currentLoc.cityState, true)
+                    }
+                    is UserLocationResult.PermissionRequired -> {
+                        Triple("Location access needed", "", false)
+                    }
+                    is UserLocationResult.Unavailable -> {
+                        Triple("Location unavailable", "", false)
+                    }
+                }
+            }
+
+            val result = GeminiService.analyzeParkingSigns(
+                bitmap = bitmap,
+                locationName = resolvedLocName,
+                cityState = resolvedCityState,
+                isLocationKnown = isKnown
+            )
             val scanId = repository.saveScan(result)
             val savedResult = result.copy(id = scanId)
             _currentScanResult.value = savedResult
@@ -257,23 +306,23 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             _isProcessingScan.value = true
-            _processingStatusText.value = "Reading parking signs…"
-            delay(700)
+            _processingStatusText.value = "Reading sample sign…"
+            delay(600)
             _processingStatusText.value = "Understanding the rules…"
-            delay(700)
+            delay(600)
 
             val scanResult = ScanResult(
                 locationName = preset.locationName,
-                cityState = "San Francisco, CA",
+                cityState = "",
                 verdict = preset.simulatedVerdict,
                 statusChipText = if (preset.simulatedVerdict == ScanVerdict.ALLOWED) "Updated just now" else if (preset.simulatedVerdict == ScanVerdict.RESTRICTED) "Enforced now" else "Rule unclear",
                 allowedUntilTime = preset.allowedUntil,
-                timeRemaining = if (preset.simulatedVerdict == ScanVerdict.ALLOWED) "2h 15m remaining" else "0m",
+                timeRemaining = if (preset.simulatedVerdict == ScanVerdict.ALLOWED) "2h 00m remaining" else "0m",
                 parkingRules = preset.rules,
                 explanation = preset.explanation,
                 detectedSigns = preset.detectedSigns,
-                zoneType = "Metered parking zone",
-                paymentInfo = "Pay at meter or via app"
+                zoneType = "Sample sign zone",
+                paymentInfo = ""
             )
             val id = repository.saveScan(scanResult)
             val finalResult = scanResult.copy(id = id)
@@ -333,10 +382,10 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startParkingSession(
         scanResultId: Long = 0,
-        locationName: String = "Mission Street",
-        durationMinutes: Int = 135, // 2h 15m
-        allowedUntilTime: String = "11:00 AM",
-        notes: String = "Mission Street spot"
+        locationName: String = "Parked Spot",
+        durationMinutes: Int = 120,
+        allowedUntilTime: String = "",
+        notes: String = ""
     ) {
         viewModelScope.launch {
             repository.startParkingSession(

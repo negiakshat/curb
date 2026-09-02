@@ -32,38 +32,32 @@ data class DetectedSign(
 data class ScanResult(
     val id: Long = 0,
     val timestamp: Long = System.currentTimeMillis(),
-    val locationName: String = "Mission Street",
-    val cityState: String = "San Francisco, CA",
+    val locationName: String = "Current Location",
+    val cityState: String = "",
     val verdict: ScanVerdict = ScanVerdict.ALLOWED,
     val statusChipText: String = "Updated just now",
     val allowedUntilTime: String = "6:00 PM",
-    val timeRemaining: String = "2h 15m remaining",
+    val timeRemaining: String = "2h 00m remaining",
     val parkingRules: List<String> = listOf(
-        "2 Hour Parking: 8:00 AM – 6:00 PM, Mon – Fri",
-        "Street Cleaning: Tuesday & Thursday, 8:00 AM – 10:00 AM",
-        "Other restrictions: No restrictions on weekends and city holidays"
+        "Standard parking rules apply based on visible signage."
     ),
-    val explanation: String = "Based on the signs you scanned, 2-hour parking is permitted between 8:00 AM and 6:00 PM on weekdays. Street sweeping is not active today.",
-    val detectedSigns: List<DetectedSign> = listOf(
-        DetectedSign("1", "2 HR PARKING", "8 AM TO 6 PM / MON-FRI", "2 hour limit applies during daytime hours."),
-        DetectedSign("2", "NO PARKING", "8 AM TO 10 AM / TUE & THU", "Street cleaning restriction (inactive today)."),
-        DetectedSign("3", "TOW-AWAY ZONE", "4 PM TO 6 PM / MON-FRI", "Evening commute tow-away lane.")
-    ),
-    val zoneType: String = "Metered parking zone",
-    val paymentInfo: String = "Pay at meter or via app ($3.50/hr)",
-    val vehicleApplicability: String = "Standard passenger vehicles (under 6,000 lbs)",
+    val explanation: String = "Sign analysis completed for this parking location.",
+    val detectedSigns: List<DetectedSign> = emptyList(),
+    val zoneType: String = "Parking zone",
+    val paymentInfo: String = "",
+    val vehicleApplicability: String = "Standard passenger vehicles",
     val imageUri: String? = null
 )
 
 data class ActiveParkingSession(
     val id: Long = 0,
     val scanResultId: Long = 0,
-    val locationName: String = "Mission Street",
-    val startTime: Long = System.currentTimeMillis() - (15 * 60 * 1000), // 15 mins ago default
-    val endTime: Long = System.currentTimeMillis() + (135 * 60 * 1000), // 2h 15m remaining
-    val allowedUntilTime: String = "11:00 AM",
+    val locationName: String = "Parked Spot",
+    val startTime: Long = System.currentTimeMillis(),
+    val endTime: Long = System.currentTimeMillis() + (120 * 60 * 1000), // 2h default
+    val allowedUntilTime: String = "",
     val reminderMinutesBefore: Int = 15,
-    val notes: String = "Metered parking • Space #42",
+    val notes: String = "",
     val isActive: Boolean = true
 ) {
     val remainingMillis: Long
@@ -131,7 +125,7 @@ data class SavedPlace(
 data class UserProfile(
     val name: String = "Alex",
     val gender: String = "Not specified",
-    val email: String = "alex@curbapp.com",
+    val email: String = "",
     val isPro: Boolean = false,
     val pushNotificationsEnabled: Boolean = true
 )

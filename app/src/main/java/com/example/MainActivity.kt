@@ -339,7 +339,6 @@ fun CurbApp(
                         onCaptureImage = { bitmap ->
                             viewModel.processCapturedImage(
                                 bitmap = bitmap,
-                                locationName = "Mission Street",
                                 onPaywallRequired = {
                                     Toast.makeText(
                                         context,
@@ -650,7 +649,8 @@ fun CurbApp(
                         onScanPlace = { place ->
                             viewModel.processCapturedImage(
                                 bitmap = null,
-                                locationName = place.name,
+                                explicitLocationName = place.name,
+                                explicitCityState = place.address,
                                 onPaywallRequired = {
                                     Toast.makeText(
                                         context,
