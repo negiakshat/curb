@@ -516,7 +516,7 @@ fun CurbApp(
                         onAboutCurbClicked = { navController.navigate(Routes.ABOUT_CURB) },
                         onLogoutClicked = {
                             viewModel.logout {
-                                Toast.makeText(context, "Logged out. Session cleared.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Logged out.", Toast.LENGTH_SHORT).show()
                                 navController.navigate(Routes.WELCOME) {
                                     popUpTo(0) { inclusive = true }
                                 }
@@ -534,8 +534,8 @@ fun CurbApp(
                             Toast.makeText(context, "Account updated", Toast.LENGTH_SHORT).show()
                         },
                         onDeleteAccount = {
-                            viewModel.logout {
-                                Toast.makeText(context, "Account deleted & session wiped.", Toast.LENGTH_SHORT).show()
+                            viewModel.deleteAccount {
+                                Toast.makeText(context, "Account deleted & data cleared.", Toast.LENGTH_SHORT).show()
                                 navController.navigate(Routes.WELCOME) {
                                     popUpTo(0) { inclusive = true }
                                 }

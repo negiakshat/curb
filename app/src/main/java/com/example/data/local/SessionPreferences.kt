@@ -66,6 +66,14 @@ class SessionPreferences(context: Context) {
         )
     }
 
+    fun logout() {
+        prefs.edit()
+            .putBoolean(KEY_IS_LOGGED_IN, false)
+            .putBoolean(KEY_ONBOARDING_COMPLETED, false)
+            .putBoolean(KEY_IS_GUEST, false)
+            .apply()
+    }
+
     fun clearSession() {
         prefs.edit().clear().apply()
     }

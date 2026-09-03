@@ -229,7 +229,7 @@ fun YouScreen(
                         SettingsDivider()
                         SettingsRow(
                             icon = Icons.AutoMirrored.Filled.Logout,
-                            title = "Log Out / Reset Session",
+                            title = "Log Out",
                             onClick = { showLogoutDialog = true },
                             tint = CurbError,
                             textColor = CurbError,
@@ -246,14 +246,14 @@ fun YouScreen(
             onDismissRequest = { showLogoutDialog = false },
             title = {
                 Text(
-                    text = "Log Out of Session?",
+                    text = "Log Out?",
                     fontWeight = FontWeight.Bold,
                     color = CurbOnSurface
                 )
             },
             text = {
                 Text(
-                    text = "Logging out will clear all active parking timers, text history, scan logs, and cached guest session data from this device.",
+                    text = "Logging out will end your current session. Your saved places and parking history will remain safely stored on this device.",
                     color = CurbOnSurfaceVariant,
                     fontSize = 14.sp
                 )
