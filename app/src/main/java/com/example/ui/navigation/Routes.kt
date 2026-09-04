@@ -22,4 +22,5 @@ object Routes {
     const val ABOUT_CURB = "about_curb"
     const val SAVED_PLACES = "saved_places"
     const val PARKING_TIMER = "parking_timer"
+    const val FIND_MY_CAR = "find_my_car"
 }

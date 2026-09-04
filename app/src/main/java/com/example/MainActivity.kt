@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
@@ -54,6 +56,7 @@ import com.example.ui.screens.AccountInfoScreen
 import com.example.ui.screens.ActivityScreen
 import com.example.ui.screens.AskCurbScreen
 import com.example.ui.screens.CurbProPaywallScreen
+import com.example.ui.screens.FindMyCarScreen
 import com.example.ui.screens.HelpSupportScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.NameSetupScreen
@@ -107,10 +110,10 @@ sealed class BottomNavItem(
         testTag = "nav_tab_home"
     )
     object Scan : BottomNavItem(
-        route = Routes.SCAN,
-        label = "Scan",
-        selectedIcon = Icons.Filled.CameraAlt,
-        unselectedIcon = Icons.Outlined.CameraAlt,
+        route = Routes.ASK_CURB,
+        label = "Curb AI",
+        selectedIcon = Icons.Filled.AutoAwesome,
+        unselectedIcon = Icons.Outlined.AutoAwesome,
         testTag = "nav_tab_scan"
     )
     object Activity : BottomNavItem(
@@ -140,6 +143,10 @@ fun CurbApp(
 
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     val activeSession by viewModel.activeSession.collectAsStateWithLifecycle()
+    val savedParkingSpot by viewModel.savedParkingSpot.collectAsStateWithLifecycle()
+    val isSavingParkingSpot by viewModel.isSavingParkingSpot.collectAsStateWithLifecycle()
+    val parkingSpotSaveError by viewModel.parkingSpotSaveError.collectAsStateWithLifecycle()
+    val userLocationState by viewModel.userLocationState.collectAsStateWithLifecycle()
     val recentScans by viewModel.allScans.collectAsStateWithLifecycle()
     val savedPlaces by viewModel.savedPlaces.collectAsStateWithLifecycle()
     val allNotes by viewModel.allNotes.collectAsStateWithLifecycle()
@@ -152,6 +159,7 @@ fun CurbApp(
     val isJudgeProActive by viewModel.isJudgeProActive.collectAsStateWithLifecycle()
     val scanUsageInfo by viewModel.scanUsageInfo.collectAsStateWithLifecycle()
     val chatUsageInfo by viewModel.chatUsageInfo.collectAsStateWithLifecycle()
+    val walkingRoute by viewModel.walkingRouteState.collectAsStateWithLifecycle()
 
     val isUserPro = userProfile.isPro || subscriptionState.isPro || isJudgeProActive
 
@@ -164,6 +172,7 @@ fun CurbApp(
 
     val showBottomBar = currentRoute in listOf(
         Routes.HOME,
+        Routes.ASK_CURB,
         Routes.ACTIVITY,
         Routes.YOU
     )
@@ -298,6 +307,7 @@ fun CurbApp(
                     HomeScreen(
                         userProfile = userProfile,
                         activeSession = activeSession,
+                        savedParkingSpot = savedParkingSpot,
                         recentScans = recentScans,
                         usageInfo = scanUsageInfo,
                         onScanClicked = {
@@ -305,6 +315,9 @@ fun CurbApp(
                         },
                         onParkingTimerClicked = {
                             navController.navigate(Routes.PARKING_TIMER)
+                        },
+                        onFindMyCarClicked = {
+                            navController.navigate(Routes.FIND_MY_CAR)
                         },
                         onSavedPlacesClicked = {
                             navController.navigate(Routes.SAVED_PLACES)
@@ -478,6 +491,7 @@ fun CurbApp(
                         isLoading = isChatLoading,
                         usageInfo = chatUsageInfo,
                         isPro = isUserPro,
+                        userName = userProfile.name,
                         onSendMessage = { query ->
                             viewModel.sendChatMessage(query)
                         },
@@ -686,6 +700,21 @@ fun CurbApp(
                 composable(Routes.PARKING_TIMER) {
                     ParkingTimerScreen(
                         activeSession = activeSession,
+                        savedParkingSpot = savedParkingSpot,
+                        isSavingParkingSpot = isSavingParkingSpot,
+                        parkingSpotSaveError = parkingSpotSaveError,
+                        onSaveParkingSpot = {
+                            viewModel.saveCurrentParkingSpot(sessionId = activeSession?.id) { success, error ->
+                                if (success) {
+                                    Toast.makeText(context, "Parking spot saved", Toast.LENGTH_SHORT).show()
+                                } else if (!error.isNullOrBlank()) {
+                                    Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        onNavigateToFindMyCar = {
+                            navController.navigate(Routes.FIND_MY_CAR)
+                        },
                         onStartQuickTimer = { minutes, limitText ->
                             val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
                             val allowedTime = sdf.format(Date(System.currentTimeMillis() + (minutes * 60 * 1000L)))
@@ -708,6 +737,33 @@ fun CurbApp(
                             viewModel.updateSessionReminder(id, reminderMins)
                         },
                         onBack = { navController.popBackStack() }
+                    )
+                }
+
+                // 22. FIND MY CAR
+                composable(Routes.FIND_MY_CAR) {
+                    FindMyCarScreen(
+                        savedParkingSpot = savedParkingSpot,
+                        userLocationState = userLocationState,
+                        walkingRoute = walkingRoute,
+                        onNavigateBack = {
+                            navController.popBackStack()
+                        },
+                        onRefreshLocation = {
+                            viewModel.refreshLocation()
+                        },
+                        onStartLiveTracking = {
+                            viewModel.startLiveLocationUpdates()
+                        },
+                        onStopLiveTracking = {
+                            viewModel.stopLiveLocationUpdates()
+                        },
+                        onUpdateWalkingRoute = { uLat, uLng, cLat, cLng ->
+                            viewModel.updateWalkingRouteIfNeeded(uLat, uLng, cLat, cLng)
+                        },
+                        onNavigateToParkingTimer = {
+                            navController.navigate(Routes.PARKING_TIMER)
+                        }
                     )
                 }
             }

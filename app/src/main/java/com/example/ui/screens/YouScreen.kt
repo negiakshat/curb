@@ -46,6 +46,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserProfile
 import com.example.ui.components.CurbCard
+import androidx.compose.material.icons.filled.Edit
+import com.example.ui.theme.BentoBorder
+import com.example.ui.theme.BentoPrimary
+import com.example.ui.theme.BentoPrimaryDark
+import com.example.ui.theme.BentoSand
+import com.example.ui.theme.BentoTextDark
 import com.example.ui.theme.RadiusCard
 import com.example.ui.theme.RadiusChip
 import com.example.ui.theme.RadiusHero
@@ -101,35 +107,58 @@ fun YouScreen(
                 CurbCard(
                     cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface,
+                    borderColor = BentoBorder,
                     onClick = onAccountInfoClicked
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(20.dp),
+                            .padding(horizontal = 18.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(CircleShape)
-                                    .background(CurbBlack),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = userProfile.name.take(1).uppercase(Locale.ROOT),
-                                    color = CurbWhite,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            // Avatar container with subtle edit badge indicator
+                            Box(modifier = Modifier.size(52.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .background(CurbBlack),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = userProfile.name.take(1).uppercase(Locale.ROOT),
+                                        color = CurbWhite,
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .align(Alignment.BottomEnd)
+                                        .clip(CircleShape)
+                                        .background(BentoPrimary),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = null,
+                                        tint = CurbWhite,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                }
                             }
 
-                            Column {
+                            Column(
+                                verticalArrangement = Arrangement.Center
+                            ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -144,34 +173,62 @@ fun YouScreen(
                                     if (isPro) {
                                         Surface(
                                             shape = RoundedCornerShape(RadiusSmall),
-                                            color = CurbBlack
+                                            color = BentoPrimary
                                         ) {
                                             Text(
                                                 text = "PRO",
                                                 color = CurbWhite,
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Surface(
+                                            shape = RoundedCornerShape(RadiusSmall),
+                                            color = BentoSand
+                                        ) {
+                                            Text(
+                                                text = "FREE",
+                                                color = BentoTextDark,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                                             )
                                         }
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(2.dp))
+                                Spacer(modifier = Modifier.height(3.dp))
+
+                                val subtitleText = if (userProfile.email.isNotBlank()) {
+                                    userProfile.email
+                                } else {
+                                    "Tap to edit profile & details"
+                                }
 
                                 Text(
-                                    text = userProfile.email,
-                                    fontSize = 14.sp,
+                                    text = subtitleText,
+                                    fontSize = 13.sp,
                                     color = CurbOnSurfaceVariant
                                 )
                             }
                         }
 
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = "Edit",
-                            tint = CurbOnSurfaceVariant
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(BentoSand.copy(alpha = 0.7f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = "Edit Profile",
+                                tint = BentoPrimaryDark,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
 

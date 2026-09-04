@@ -4,11 +4,13 @@ import android.content.Context
 import com.example.data.local.CurbDatabase
 import com.example.data.local.CurbNoteEntity
 import com.example.data.local.ParkingSessionEntity
+import com.example.data.local.ParkingSpotEntity
 import com.example.data.local.SavedPlaceEntity
 import com.example.data.local.ScanResultEntity
 import com.example.data.model.ActiveParkingSession
 import com.example.data.model.CurbNote
 import com.example.data.model.DetectedSign
+import com.example.data.model.ParkingSpot
 import com.example.data.model.SavedPlace
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
@@ -24,6 +26,7 @@ class CurbRepository(context: Context) {
     private val parkingSessionDao = database.parkingSessionDao()
     private val savedPlaceDao = database.savedPlaceDao()
     private val noteDao = database.noteDao()
+    private val parkingSpotDao = database.parkingSpotDao()
 
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     private val stringListType = Types.newParameterizedType(List::class.java, String::class.java)
@@ -37,6 +40,10 @@ class CurbRepository(context: Context) {
 
     val activeSession: Flow<ActiveParkingSession?> = parkingSessionDao.getActiveSession().map { entity ->
         entity?.let { entityToParkingSession(it) }
+    }
+
+    val savedParkingSpot: Flow<ParkingSpot?> = parkingSpotDao.getActiveParkingSpot().map { entity ->
+        entity?.let { entityToParkingSpot(it) }
     }
 
     val savedPlaces: Flow<List<SavedPlace>> = savedPlaceDao.getAllSavedPlaces().map { entities ->
@@ -148,11 +155,41 @@ class CurbRepository(context: Context) {
         noteDao.deleteNoteForSavedPlace(id)
     }
 
+    suspend fun saveParkingSpot(
+        latitude: Double,
+        longitude: Double,
+        accuracy: Float? = null,
+        timestamp: Long = System.currentTimeMillis(),
+        locationName: String = "",
+        sessionId: Long? = null
+    ): Long {
+        parkingSpotDao.clearActiveSpots()
+        val entity = ParkingSpotEntity(
+            latitude = latitude,
+            longitude = longitude,
+            accuracy = accuracy,
+            timestamp = timestamp,
+            locationName = locationName,
+            sessionId = sessionId,
+            isActive = true
+        )
+        return parkingSpotDao.insertParkingSpot(entity)
+    }
+
+    suspend fun clearActiveParkingSpots() {
+        parkingSpotDao.clearActiveSpots()
+    }
+
+    suspend fun getActiveParkingSpotDirect(): ParkingSpot? {
+        return parkingSpotDao.getActiveParkingSpotDirect()?.let { entityToParkingSpot(it) }
+    }
+
     suspend fun clearAllData() {
         scanDao.clearAllScans()
         parkingSessionDao.clearAllSessions()
         savedPlaceDao.clearAllSavedPlaces()
         noteDao.clearAllNotes()
+        parkingSpotDao.clearAllSpots()
     }
 
     private fun entityToScanResult(entity: ScanResultEntity): ScanResult {
@@ -245,6 +282,19 @@ class CurbRepository(context: Context) {
             text = entity.text,
             createdAt = entity.createdAt,
             updatedAt = entity.updatedAt
+        )
+    }
+
+    private fun entityToParkingSpot(entity: ParkingSpotEntity): ParkingSpot {
+        return ParkingSpot(
+            id = entity.id,
+            latitude = entity.latitude,
+            longitude = entity.longitude,
+            timestamp = entity.timestamp,
+            accuracy = entity.accuracy,
+            locationName = entity.locationName,
+            sessionId = entity.sessionId,
+            isActive = entity.isActive
         )
     }
 }

@@ -61,3 +61,16 @@ data class CurbNoteEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+@Entity(tableName = "parking_spots")
+data class ParkingSpotEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val latitude: Double,
+    val longitude: Double,
+    val timestamp: Long = System.currentTimeMillis(),
+    val accuracy: Float? = null,
+    val locationName: String = "",
+    val sessionId: Long? = null,
+    val isActive: Boolean = true
+)
+

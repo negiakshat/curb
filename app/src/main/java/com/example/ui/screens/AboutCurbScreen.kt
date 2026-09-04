@@ -107,7 +107,7 @@ fun AboutCurbScreen(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Curb uses multimodal Gemini AI to decipher complex, multi-layered parking signs in seconds. From metered spaces to tricky street sweeping schedules and commute tow-away zones, Curb tells you clearly if you can park right now.",
+                            text = "Curb deciphers complex, multi-layered parking signs in seconds. From metered spaces to tricky street sweeping schedules and commute tow-away zones, Curb tells you clearly if you can park right now.",
                             fontSize = 14.sp,
                             lineHeight = 22.sp,
                             color = CurbOnSurfaceVariant

@@ -129,6 +129,17 @@ data class ActiveParkingSession(
         }
 }
 
+data class ParkingSpot(
+    val id: Long = 0,
+    val latitude: Double,
+    val longitude: Double,
+    val timestamp: Long = System.currentTimeMillis(),
+    val accuracy: Float? = null,
+    val locationName: String = "",
+    val sessionId: Long? = null,
+    val isActive: Boolean = true
+)
+
 data class SavedPlace(
     val id: Long = 0,
     val name: String,

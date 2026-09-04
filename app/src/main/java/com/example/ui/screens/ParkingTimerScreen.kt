@@ -1,6 +1,10 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -49,12 +53,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -85,7 +91,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.example.data.model.ActiveParkingSession
+import com.example.data.model.ParkingSpot
 import com.example.ui.theme.RadiusCard
 import com.example.ui.theme.RadiusChip
 import com.example.ui.theme.RadiusHero
@@ -120,6 +128,11 @@ private val TimerDividerColor = Color(0xFFF1F1F1)
 @Composable
 fun ParkingTimerScreen(
     activeSession: ActiveParkingSession?,
+    savedParkingSpot: ParkingSpot? = null,
+    isSavingParkingSpot: Boolean = false,
+    parkingSpotSaveError: String? = null,
+    onSaveParkingSpot: () -> Unit = {},
+    onNavigateToFindMyCar: () -> Unit = {},
     onStartQuickTimer: (Int, String) -> Unit,
     onEndSession: (Long) -> Unit,
     onExtendSession: (Long, Int, Long) -> Unit,
@@ -128,6 +141,18 @@ fun ParkingTimerScreen(
 ) {
     val context = LocalContext.current
     var currentTimeMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val isGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (isGranted) {
+            onSaveParkingSpot()
+        } else {
+            Toast.makeText(context, "Location permission is required to save your spot", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // Live update ticker for smooth countdown
     LaunchedEffect(Unit) {
@@ -530,6 +555,157 @@ fun ParkingTimerScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+
+                // ==========================================
+                // SAVE PARKING SPOT ACTION
+                // ==========================================
+                if (savedParkingSpot != null) {
+                    Surface(
+                        shape = RoundedCornerShape(RadiusCard),
+                        color = TimerCardBg,
+                        border = BorderStroke(1.dp, BentoBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("saved_parking_spot_card")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFE6F4EA)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF137333),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Parking spot saved",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TimerTextDark
+                                )
+                                if (savedParkingSpot.locationName.isNotBlank()) {
+                                    Text(
+                                        text = savedParkingSpot.locationName,
+                                        fontSize = 12.sp,
+                                        color = TimerTextMuted
+                                    )
+                                }
+                            }
+                            Button(
+                                onClick = onNavigateToFindMyCar,
+                                shape = RoundedCornerShape(RadiusCard),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = BentoPrimaryDark,
+                                    contentColor = Color.White
+                                ),
+                                modifier = Modifier.testTag("find_my_car_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Place,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "FIND MY CAR",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val hasPermission = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.ACCESS_FINE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED
+
+                                if (hasPermission) {
+                                    onSaveParkingSpot()
+                                } else {
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    )
+                                }
+                            },
+                            enabled = !isSavingParkingSpot,
+                            shape = RoundedCornerShape(RadiusCard),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = BentoPrimaryDark,
+                                contentColor = Color.White,
+                                disabledContainerColor = TimerCardBg,
+                                disabledContentColor = TimerTextMuted
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("save_parking_spot_button")
+                        ) {
+                            if (isSavingParkingSpot) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Saving parking spot…",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Place,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "SAVE MY PARKING SPOT",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+
+                        if (!parkingSpotSaveError.isNullOrBlank()) {
+                            Text(
+                                text = parkingSpotSaveError,
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 12.sp,
+                                modifier = Modifier
+                                    .padding(horizontal = 8.dp)
+                                    .testTag("parking_spot_save_error")
+                            )
                         }
                     }
                 }

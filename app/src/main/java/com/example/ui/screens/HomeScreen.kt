@@ -90,10 +90,12 @@ import java.util.Locale
 fun HomeScreen(
     userProfile: UserProfile,
     activeSession: ActiveParkingSession?,
+    savedParkingSpot: com.example.data.model.ParkingSpot? = null,
     recentScans: List<ScanResult>,
     usageInfo: ScanUsageInfo = ScanUsageInfo(0),
     onScanClicked: () -> Unit,
     onParkingTimerClicked: () -> Unit,
+    onFindMyCarClicked: () -> Unit = {},
     onSavedPlacesClicked: () -> Unit,
     onActivityClicked: () -> Unit,
     onAskCurbClicked: () -> Unit,
@@ -197,32 +199,48 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold,
                             color = BentoPrimary,
                             letterSpacing = 0.5.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                         )
                     }
+
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(CurbSuccess, CircleShape)
+                    )
+
+                    Text(
+                        text = "System active",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = BentoTextSecondary
+                    )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
                     text = "$greeting, ${userProfile.name}",
-                    fontSize = 28.sp,
+                    fontSize = 30.sp,
                     fontWeight = FontWeight.Bold,
                     color = BentoTextPrimary,
-                    letterSpacing = (-0.5).sp
+                    letterSpacing = (-0.6).sp
                 )
+
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
                     text = "Your AI parking co-pilot is ready.",
                     fontSize = 14.sp,
-                    color = BentoTextSecondary
+                    color = BentoTextSecondary,
+                    fontWeight = FontWeight.Normal
                 )
             }
         }
 
-        // BENTO GRID HERO TILE: SCAN THIS SPOT
+        // BENTO GRID HERO TILE: SCAN THIS SPOT (PRIMARY ACTION)
         item {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                 Card(
                     modifier = Modifier
@@ -251,7 +269,7 @@ fun HomeScreen(
                             ) {
                                 BentoPillBadge(
                                     text = "AI SCANNER",
-                                    backgroundColor = BentoWhite.copy(alpha = 0.85f),
+                                    backgroundColor = BentoWhite.copy(alpha = 0.9f),
                                     textColor = BentoPrimary
                                 )
 
@@ -286,7 +304,7 @@ fun HomeScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         Text(
                             text = "Scan this spot",
@@ -296,37 +314,42 @@ fun HomeScreen(
                             letterSpacing = (-0.3).sp
                         )
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
                         Text(
-                            text = "Point your camera at the curb signs to check real-time rules, street cleaning, and meter limits.",
+                            text = "Point your camera at curb signs to check real-time rules, street cleaning, and meter limits.",
                             fontSize = 14.sp,
                             lineHeight = 20.sp,
                             color = BentoTextDark
                         )
 
-                        Spacer(modifier = Modifier.height(18.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
+                        // PROMINENT FULL-WIDTH CTA BUTTON
                         Surface(
-                            shape = RoundedCornerShape(RadiusCard),
-                            color = BentoPrimary,
-                            modifier = Modifier.clip(RoundedCornerShape(RadiusCard))
+                            shape = RoundedCornerShape(16.dp),
+                            color = BentoPrimaryDark,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .clip(RoundedCornerShape(16.dp))
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                modifier = Modifier.fillMaxSize(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.CameraAlt,
                                     contentDescription = null,
                                     tint = BentoWhite,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Text(
                                     text = "START INSTANT SCAN",
                                     color = BentoWhite,
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.5.sp
                                 )
@@ -424,18 +447,40 @@ fun HomeScreen(
                             }
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(RadiusChip),
-                            color = BentoWhite.copy(alpha = 0.15f)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text(
-                                text = if (activeSession != null && activeSession.isActive) "VIEW TIMER" else "SET TIMER",
-                                color = BentoWhite,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(RadiusChip),
+                                color = BentoWhite.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = if (activeSession != null && activeSession.isActive) "VIEW TIMER" else "SET TIMER",
+                                    color = BentoWhite,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+
+                            if (savedParkingSpot != null) {
+                                Surface(
+                                    shape = RoundedCornerShape(RadiusChip),
+                                    color = BentoPeach,
+                                    modifier = Modifier.clickable { onFindMyCarClicked() }
+                                ) {
+                                    Text(
+                                        text = "FIND CAR",
+                                        color = BentoPrimaryDark,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }

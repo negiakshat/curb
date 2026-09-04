@@ -15,6 +15,7 @@ import com.example.data.location.UserLocationResult
 import com.example.data.model.ActiveParkingSession
 import com.example.data.model.ChatMessage
 import com.example.data.model.CurbNote
+import com.example.data.model.ParkingSpot
 import com.example.data.model.SampleSignPreset
 import com.example.data.model.SavedPlace
 import com.example.data.model.ScanResult
@@ -24,7 +25,11 @@ import com.example.data.remote.GeminiService
 import com.example.data.remote.SubscriptionPackageInfo
 import com.example.data.remote.SubscriptionService
 import com.example.data.remote.SubscriptionUiState
+import com.example.data.remote.WalkingRoute
+import com.example.data.remote.WalkingRouteService
 import com.example.data.repository.CurbRepository
+import android.location.Location
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -57,6 +62,22 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     val activeSession: StateFlow<ActiveParkingSession?> = repository.activeSession
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val savedParkingSpot: StateFlow<ParkingSpot?> = repository.savedParkingSpot
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private val _isSavingParkingSpot = MutableStateFlow(false)
+    val isSavingParkingSpot: StateFlow<Boolean> = _isSavingParkingSpot.asStateFlow()
+
+    private val _parkingSpotSaveError = MutableStateFlow<String?>(null)
+    val parkingSpotSaveError: StateFlow<String?> = _parkingSpotSaveError.asStateFlow()
+
+    private val _currentUserLocation = MutableStateFlow<UserLocationResult?>(null)
+    val currentUserLocation: StateFlow<UserLocationResult?> = _currentUserLocation.asStateFlow()
+
+    private val walkingRouteService = WalkingRouteService()
+    private val _walkingRouteState = MutableStateFlow<WalkingRoute?>(null)
+    val walkingRouteState: StateFlow<WalkingRoute?> = _walkingRouteState.asStateFlow()
 
     val savedPlaces: StateFlow<List<SavedPlace>> = repository.savedPlaces
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -95,7 +116,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     private val _isProcessingScan = MutableStateFlow(false)
     val isProcessingScan: StateFlow<Boolean> = _isProcessingScan.asStateFlow()
 
-    private val _processingStatusText = MutableStateFlow("Reading parking signs…")
+    private val _processingStatusText = MutableStateFlow("Reading your parking sign…")
     val processingStatusText: StateFlow<String> = _processingStatusText.asStateFlow()
 
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(
@@ -130,6 +151,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var liveLocationJob: Job? = null
+
     fun refreshLocation() {
         viewModelScope.launch {
             if (!locationService.hasLocationPermission()) {
@@ -138,6 +161,56 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             }
             val result = locationService.fetchCurrentLocation()
             _userLocationState.value = result
+        }
+    }
+
+    fun startLiveLocationUpdates() {
+        stopLiveLocationUpdates()
+        liveLocationJob = viewModelScope.launch {
+            if (!locationService.hasLocationPermission()) {
+                _userLocationState.value = UserLocationResult.PermissionRequired()
+                return@launch
+            }
+            locationService.getLocationUpdates(intervalMs = 3000L).collect { result ->
+                _userLocationState.value = result
+            }
+        }
+    }
+
+    fun stopLiveLocationUpdates() {
+        liveLocationJob?.cancel()
+        liveLocationJob = null
+    }
+
+    private var lastRouteFetchLat: Double? = null
+    private var lastRouteFetchLng: Double? = null
+    private var fetchRouteJob: Job? = null
+
+    fun updateWalkingRouteIfNeeded(userLat: Double, userLng: Double, carLat: Double, carLng: Double) {
+        val lastLat = lastRouteFetchLat
+        val lastLng = lastRouteFetchLng
+
+        val needsFetch = if (lastLat == null || lastLng == null || _walkingRouteState.value == null) {
+            true
+        } else {
+            val dist = FloatArray(1)
+            Location.distanceBetween(userLat, userLng, lastLat, lastLng, dist)
+            dist[0] > 8.0 // Refetch route if user's location moves > 8 meters
+        }
+
+        if (needsFetch) {
+            fetchRouteJob?.cancel()
+            fetchRouteJob = viewModelScope.launch {
+                lastRouteFetchLat = userLat
+                lastRouteFetchLng = userLng
+                val route = walkingRouteService.getWalkingRoute(
+                    startLat = userLat,
+                    startLng = userLng,
+                    endLat = carLat,
+                    endLng = carLng
+                )
+                _walkingRouteState.value = route
+            }
         }
     }
 
@@ -219,7 +292,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             // 4. Reset ephemeral in-memory UI state only
             _currentScanResult.value = null
             _isProcessingScan.value = false
-            _processingStatusText.value = "Reading parking signs…"
+            _processingStatusText.value = "Reading your parking sign…"
             _chatMessages.value = listOf(
                 ChatMessage(
                     text = "Hello! I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
@@ -256,7 +329,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             _onboardingCompleted.value = false
             _currentScanResult.value = null
             _isProcessingScan.value = false
-            _processingStatusText.value = "Reading parking signs…"
+            _processingStatusText.value = "Reading your parking sign…"
             _chatMessages.value = listOf(
                 ChatMessage(
                     text = "Hello. I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
@@ -282,7 +355,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             _isJudgeProActive.value = false
             _currentScanResult.value = null
             _isProcessingScan.value = false
-            _processingStatusText.value = "Reading parking signs…"
+            _processingStatusText.value = "Reading your parking sign…"
             _chatMessages.value = listOf(
                 ChatMessage(
                     text = "Hello Alex. I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
@@ -355,7 +428,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                 "Final detected crops count: ${detectedCrops.size} (files: ${detectedCrops.map { it.fileUri }})"
             )
 
-            _processingStatusText.value = "Understanding your sign…"
+            _processingStatusText.value = "Reading your parking sign…"
 
             // Resolve location context
             val (resolvedLocName, resolvedCityState, isKnown) = if (!explicitLocationName.isNullOrBlank()) {
@@ -415,9 +488,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isProcessingScan.value = true
             _processingStatusText.value = "Reading your parking sign…"
-            delay(500)
-            _processingStatusText.value = "Understanding your sign…"
-            delay(500)
+            delay(1000)
 
             val enrichedSigns = preset.detectedSigns.map { sign ->
                 if (!sign.croppedImageUri.isNullOrBlank() && java.io.File(sign.croppedImageUri).exists()) {
@@ -538,6 +609,75 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     fun updateSessionReminder(sessionId: Long, reminderMinutes: Int) {
         viewModelScope.launch {
             repository.updateSessionReminder(sessionId, reminderMinutes)
+        }
+    }
+
+    fun saveCurrentParkingSpot(
+        sessionId: Long? = null,
+        onResult: (Boolean, String?) -> Unit = { _, _ -> }
+    ) {
+        viewModelScope.launch {
+            _isSavingParkingSpot.value = true
+            _parkingSpotSaveError.value = null
+
+            if (!locationService.hasLocationPermission()) {
+                val errorMsg = "Location permission is required to save your parking spot."
+                _isSavingParkingSpot.value = false
+                _parkingSpotSaveError.value = errorMsg
+                onResult(false, errorMsg)
+                return@launch
+            }
+
+            val result = locationService.fetchCurrentLocation()
+            when (result) {
+                is UserLocationResult.Success -> {
+                    repository.saveParkingSpot(
+                        latitude = result.latitude,
+                        longitude = result.longitude,
+                        accuracy = result.accuracy,
+                        timestamp = result.timestamp,
+                        locationName = result.locationName,
+                        sessionId = sessionId
+                    )
+                    _isSavingParkingSpot.value = false
+                    _parkingSpotSaveError.value = null
+                    onResult(true, null)
+                }
+                is UserLocationResult.PermissionRequired -> {
+                    _isSavingParkingSpot.value = false
+                    _parkingSpotSaveError.value = result.message
+                    onResult(false, result.message)
+                }
+                is UserLocationResult.Unavailable -> {
+                    _isSavingParkingSpot.value = false
+                    _parkingSpotSaveError.value = result.message
+                    onResult(false, result.message)
+                }
+            }
+        }
+    }
+
+    fun clearParkingSpotSaveError() {
+        _parkingSpotSaveError.value = null
+    }
+
+    fun clearSavedParkingSpot() {
+        viewModelScope.launch {
+            repository.clearActiveParkingSpots()
+        }
+    }
+
+    fun refreshCurrentLocation(onResult: (UserLocationResult) -> Unit = {}) {
+        viewModelScope.launch {
+            if (!locationService.hasLocationPermission()) {
+                val req = UserLocationResult.PermissionRequired()
+                _currentUserLocation.value = req
+                onResult(req)
+                return@launch
+            }
+            val loc = locationService.fetchCurrentLocation()
+            _currentUserLocation.value = loc
+            onResult(loc)
         }
     }
 

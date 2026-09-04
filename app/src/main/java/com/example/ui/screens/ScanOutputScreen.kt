@@ -748,7 +748,7 @@ private fun exportScanResult(context: Context, scan: ScanResult) {
         }
         builder.append("\n")
     }
-    builder.append("AI Explanation:\n${scan.explanation}\n")
+    builder.append("Curb Overview:\n${scan.explanation}\n")
 
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"

@@ -6,15 +6,23 @@ import android.content.pm.PackageManager
 import android.location.Address
 import android.location.Geocoder
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.gms.tasks.Task
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -27,7 +35,8 @@ sealed class UserLocationResult {
         val locationName: String,
         val cityState: String,
         val formattedDisplay: String,
-        val timestamp: Long = System.currentTimeMillis()
+        val timestamp: Long = System.currentTimeMillis(),
+        val accuracy: Float? = null
     ) : UserLocationResult()
 
     data class PermissionRequired(
@@ -55,6 +64,107 @@ class LocationService(private val context: Context) {
             Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         return fineLocation || coarseLocation
+    }
+
+    fun getLocationUpdates(intervalMs: Long = 3000L): Flow<UserLocationResult> = callbackFlow {
+        if (!hasLocationPermission()) {
+            trySend(UserLocationResult.PermissionRequired())
+            close()
+            return@callbackFlow
+        }
+
+        // Emit initial location fix immediately if available
+        try {
+            val initialRes = fetchCurrentLocation()
+            trySend(initialRes)
+        } catch (e: Exception) {
+            // Ignore failure on initial fetch
+        }
+
+        val locationCallback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                val loc = result.lastLocation ?: return
+                val lat = loc.latitude
+                val lng = loc.longitude
+                val accuracy = if (loc.hasAccuracy()) loc.accuracy else null
+                val time = if (loc.time > 0) loc.time else System.currentTimeMillis()
+
+                val coordsStr = String.format(Locale.US, "%.4f, %.4f", lat, lng)
+                val userRes = UserLocationResult.Success(
+                    latitude = lat,
+                    longitude = lng,
+                    locationName = "Current Location",
+                    cityState = coordsStr,
+                    formattedDisplay = "GPS ($coordsStr)",
+                    timestamp = time,
+                    accuracy = accuracy
+                )
+                trySend(userRes)
+            }
+        }
+
+        var isFusedActive = false
+        try {
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMs)
+                .setMinUpdateIntervalMillis(intervalMs / 2)
+                .build()
+
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+            isFusedActive = true
+        } catch (e: Exception) {
+            // Fused client update request failed
+        }
+
+        var locationManagerListener: LocationListener? = null
+        if (!isFusedActive) {
+            try {
+                val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                if (locationManager != null && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    val listener = LocationListener { loc ->
+                        val lat = loc.latitude
+                        val lng = loc.longitude
+                        val accuracy = if (loc.hasAccuracy()) loc.accuracy else null
+                        val time = if (loc.time > 0) loc.time else System.currentTimeMillis()
+                        val coordsStr = String.format(Locale.US, "%.4f, %.4f", lat, lng)
+                        trySend(
+                            UserLocationResult.Success(
+                                latitude = lat,
+                                longitude = lng,
+                                locationName = "Current Location",
+                                cityState = coordsStr,
+                                formattedDisplay = "GPS ($coordsStr)",
+                                timestamp = time,
+                                accuracy = accuracy
+                            )
+                        )
+                    }
+                    locationManagerListener = listener
+                    locationManager.requestLocationUpdates(
+                        LocationManager.GPS_PROVIDER,
+                        intervalMs,
+                        0f,
+                        listener,
+                        Looper.getMainLooper()
+                    )
+                }
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+
+        awaitClose {
+            if (isFusedActive) {
+                fusedLocationClient.removeLocationUpdates(locationCallback)
+            }
+            if (locationManagerListener != null) {
+                try {
+                    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                    locationManager?.removeUpdates(locationManagerListener)
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            }
+        }
     }
 
     suspend fun fetchCurrentLocation(): UserLocationResult = withContext(Dispatchers.IO) {
@@ -124,6 +234,8 @@ class LocationService(private val context: Context) {
 
             val lat = rawLocation.latitude
             val lng = rawLocation.longitude
+            val accuracy = if (rawLocation.hasAccuracy()) rawLocation.accuracy else null
+            val time = if (rawLocation.time > 0) rawLocation.time else System.currentTimeMillis()
 
             // 4. Reverse-geocode to human-readable address
             val geocoded = reverseGeocode(lat, lng)
@@ -132,7 +244,9 @@ class LocationService(private val context: Context) {
                 longitude = lng,
                 locationName = geocoded.first,
                 cityState = geocoded.second,
-                formattedDisplay = geocoded.third
+                formattedDisplay = geocoded.third,
+                timestamp = time,
+                accuracy = accuracy
             )
         } catch (e: Exception) {
             return@withContext UserLocationResult.Unavailable(

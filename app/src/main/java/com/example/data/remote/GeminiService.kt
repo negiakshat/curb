@@ -34,10 +34,15 @@ object GeminiService {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private fun Bitmap.toBase64(): String {
-        val outputStream = ByteArrayOutputStream()
-        compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-        return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+    private fun Bitmap.toBase64(): String? {
+        if (isRecycled || width <= 0 || height <= 0) return null
+        return try {
+            val outputStream = ByteArrayOutputStream()
+            compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+            Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+        } catch (e: Exception) {
+            null
+        }
     }
 
     suspend fun analyzeParkingSigns(
@@ -55,85 +60,124 @@ object GeminiService {
 
         val currentTimeStr = SimpleDateFormat("EEEE, h:mm a", Locale.getDefault()).format(Date())
         val locationContextText = if (isLocationKnown && locationName.isNotBlank() && locationName != "Location unavailable" && locationName != "Location access needed") {
-            "Location Context: $locationName${if (cityState.isNotBlank()) ", $cityState" else ""}. Use local municipal guidelines if applicable, but base primary determination strictly on the signs shown in the image. Do not invent municipal laws if uncertain."
+            "Location Context: $locationName${if (cityState.isNotBlank()) ", $cityState" else ""}. Base primary determination strictly on the signs shown in the images. Do not invent municipal laws if uncertain."
         } else {
-            "Location Context: Device location is unavailable or permission not granted. Analyze regulations strictly from the visible signs in the photo. Explicitly note that location-specific municipal context was not resolved."
+            "Location Context: Device location is unavailable. Analyze regulations strictly from the visible signs in the photo."
         }
 
-        val localDetectionsPromptSection = if (localDetections.isNotEmpty()) {
+        val signContextText = if (localDetections.isNotEmpty()) {
             """
-            ON-DEVICE MACHINE VISION DETECTOR RESULTS:
-            The on-device local detector identified ${localDetections.size} distinct physical sign plate(s) on the post:
+            SCANNED PARKING SIGNS:
+            ${localDetections.size} distinct sign plate(s) were captured at this parking spot:
             ${localDetections.mapIndexed { idx, crop ->
-                "- Sign #${idx + 1} (${crop.normalizedBox.label}): OCR text detected: \"${crop.ocrText.replace("\n", " ")}\""
+                "- Sign #${idx + 1} (${crop.normalizedBox.label}): Visible text: \"${crop.ocrText.replace("\n", " ")}\""
             }.joinToString("\n")}
             
-            PARKING HYBRID AI PROTOCOL:
-            The local on-device detector localized 'WHERE THE SIGNS ARE' and read raw text.
-            Your task is to interpret 'WHAT THE SIGNS MEAN':
-            - Analyze EACH of the ${localDetections.size} detected sign plates individually in the 'detectedSigns' array.
-            - Synthesize all applicable restrictions to determine whether parking is currently ALLOWED, RESTRICTED, or AMBIGUOUS.
+            Note: All cropped signs belong to the same post and location. Evaluate how they interact and apply together.
             """.trimIndent()
         } else {
-            """
-            ON-DEVICE MACHINE VISION DETECTOR:
-            No distinct individual sign plates were isolated locally. Inspect the full high-resolution image to detect any parking signage and regulations. If no signs exist in the image, mark AMBIGUOUS and state that no signs were detected.
-            """.trimIndent()
+            "Inspect the captured image to detect all parking signs and posted regulations at this location."
         }
 
-        if (!apiKey.isNullOrBlank() && apiKey != "MY_GEMINI_API_KEY" && bitmap != null) {
+        val hasValidImages = (bitmap != null && !bitmap.isRecycled) || localDetections.any { 
+            (!it.bitmap.isRecycled && it.bitmap.width > 0) || (it.fileUri.isNotBlank() && java.io.File(it.fileUri).exists()) 
+        }
+
+        if (!apiKey.isNullOrBlank() && apiKey != "MY_GEMINI_API_KEY" && hasValidImages) {
             try {
                 val prompt = """
-                    You are CURB, an expert AI parking assistant.
-                    Analyze this parking sign photo taken on $currentTimeStr.
+                    You are CURB, an expert parking regulation assistant.
+                    Current evaluation time: $currentTimeStr
                     $locationContextText
                     
-                    $localDetectionsPromptSection
+                    $signContextText
+                    
+                    TASK:
+                    Interpret all visible parking rules from the provided sign images, including where applicable:
+                    - Whether parking is currently allowed or restricted at this moment
+                    - Time limit restrictions (e.g. 2 Hour, 30 Min)
+                    - Active days and enforcement hours
+                    - Permit requirements (e.g. Area Permit holders exempt)
+                    - Payment / meter requirements
+                    - Street cleaning and sweeping windows
+                    - Commercial or passenger loading restrictions
+                    - Arrow directions, precedence (e.g. tow-away superseding standard parking)
+                    - Visual symbols and curb rules
+                    - Stated exceptions (holidays, weekends)
+                    
+                    ACCURACY RULES:
+                    - Rely strictly on visible text and symbols. Do NOT invent unreadable text or imagined rules.
+                    - If signs are conflicting, damaged, or unreadable, set verdict to "AMBIGUOUS".
+                    - If parking is not permitted right now, set verdict to "RESTRICTED".
+                    - If parking is permitted right now, set verdict to "ALLOWED".
                     
                     Return a strict JSON object with this exact structure:
                     {
                       "verdict": "ALLOWED" or "RESTRICTED" or "AMBIGUOUS",
-                      "statusChipText": "e.g. Updated just now or Enforced until 6 PM",
-                      "allowedUntilTime": "e.g. 6:00 PM or No parking permitted or Rule unclear",
-                      "timeRemaining": "e.g. 2h 00m remaining",
-                      "parkingRules": ["Rule 1", "Rule 2", "Rule 3"],
-                      "explanation": "Clear, concise 2-sentence explanation of what is allowed or why it is restricted/unclear.",
-                      "zoneType": "e.g. Metered parking zone or Standard parking area",
-                      "paymentInfo": "e.g. Pay at meter or Free parking",
-                      "vehicleApplicability": "e.g. Standard passenger vehicles",
+                      "statusChipText": "Concise 2-4 word status (e.g. 'Updated just now' or 'Enforced until 6 PM')",
+                      "allowedUntilTime": "e.g. '6:00 PM' or 'No parking permitted' or 'Verify physical signage'",
+                      "timeRemaining": "e.g. '2h 00m remaining' or '0m'",
+                      "parkingRules": ["Rule 1 summary", "Rule 2 summary"],
+                      "explanation": "Clear, concise 2-sentence explanation of what is allowed or why it is restricted/unclear right now.",
+                      "zoneType": "e.g. 'Metered parking zone' or 'Standard parking area'",
+                      "paymentInfo": "e.g. 'Pay at meter' or 'Free parking'",
+                      "vehicleApplicability": "e.g. 'Standard passenger vehicles'",
                       "detectedSigns": [
                         {
                           "id": "1",
-                          "title": "Main text on sign",
-                          "subtitle": "Hours and days",
-                          "ruleText": "Brief summary",
+                          "title": "Clear headline of sign",
+                          "subtitle": "Hours, days, or permit details",
+                          "ruleText": "Brief rule summary",
                           "isRestrictingNow": false
                         }
                       ]
                     }
-                    Important:
-                    - If signs are conflicting, damaged, or unreadable, set verdict to "AMBIGUOUS".
-                    - If parking is not permitted right now (e.g. street cleaning, tow-away, no parking), set verdict to "RESTRICTED".
-                    - If parking is allowed right now, set verdict to "ALLOWED".
-                    - If local on-device detector provided signs, map the ${localDetections.size} signs in order to the 'detectedSigns' list.
-                    - Keep sign interpretation separate from location context. Do NOT fabricate municipal rules if not known.
-                    - Do NOT output markdown code fences, just raw JSON.
+                    Important: Output raw JSON only. Do not include markdown formatting or backticks.
                 """.trimIndent()
 
-                val base64Image = bitmap.toBase64()
+                val partsArray = JSONArray()
+                partsArray.put(JSONObject().apply { put("text", prompt) })
+
+                // 1. Add real cropped sign images
+                if (localDetections.isNotEmpty()) {
+                    for (crop in localDetections) {
+                        val cropBmp = if (!crop.bitmap.isRecycled && crop.bitmap.width > 0) {
+                            crop.bitmap
+                        } else if (crop.fileUri.isNotBlank()) {
+                            val f = java.io.File(crop.fileUri)
+                            if (f.exists() && f.length() > 0) {
+                                android.graphics.BitmapFactory.decodeFile(f.absolutePath)
+                            } else null
+                        } else null
+
+                        val b64 = cropBmp?.toBase64()
+                        if (!b64.isNullOrBlank()) {
+                            partsArray.put(JSONObject().apply {
+                                put("inlineData", JSONObject().apply {
+                                    put("mimeType", "image/jpeg")
+                                    put("data", b64)
+                                })
+                            })
+                        }
+                    }
+                }
+
+                // 2. Add full captured photo context if available and local crops weren't already complete
+                if (bitmap != null && !bitmap.isRecycled) {
+                    val fullB64 = bitmap.toBase64()
+                    if (!fullB64.isNullOrBlank()) {
+                        partsArray.put(JSONObject().apply {
+                            put("inlineData", JSONObject().apply {
+                                put("mimeType", "image/jpeg")
+                                put("data", fullB64)
+                            })
+                        })
+                    }
+                }
 
                 val jsonBody = JSONObject().apply {
                     val contentsArray = JSONArray().apply {
                         val contentObj = JSONObject().apply {
-                            val partsArray = JSONArray().apply {
-                                put(JSONObject().apply { put("text", prompt) })
-                                put(JSONObject().apply {
-                                    put("inlineData", JSONObject().apply {
-                                        put("mimeType", "image/jpeg")
-                                        put("data", base64Image)
-                                    })
-                                })
-                            }
                             put("parts", partsArray)
                         }
                         put(contentObj)
@@ -197,6 +241,27 @@ object GeminiService {
                                     rawText = crop.ocrText,
                                     croppedImageUri = crop.fileUri,
                                     confidence = crop.normalizedBox.confidence
+                                )
+                            )
+                        }
+                    } else if (signsArray != null && signsArray.length() > 0) {
+                        for (i in 0 until signsArray.length()) {
+                            val signObj = signsArray.optJSONObject(i) ?: continue
+                            val title = signObj.optString("title", "Parking Sign")
+                            val subtitle = signObj.optString("subtitle", "Posted schedule")
+                            val ruleText = signObj.optString("ruleText", "Standard regulations")
+                            val isRestrictingNow = signObj.optBoolean("isRestrictingNow", false)
+
+                            signsList.add(
+                                DetectedSign(
+                                    id = "sign_${i + 1}",
+                                    title = title,
+                                    subtitle = subtitle,
+                                    ruleText = ruleText,
+                                    isRestrictingNow = isRestrictingNow,
+                                    rawText = ruleText,
+                                    croppedImageUri = "",
+                                    confidence = 1.0f
                                 )
                             )
                         }
