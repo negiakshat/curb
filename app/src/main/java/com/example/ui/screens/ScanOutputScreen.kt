@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,22 +19,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,14 +46,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.data.model.CurbNote
+import com.example.data.model.DetectedSign
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
+import java.io.File
 import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbNoteDialog
 import com.example.ui.components.CurbNoteSection
@@ -74,6 +84,7 @@ import com.example.ui.theme.RadiusNested
 import com.example.ui.theme.RadiusSmall
 import com.example.ui.theme.CurbWhite
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScanOutputScreen(
     scanResult: ScanResult,
@@ -92,6 +103,7 @@ fun ScanOutputScreen(
     var showExportProSheet by remember { mutableStateOf(false) }
     var showNotesProSheet by remember { mutableStateOf(false) }
     var showNoteDialog by remember { mutableStateOf(false) }
+    var selectedSignForPreview by remember { mutableStateOf<DetectedSign?>(null) }
 
     Column(
         modifier = Modifier
@@ -394,8 +406,8 @@ fun ScanOutputScreen(
                 Spacer(modifier = Modifier.height(18.dp))
             }
 
-            // SCANNED SIGNS LIST (For YES and NO states)
-            if (scanResult.verdict != ScanVerdict.AMBIGUOUS && scanResult.detectedSigns.isNotEmpty()) {
+            // SCANNED SIGNS LIST (Shows localized signs and cropped plates)
+            if (scanResult.detectedSigns.isNotEmpty()) {
                 item {
                     Text(
                         text = "Scanned signs (${scanResult.detectedSigns.size})",
@@ -406,32 +418,107 @@ fun ScanOutputScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                 }
 
-                items(scanResult.detectedSigns) { sign ->
-                    Box(modifier = Modifier.padding(bottom = 8.dp)) {
+                itemsIndexed(scanResult.detectedSigns) { index, sign ->
+                    Box(modifier = Modifier.padding(bottom = 10.dp)) {
                         CurbCard(
                             cornerRadius = RadiusNested,
-                            backgroundColor = CurbSurface
+                            backgroundColor = CurbSurface,
+                            modifier = Modifier.clickable {
+                                selectedSignForPreview = sign
+                            }
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(14.dp),
+                                    .padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
+                                // Real Cropped Sign Plate Thumbnail
+                                if (!sign.croppedImageUri.isNullOrBlank()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 80.dp, height = 74.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(CurbSurfaceVariant)
+                                    ) {
+                                        AsyncImage(
+                                            model = File(sign.croppedImageUri),
+                                            contentDescription = "Sign crop ${index + 1}",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 64.dp, height = 64.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(CurbSurfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CropFree,
+                                            contentDescription = null,
+                                            tint = CurbOnSurfaceVariant,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                }
+
                                 Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "SIGN ${index + 1}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = CurbOnSurfaceVariant
+                                        )
+
+                                        Surface(
+                                            shape = RoundedCornerShape(RadiusChip),
+                                            color = if (sign.isRestrictingNow) CurbErrorContainer else CurbSuccessContainer
+                                        ) {
+                                            Text(
+                                                text = if (sign.isRestrictingNow) "Restricting now" else "Permitted",
+                                                color = if (sign.isRestrictingNow) CurbError else CurbSuccess,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
                                     Text(
                                         text = sign.title,
-                                        fontSize = 14.sp,
+                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = CurbOnSurface
                                     )
+
                                     Spacer(modifier = Modifier.height(2.dp))
+
                                     Text(
                                         text = sign.subtitle,
                                         fontSize = 12.sp,
                                         color = CurbOnSurfaceVariant
                                     )
+
+                                    if (sign.ruleText.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = sign.ruleText,
+                                            fontSize = 12.sp,
+                                            lineHeight = 16.sp,
+                                            color = CurbOnSurface
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -523,6 +610,127 @@ fun ScanOutputScreen(
                 showNoteDialog = false
             }
         )
+    }
+
+    // SIGN CROP INSPECTION BOTTOM SHEET
+    selectedSignForPreview?.let { sign ->
+        val inspectSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { selectedSignForPreview = null },
+            sheetState = inspectSheetState,
+            containerColor = CurbSurface,
+            shape = RoundedCornerShape(topStart = RadiusHero, topEnd = RadiusHero)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .navigationBarsPadding()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Sign Detail Analysis",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CurbOnSurface
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(RadiusChip),
+                        color = if (sign.isRestrictingNow) CurbErrorContainer else CurbSuccessContainer
+                    ) {
+                        Text(
+                            text = if (sign.isRestrictingNow) "Restricting now" else "Permitted",
+                            color = if (sign.isRestrictingNow) CurbError else CurbSuccess,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // High-resolution sign plate crop preview
+                if (!sign.croppedImageUri.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(CurbSurfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = File(sign.croppedImageUri),
+                            contentDescription = sign.title,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                CurbCard(
+                    cornerRadius = RadiusCard,
+                    backgroundColor = CurbSurfaceVariant
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = sign.title,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CurbOnSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = sign.subtitle,
+                            fontSize = 14.sp,
+                            color = CurbOnSurfaceVariant
+                        )
+
+                        if (sign.ruleText.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = sign.ruleText,
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp,
+                                color = CurbOnSurface
+                            )
+                        }
+
+                        if (sign.rawText.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Transcribed text:",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CurbOnSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = sign.rawText,
+                                fontSize = 12.sp,
+                                color = CurbOnSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                CurbPrimaryButton(
+                    text = "Close",
+                    onClick = { selectedSignForPreview = null },
+                    testTag = "close_sign_inspection_button"
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
     }
 }
 

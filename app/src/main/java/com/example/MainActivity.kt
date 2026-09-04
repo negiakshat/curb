@@ -338,9 +338,10 @@ fun CurbApp(
                         processingStatusText = processingStatusText,
                         usageInfo = scanUsageInfo,
                         isPro = isUserPro,
-                        onCaptureImage = { bitmap ->
+                        onCaptureImage = { bitmap, boxes ->
                             viewModel.processCapturedImage(
                                 bitmap = bitmap,
+                                detectionBoxes = boxes,
                                 onPaywallRequired = {
                                     Toast.makeText(
                                         context,

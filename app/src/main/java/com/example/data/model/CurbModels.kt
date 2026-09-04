@@ -20,13 +20,28 @@ enum class ScanVerdict {
         }
 }
 
+data class SignBoundingBox(
+    val id: String,
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+    val label: String,
+    val ocrText: String = "",
+    val confidence: Float = 0.95f,
+    val sourceWidth: Float = 0f,
+    val sourceHeight: Float = 0f
+)
+
 data class DetectedSign(
     val id: String,
     val title: String,
     val subtitle: String,
     val ruleText: String,
     val isRestrictingNow: Boolean = false,
-    val rawText: String = ""
+    val rawText: String = "",
+    val croppedImageUri: String? = null,
+    val confidence: Float = 0.95f
 )
 
 data class ScanResult(

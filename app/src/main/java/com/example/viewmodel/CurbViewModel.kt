@@ -270,10 +270,41 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deleteAccount(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.clearAllData()
+            sessionPreferences.clearSession()
+            scanUsageManager.resetUsage()
+            chatUsageManager.resetUsage()
+
+            val defaultProfile = UserProfile(name = "Alex", email = "")
+            _userProfile.value = defaultProfile
+            _isJudgeProActive.value = false
+            _currentScanResult.value = null
+            _isProcessingScan.value = false
+            _processingStatusText.value = "Reading parking signs…"
+            _chatMessages.value = listOf(
+                ChatMessage(
+                    text = "Hello Alex. I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
+                    isUser = false
+                )
+            )
+            _isChatLoading.value = false
+            _showNotificationDialog.value = false
+            _onboardingCompleted.value = false
+            _scanUsageInfo.value = scanUsageManager.getUsageInfo(false)
+            _chatUsageInfo.value = chatUsageManager.getUsageInfo(false)
+
+            onComplete()
+        }
+    }
+
     fun processCapturedImage(
         bitmap: Bitmap?,
         explicitLocationName: String? = null,
         explicitCityState: String? = null,
+        detectionBoxes: List<com.example.data.model.SignBoundingBox> = emptyList(),
+        localDetections: List<com.example.data.detection.LocalSignCrop> = emptyList(),
         onPaywallRequired: () -> Unit,
         onComplete: () -> Unit
     ) {
@@ -285,10 +316,46 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             _isProcessingScan.value = true
-            _processingStatusText.value = "Reading parking signs…"
-            delay(800)
-            _processingStatusText.value = "Understanding the rules…"
-            delay(800)
+            _processingStatusText.value = "Reading your parking sign…"
+
+            // Build real sign crops from live detection boxes or full image detection
+            val detectedCrops = if (localDetections.isNotEmpty()) {
+                android.util.Log.d("CurbPipeline", "Using pre-supplied local detections: ${localDetections.size}")
+                localDetections
+            } else if (bitmap != null && detectionBoxes.isNotEmpty()) {
+                android.util.Log.d("CurbPipeline", "Cropping signs from ${detectionBoxes.size} live detection box(es) on bitmap ${bitmap.width}x${bitmap.height}")
+                val liveCrops = com.example.data.detection.SignDetectionService.cropSignsFromBoxes(
+                    getApplication(),
+                    bitmap,
+                    detectionBoxes
+                )
+                if (liveCrops.isNotEmpty()) {
+                    liveCrops
+                } else {
+                    // Fallback to on-device text block clustering
+                    val fallbackResult = com.example.data.detection.SignDetectionService.detectAndCropSigns(
+                        getApplication(),
+                        bitmap
+                    )
+                    fallbackResult.signs
+                }
+            } else if (bitmap != null) {
+                android.util.Log.d("CurbPipeline", "Running on-device sign detection on captured bitmap ${bitmap.width}x${bitmap.height}")
+                val detectionResult = com.example.data.detection.SignDetectionService.detectAndCropSigns(
+                    getApplication(),
+                    bitmap
+                )
+                detectionResult.signs
+            } else {
+                emptyList()
+            }
+
+            android.util.Log.d(
+                "CurbPipeline",
+                "Final detected crops count: ${detectedCrops.size} (files: ${detectedCrops.map { it.fileUri }})"
+            )
+
+            _processingStatusText.value = "Understanding your sign…"
 
             // Resolve location context
             val (resolvedLocName, resolvedCityState, isKnown) = if (!explicitLocationName.isNullOrBlank()) {
@@ -319,7 +386,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                 bitmap = bitmap,
                 locationName = resolvedLocName,
                 cityState = resolvedCityState,
-                isLocationKnown = isKnown
+                isLocationKnown = isKnown,
+                localDetections = detectedCrops
             )
             val scanId = repository.saveScan(result)
             val savedResult = result.copy(id = scanId)
@@ -346,10 +414,25 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             _isProcessingScan.value = true
-            _processingStatusText.value = "Reading sample sign…"
-            delay(600)
-            _processingStatusText.value = "Understanding the rules…"
-            delay(600)
+            _processingStatusText.value = "Reading your parking sign…"
+            delay(500)
+            _processingStatusText.value = "Understanding your sign…"
+            delay(500)
+
+            val enrichedSigns = preset.detectedSigns.map { sign ->
+                if (!sign.croppedImageUri.isNullOrBlank() && java.io.File(sign.croppedImageUri).exists()) {
+                    sign
+                } else {
+                    val cropPath = com.example.data.detection.SignDetectionService.getOrCreateSampleSignCrop(
+                        getApplication(),
+                        sign.id,
+                        sign.title,
+                        sign.subtitle,
+                        sign.isRestrictingNow
+                    )
+                    sign.copy(croppedImageUri = cropPath)
+                }
+            }
 
             val scanResult = ScanResult(
                 locationName = preset.locationName,
@@ -360,8 +443,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                 timeRemaining = if (preset.simulatedVerdict == ScanVerdict.ALLOWED) "2h 00m remaining" else "0m",
                 parkingRules = preset.rules,
                 explanation = preset.explanation,
-                detectedSigns = preset.detectedSigns,
-                zoneType = "Sample sign zone",
+                detectedSigns = enrichedSigns,
+                zoneType = "Parking zone",
                 paymentInfo = ""
             )
             val id = repository.saveScan(scanResult)

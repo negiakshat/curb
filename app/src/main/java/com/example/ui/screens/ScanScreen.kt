@@ -2,9 +2,12 @@ package com.example.ui.screens
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
@@ -12,13 +15,6 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -36,20 +32,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.CircularProgressIndicator
@@ -61,6 +58,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,9 +69,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -82,24 +78,27 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.example.data.detection.SignDetectionService
 import com.example.data.local.ScanUsageInfo
 import com.example.data.model.SampleSignPreset
+import com.example.data.model.SignBoundingBox
 import com.example.data.remote.GeminiService
+import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.components.CurbSecondaryButton
 import com.example.ui.theme.BentoPeach
 import com.example.ui.theme.BentoPrimary
-import com.example.ui.theme.BentoSand
-import com.example.ui.theme.BentoWhite
 import com.example.ui.theme.CurbBlack
 import com.example.ui.theme.CurbOnSurface
 import com.example.ui.theme.CurbOnSurfaceVariant
 import com.example.ui.theme.CurbSuccess
 import com.example.ui.theme.CurbSurface
+import com.example.ui.theme.CurbSurfaceVariant
 import com.example.ui.theme.CurbWhite
+import com.example.ui.theme.RadiusCard
 import com.example.ui.theme.RadiusChip
 import com.example.ui.theme.RadiusHero
 import com.example.ui.theme.RadiusNested
-import com.example.ui.theme.RadiusSmall
 import java.nio.ByteBuffer
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,13 +108,15 @@ fun ScanScreen(
     processingStatusText: String,
     usageInfo: ScanUsageInfo = ScanUsageInfo(0),
     isPro: Boolean = false,
-    onCaptureImage: (Bitmap?) -> Unit,
+    onCaptureImage: (Bitmap?, List<SignBoundingBox>) -> Unit,
     onPresetSelected: (SampleSignPreset) -> Unit = {},
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     var showHelpSheet by remember { mutableStateOf(false) }
     var flashEnabled by remember { mutableStateOf(false) }
+    var activeCamera: Camera? by remember { mutableStateOf(null) }
+
     val hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -126,6 +127,16 @@ fun ScanScreen(
     }
 
     var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
+    var liveDetectedBoxes by remember { mutableStateOf<List<SignBoundingBox>>(emptyList()) }
+
+    // Synchronize physical torch with state
+    LaunchedEffect(flashEnabled, activeCamera) {
+        try {
+            activeCamera?.cameraControl?.enableTorch(flashEnabled)
+        } catch (e: Exception) {
+            // Flash not supported or permission issue
+        }
+    }
 
     // Gallery Picker
     val galleryLauncher = rememberLauncherForActivityResult(
@@ -135,48 +146,12 @@ fun ScanScreen(
             try {
                 val inputStream = context.contentResolver.openInputStream(uri)
                 val bitmap = BitmapFactory.decodeStream(inputStream)
-                onCaptureImage(bitmap)
+                onCaptureImage(bitmap, emptyList())
             } catch (e: Exception) {
-                onCaptureImage(null)
+                onCaptureImage(null, emptyList())
             }
         }
     }
-
-    // FANCY MATERIAL DESIGN 3 SCANNING ANIMATION CONTROLLERS
-    val infiniteTransition = rememberInfiniteTransition(label = "m3_scan_animation")
-
-    // 1. Smooth Laser Sweep (Top to bottom cyclic scan)
-    val laserProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "laser_sweep"
-    )
-
-    // 2. Corner Reticle Breathing / Pulse
-    val reticlePulse by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "reticle_pulse"
-    )
-
-    // 3. Radar wave expansion
-    val radarProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "radar_wave"
-    )
 
     Box(
         modifier = Modifier
@@ -184,11 +159,13 @@ fun ScanScreen(
             .background(CurbBlack)
             .testTag("scan_screen")
     ) {
-        // FULL SCREEN CAMERA VIEWFINDER
+        // REAL FULL-SCREEN CAMERA VIEWFINDER WITH REAL-TIME ON-DEVICE SIGN ANALYSIS
         if (hasCameraPermission) {
             AndroidView(
                 factory = { ctx ->
-                    val previewView = PreviewView(ctx)
+                    val previewView = PreviewView(ctx).apply {
+                        scaleType = PreviewView.ScaleType.FIT_CENTER
+                    }
                     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                     cameraProviderFuture.addListener({
                         try {
@@ -196,19 +173,36 @@ fun ScanScreen(
                             val preview = Preview.Builder().build().also {
                                 it.setSurfaceProvider(previewView.surfaceProvider)
                             }
+
                             val capture = ImageCapture.Builder()
                                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                                 .build()
                             imageCapture = capture
 
+                            // Real on-device ML Kit image analyzer
+                            val imageAnalysis = ImageAnalysis.Builder()
+                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                .build()
+
+                            imageAnalysis.setAnalyzer(
+                                SignDetectionService.getAnalysisExecutor(),
+                                SignDetectionService.createLiveAnalyzer { boxes ->
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        liveDetectedBoxes = boxes
+                                    }
+                                }
+                            )
+
                             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
                             cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
+                            val cameraInstance = cameraProvider.bindToLifecycle(
                                 (ctx as androidx.lifecycle.LifecycleOwner),
                                 cameraSelector,
                                 preview,
-                                capture
+                                capture,
+                                imageAnalysis
                             )
+                            activeCamera = cameraInstance
                         } catch (e: Exception) {
                             // Camera bind fallback
                         }
@@ -218,7 +212,7 @@ fun ScanScreen(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            // Viewfinder fallback placeholder
+            // Camera permission fallback placeholder
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -252,7 +246,7 @@ fun ScanScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Point toward parking signage or select a test sign below.",
+                        text = "Point your camera directly at posted parking signs to scan.",
                         fontSize = 14.sp,
                         color = CurbWhite.copy(alpha = 0.7f),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -261,218 +255,99 @@ fun ScanScreen(
             }
         }
 
-        // FANCY M3 CAMERA SCANNING OVERLAY CANVAS (Laser, Reticles, Radar Sweep)
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 90.dp, bottom = 220.dp, start = 24.dp, end = 24.dp)
-        ) {
-            val width = maxWidth
-            val height = maxHeight
+        // REAL ON-DEVICE BOUNDING BOX OVERLAY (Clean white outline around real detected signs)
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
 
-            // Canvas for corner brackets, laser beam & radar pulse
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val w = size.width
-                val h = size.height
-                val cornerLen = 32.dp.toPx()
-                val strokeW = 3.5.dp.toPx()
-                val cornerRad = RadiusHero.toPx()
+            // Draw clean white outline around each real detected sign
+            liveDetectedBoxes.forEach { box ->
+                val left = box.left * w
+                val top = box.top * h
+                val right = box.right * w
+                val bottom = box.bottom * h
+                val boxWidth = right - left
+                val boxHeight = bottom - top
 
-                val reticleColor = Color.White.copy(alpha = 0.4f + (reticlePulse * 0.55f))
-
-                // Top-Left Reticle
-                drawLine(
-                    color = reticleColor,
-                    start = Offset(0f, cornerLen),
-                    end = Offset(0f, 0f),
-                    strokeWidth = strokeW
-                )
-                drawLine(
-                    color = reticleColor,
-                    start = Offset(0f, 0f),
-                    end = Offset(cornerLen, 0f),
-                    strokeWidth = strokeW
-                )
-
-                // Top-Right Reticle
-                drawLine(
-                    color = reticleColor,
-                    start = Offset(w - cornerLen, 0f),
-                    end = Offset(w, 0f),
-                    strokeWidth = strokeW
-                )
-                drawLine(
-                    color = reticleColor,
-                    start = Offset(w, 0f),
-                    end = Offset(w, cornerLen),
-                    strokeWidth = strokeW
-                )
-
-                // Bottom-Left Reticle
-                drawLine(
-                    color = reticleColor,
-                    start = Offset(0f, h - cornerLen),
-                    end = Offset(0f, h),
-                    strokeWidth = strokeW
-                )
-                drawLine(
-                    color = reticleColor,
-                    start = Offset(0f, h),
-                    end = Offset(cornerLen, h),
-                    strokeWidth = strokeW
-                )
-
-                // Bottom-Right Reticle
-                drawLine(
-                    color = reticleColor,
-                    start = Offset(w - cornerLen, h),
-                    end = Offset(w, h),
-                    strokeWidth = strokeW
-                )
-                drawLine(
-                    color = reticleColor,
-                    start = Offset(w, h),
-                    end = Offset(w, h - cornerLen),
-                    strokeWidth = strokeW
-                )
-
-                // Expanding Radar Wave Ring from center
-                val center = Offset(w / 2f, h / 2f)
-                val maxRadius = Math.min(w, h) * 0.45f
-                val currentRadius = maxRadius * radarProgress
-                val radarAlpha = (1f - radarProgress).coerceIn(0f, 1f) * 0.4f
-
-                drawCircle(
-                    color = Color.White.copy(alpha = radarAlpha),
-                    radius = currentRadius,
-                    center = center,
-                    style = Stroke(width = 1.5.dp.toPx())
-                )
-
-                // Subtle Center Crosshair Targeting Ticks
-                val chLen = 10.dp.toPx()
-                val chGap = 8.dp.toPx()
-                drawLine(
-                    color = Color.White.copy(alpha = 0.6f),
-                    start = Offset(center.x - chGap - chLen, center.y),
-                    end = Offset(center.x - chGap, center.y),
-                    strokeWidth = 2.dp.toPx()
-                )
-                drawLine(
-                    color = Color.White.copy(alpha = 0.6f),
-                    start = Offset(center.x + chGap, center.y),
-                    end = Offset(center.x + chGap + chLen, center.y),
-                    strokeWidth = 2.dp.toPx()
-                )
-                drawLine(
-                    color = Color.White.copy(alpha = 0.6f),
-                    start = Offset(center.x, center.y - chGap - chLen),
-                    end = Offset(center.x, center.y - chGap),
-                    strokeWidth = 2.dp.toPx()
-                )
-                drawLine(
-                    color = Color.White.copy(alpha = 0.6f),
-                    start = Offset(center.x, center.y + chGap),
-                    end = Offset(center.x, center.y + chGap + chLen),
-                    strokeWidth = 2.dp.toPx()
-                )
-
-                // Dynamic Laser Beam with Trailing Gradient Sweep
-                val laserY = h * laserProgress
-                val trailHeight = 60.dp.toPx()
-
-                // Trailing gradient
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color(0xFFE88A6B).copy(alpha = 0.15f),
-                            Color.White.copy(alpha = 0.35f)
-                        ),
-                        startY = (laserY - trailHeight).coerceAtLeast(0f),
-                        endY = laserY
-                    ),
-                    topLeft = Offset(0f, (laserY - trailHeight).coerceAtLeast(0f)),
-                    size = Size(w, trailHeight.coerceAtMost(laserY))
-                )
-
-                // Primary glowing laser line
-                drawLine(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color(0xFFFFB4A2),
-                            Color.White,
-                            Color(0xFFFFB4A2),
-                            Color.Transparent
-                        )
-                    ),
-                    start = Offset(0f, laserY),
-                    end = Offset(w, laserY),
-                    strokeWidth = 3.dp.toPx()
-                )
-            }
-        }
-
-        // TOP CONTROLS (Back / Close & Help "?")
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(CurbBlack.copy(alpha = 0.5f), CircleShape)
-                    .testTag("scan_back_button")
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Close",
-                    tint = CurbWhite
-                )
-            }
-
-            Surface(
-                shape = RoundedCornerShape(RadiusChip),
-                color = CurbBlack.copy(alpha = 0.65f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(if (isPro || !usageInfo.isLimitReached) CurbSuccess else Color(0xFFFF5252), CircleShape)
-                    )
-                    Text(
-                        text = if (isPro) "Curb Pro • Unlimited" else usageInfo.displayText,
-                        color = CurbWhite,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
+                if (boxWidth > 10 && boxHeight > 10) {
+                    drawRoundRect(
+                        color = Color.White,
+                        topLeft = Offset(left, top),
+                        size = Size(boxWidth, boxHeight),
+                        cornerRadius = CornerRadius(4.dp.toPx()),
+                        style = Stroke(width = 2.5.dp.toPx())
                     )
                 }
             }
+        }
 
-            IconButton(
-                onClick = { showHelpSheet = true },
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(CurbBlack.copy(alpha = 0.5f), CircleShape)
-                    .testTag("scan_help_button")
+        // TOP CONTROLS & HUD STATUS BAR
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.HelpOutline,
-                    contentDescription = "Scan Help",
-                    tint = CurbWhite
-                )
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(CurbBlack.copy(alpha = 0.6f), CircleShape)
+                        .testTag("scan_back_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Close",
+                        tint = CurbWhite
+                    )
+                }
+
+                // Usage quota chip
+                Surface(
+                    shape = RoundedCornerShape(RadiusChip),
+                    color = CurbBlack.copy(alpha = 0.75f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(
+                                    if (isPro || !usageInfo.isLimitReached) CurbSuccess else Color(0xFFFF5252),
+                                    CircleShape
+                                )
+                        )
+                        Text(
+                            text = if (isPro) "Curb Pro • Unlimited" else usageInfo.displayText,
+                            color = CurbWhite,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = { showHelpSheet = true },
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(CurbBlack.copy(alpha = 0.6f), CircleShape)
+                        .testTag("scan_help_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.HelpOutline,
+                        contentDescription = "Scan Help",
+                        tint = CurbWhite
+                    )
+                }
             }
         }
 
@@ -482,7 +357,7 @@ fun ScanScreen(
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 32.dp),
+                .padding(bottom = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Main Shutter Button & Symmetrical Gallery / Flash Controls
@@ -509,7 +384,7 @@ fun ScanScreen(
                     )
                 }
 
-                // Large Central Shutter Button with tactile pulsing ring
+                // Large Shutter Button with tactile lock ring
                 Box(
                     modifier = Modifier
                         .size(80.dp)
@@ -517,26 +392,48 @@ fun ScanScreen(
                         .background(CurbWhite)
                         .clickable {
                             val capture = imageCapture
+                            val capturedBoxesSnapshot = liveDetectedBoxes.toList()
                             if (capture != null) {
                                 capture.takePicture(
-                                    ContextCompat.getMainExecutor(context),
+                                    SignDetectionService.getAnalysisExecutor(),
                                     object : ImageCapture.OnImageCapturedCallback() {
                                         override fun onCaptureSuccess(image: ImageProxy) {
-                                            val buffer: ByteBuffer = image.planes[0].buffer
-                                            val bytes = ByteArray(buffer.remaining())
-                                            buffer.get(bytes)
-                                            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                            image.close()
-                                            onCaptureImage(bitmap)
+                                            try {
+                                                val rotationDegrees = image.imageInfo.rotationDegrees
+                                                val buffer: ByteBuffer = image.planes[0].buffer
+                                                val bytes = ByteArray(buffer.remaining())
+                                                buffer.get(bytes)
+                                                var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                                if (bitmap != null && rotationDegrees != 0) {
+                                                    val matrix = Matrix()
+                                                    matrix.postRotate(rotationDegrees.toFloat())
+                                                    bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                                                }
+                                                android.util.Log.d(
+                                                    "CurbPipeline",
+                                                    "Camera picture taken: bmp=${bitmap?.width}x${bitmap?.height}, liveBoxes=${capturedBoxesSnapshot.size}"
+                                                )
+                                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                    onCaptureImage(bitmap, capturedBoxesSnapshot)
+                                                }
+                                            } catch (e: Throwable) {
+                                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                    onCaptureImage(null, emptyList())
+                                                }
+                                            } finally {
+                                                image.close()
+                                            }
                                         }
 
                                         override fun onError(exception: ImageCaptureException) {
-                                            onCaptureImage(null)
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                onCaptureImage(null, emptyList())
+                                            }
                                         }
                                     }
                                 )
                             } else {
-                                onCaptureImage(null)
+                                onCaptureImage(null, emptyList())
                             }
                         }
                         .testTag("shutter_capture_button"),
@@ -545,11 +442,17 @@ fun ScanScreen(
                     Box(
                         modifier = Modifier
                             .size(68.dp)
-                            .border(BorderStroke(3.dp, CurbBlack), CircleShape)
+                            .border(
+                                BorderStroke(
+                                    3.dp,
+                                    if (liveDetectedBoxes.isNotEmpty()) Color.White else CurbBlack
+                                ),
+                                CircleShape
+                            )
                     )
                 }
 
-                // Symmetrical Flashlight / Assist Button
+                // Symmetrical Flashlight Toggle
                 IconButton(
                     onClick = { flashEnabled = !flashEnabled },
                     modifier = Modifier
@@ -561,7 +464,7 @@ fun ScanScreen(
                         .testTag("flash_toggle_button")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.FlashOn,
+                        imageVector = if (flashEnabled) Icons.Default.FlashOn else Icons.Default.FlashOff,
                         contentDescription = "Toggle Flash",
                         tint = if (flashEnabled) BentoPrimary else CurbWhite,
                         modifier = Modifier.size(24.dp)
@@ -570,7 +473,7 @@ fun ScanScreen(
             }
         }
 
-        // SCAN PROCESSING MODAL OVERLAY
+        // REAL HYBRID PROCESSING MODAL OVERLAY
         AnimatedVisibility(
             visible = isProcessing,
             enter = fadeIn(),
@@ -579,7 +482,7 @@ fun ScanScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(CurbBlack.copy(alpha = 0.9f)),
+                    .background(CurbBlack.copy(alpha = 0.92f)),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -596,24 +499,26 @@ fun ScanScreen(
 
                     Text(
                         text = processingStatusText,
-                        fontSize = 20.sp,
+                        fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
-                        color = CurbWhite
+                        color = CurbWhite,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = "Analyzing local municipal rules & conditions",
-                        fontSize = 14.sp,
-                        color = CurbWhite.copy(alpha = 0.7f)
+                        text = "Checking parking regulations…",
+                        fontSize = 13.sp,
+                        color = CurbWhite.copy(alpha = 0.7f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
             }
         }
     }
 
-    // SCAN HELP BOTTOM SHEET (RadiusHero = 28.dp)
+    // SCAN HELP BOTTOM SHEET
     if (showHelpSheet) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
@@ -629,19 +534,31 @@ fun ScanScreen(
                     .navigationBarsPadding()
             ) {
                 Text(
-                    text = "How to scan",
-                    fontSize = 24.sp,
+                    text = "How Curb Works",
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = CurbOnSurface
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                HelpTipRow(number = "1", title = "Point toward parking signs", desc = "Position your camera so all signs on the pole are within the frame.")
+                HelpTipRow(
+                    number = "1",
+                    title = "Target parking signs",
+                    desc = "Curb highlights signs in your camera view to isolate each restriction."
+                )
                 Spacer(modifier = Modifier.height(14.dp))
-                HelpTipRow(number = "2", title = "Keep signs visible & clear", desc = "Ensure text, hours, days, and directional arrows are reasonably legible.")
+                HelpTipRow(
+                    number = "2",
+                    title = "Read posted rules",
+                    desc = "Each sign plate is analyzed against the current day and time to check if parking is allowed."
+                )
                 Spacer(modifier = Modifier.height(14.dp))
-                HelpTipRow(number = "3", title = "Multi-sign analysis", desc = "Curb analyzes combinations of street cleaning, meters, tow-away, and permit signs together.")
+                HelpTipRow(
+                    number = "3",
+                    title = "Get a clear verdict",
+                    desc = "Tow-away hours, street cleaning schedules, and meter limits on the post are resolved into one clear answer."
+                )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -681,15 +598,15 @@ private fun HelpTipRow(number: String, title: String, desc: String) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontSize = 16.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = CurbOnSurface
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = desc,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
                 color = CurbOnSurfaceVariant
             )
         }
