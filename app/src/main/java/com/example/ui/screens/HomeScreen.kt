@@ -93,6 +93,7 @@ fun HomeScreen(
     savedParkingSpot: com.example.data.model.ParkingSpot? = null,
     recentScans: List<ScanResult>,
     usageInfo: ScanUsageInfo = ScanUsageInfo(0),
+    userLocationResult: com.example.data.location.UserLocationResult = com.example.data.location.UserLocationResult.Unavailable("Checking location…"),
     onScanClicked: () -> Unit,
     onParkingTimerClicked: () -> Unit,
     onFindMyCarClicked: () -> Unit = {},
@@ -184,6 +185,27 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 6.dp)
             ) {
+                val (dotColor, locationLabel) = remember(userLocationResult) {
+                    when (userLocationResult) {
+                        is com.example.data.location.UserLocationResult.Success -> {
+                            val loc = userLocationResult
+                            val cityOrLocality = loc.cityState.ifBlank { loc.locationName }
+                            Pair(CurbSuccess, if (cityOrLocality.isNotBlank() && cityOrLocality != "Current Location") cityOrLocality else "Location active")
+                        }
+                        is com.example.data.location.UserLocationResult.PermissionRequired -> {
+                            Pair(Color(0xFFFF9800), "Location unavailable")
+                        }
+                        is com.example.data.location.UserLocationResult.Unavailable -> {
+                            val msg = userLocationResult.message
+                            if (msg.contains("Checking", ignoreCase = true) || msg.contains("Getting", ignoreCase = true)) {
+                                Pair(Color(0xFFFF9800), "Getting location…")
+                            } else {
+                                Pair(Color(0xFFFF9800), "Location unavailable")
+                            }
+                        }
+                    }
+                }
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -203,18 +225,30 @@ fun HomeScreen(
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .background(CurbSuccess, CircleShape)
-                    )
-
                     Text(
-                        text = "System active",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
+                        text = "•",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
                         color = BentoTextSecondary
                     )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .background(dotColor, CircleShape)
+                        )
+
+                        Text(
+                            text = locationLabel,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = BentoTextSecondary
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -854,8 +888,8 @@ fun RecentScanCard(
     }
 
     val (statusColor, statusText) = when (scan.verdict) {
-        ScanVerdict.ALLOWED -> Pair(CurbSuccess, "Allowed to park")
-        ScanVerdict.RESTRICTED -> Pair(CurbError, "Restricted")
+        ScanVerdict.ALLOWED -> Pair(CurbSuccess, "Parking allowed")
+        ScanVerdict.RESTRICTED -> Pair(CurbError, "Parking restricted")
         ScanVerdict.AMBIGUOUS -> Pair(CurbWarning, "Rule unclear")
     }
 

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -88,7 +89,7 @@ fun CurbPrimaryButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(54.dp)
+            .defaultMinSize(minHeight = 54.dp)
             .testTag(testTag),
         enabled = enabled,
         shape = RoundedCornerShape(RadiusHero),
@@ -143,7 +144,7 @@ fun CurbSecondaryButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(54.dp)
+            .defaultMinSize(minHeight = 54.dp)
             .testTag(testTag),
         enabled = enabled,
         shape = RoundedCornerShape(RadiusHero),

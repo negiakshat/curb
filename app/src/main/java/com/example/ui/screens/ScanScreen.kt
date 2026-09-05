@@ -144,8 +144,7 @@ fun ScanScreen(
     ) { uri ->
         if (uri != null) {
             try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
+                val bitmap = SignDetectionService.loadOrientedBitmapFromUri(context, uri)
                 onCaptureImage(bitmap, emptyList())
             } catch (e: Exception) {
                 onCaptureImage(null, emptyList())

@@ -107,6 +107,7 @@ import com.example.ui.theme.BentoPrimaryDark
 import com.example.ui.theme.BentoSand
 import com.example.ui.theme.BentoWhite
 import com.example.ui.theme.CurbError
+import com.example.ui.theme.CurbErrorContainer
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -291,11 +292,12 @@ fun ParkingTimerScreen(
                 .padding(horizontal = 20.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (activeSession != null && activeSession.isActive && activeSession.remainingMillis > 0) {
+            if (activeSession != null && activeSession.isActive) {
                 // Pre-calculated values for the cards
                 val totalDuration = (activeSession.endTime - activeSession.startTime).coerceAtLeast(1000L)
-                val remaining = (activeSession.endTime - currentTimeMillis).coerceAtLeast(0L)
-                val rawProgress = (remaining.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
+                val remaining = (activeSession.endTime - currentTimeMillis)
+                val isExpired = remaining <= 0
+                val rawProgress = if (isExpired) 0f else (remaining.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
 
                 val animatedProgress by animateFloatAsState(
                     targetValue = rawProgress,
@@ -303,10 +305,10 @@ fun ParkingTimerScreen(
                     label = "timer_progress"
                 )
 
-                val totalSeconds = remaining / 1000
+                val totalSeconds = (remaining / 1000).coerceAtLeast(0L)
                 val hours = totalSeconds / 3600
                 val minutes = (totalSeconds % 3600) / 60
-                val timeDisplay = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+                val timeDisplay = if (isExpired) "0m" else if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 
                 val totalSecs = totalDuration / 1000
                 val totalHours = totalSecs / 3600
@@ -338,7 +340,7 @@ fun ParkingTimerScreen(
                             .padding(top = 22.dp, bottom = 18.dp, start = 18.dp, end = 18.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // "P" Active parking header pill
+                        // Header pill (Active vs Expired)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -347,22 +349,22 @@ fun ParkingTimerScreen(
                                 modifier = Modifier
                                     .size(24.dp)
                                     .clip(CircleShape)
-                                    .background(TimerBannerBg),
+                                    .background(if (isExpired) CurbErrorContainer else TimerBannerBg),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "P",
+                                    text = if (isExpired) "!" else "P",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = TimerBannerGreen
+                                    color = if (isExpired) CurbError else TimerBannerGreen
                                 )
                             }
 
                             Text(
-                                text = "Active parking",
+                                text = if (isExpired) "Restriction active • Expired" else "Active parking",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = TimerBannerGreen
+                                color = if (isExpired) CurbError else TimerBannerGreen
                             )
                         }
 
@@ -381,9 +383,9 @@ fun ParkingTimerScreen(
                                 val topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f)
                                 val arcSize = Size(diameter, diameter)
 
-                                // 1. Background full track (mint circle)
+                                // 1. Background full track
                                 drawArc(
-                                    color = TimerTrackGreen,
+                                    color = if (isExpired) CurbErrorContainer else TimerTrackGreen,
                                     startAngle = 0f,
                                     sweepAngle = 360f,
                                     useCenter = false,
@@ -392,10 +394,10 @@ fun ParkingTimerScreen(
                                     style = Stroke(width = strokeWidth)
                                 )
 
-                                // 2. Foreground active progress arc (vibrant green)
-                                val sweep = animatedProgress * 360f
+                                // 2. Foreground active progress arc
+                                val sweep = if (isExpired) 360f else animatedProgress * 360f
                                 drawArc(
-                                    color = TimerProgressGreen,
+                                    color = if (isExpired) CurbError else TimerProgressGreen,
                                     startAngle = -90f,
                                     sweepAngle = sweep,
                                     useCenter = false,
@@ -419,7 +421,7 @@ fun ParkingTimerScreen(
                                     center = knobCenter
                                 )
                                 drawCircle(
-                                    color = TimerProgressGreen,
+                                    color = if (isExpired) CurbError else TimerProgressGreen,
                                     radius = strokeWidth * 0.55f,
                                     center = knobCenter
                                 )
@@ -431,7 +433,7 @@ fun ParkingTimerScreen(
                                 verticalArrangement = Arrangement.Center
                             ) {
                                 Text(
-                                    text = "Time remaining",
+                                    text = if (isExpired) "Status" else "Time remaining",
                                     fontSize = 13.sp,
                                     color = TimerTextMuted,
                                     fontWeight = FontWeight.Medium
@@ -440,17 +442,17 @@ fun ParkingTimerScreen(
                                 Spacer(modifier = Modifier.height(2.dp))
 
                                 Text(
-                                    text = timeDisplay,
-                                    fontSize = 38.sp,
+                                    text = if (isExpired) "EXPIRED" else timeDisplay,
+                                    fontSize = if (isExpired) 26.sp else 38.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = TimerTextDark,
+                                    color = if (isExpired) CurbError else TimerTextDark,
                                     letterSpacing = (-0.5).sp
                                 )
 
                                 Spacer(modifier = Modifier.height(2.dp))
 
                                 Text(
-                                    text = "of $limitDisplay limit",
+                                    text = "Limit: $limitDisplay",
                                     fontSize = 13.sp,
                                     color = TimerTextMuted
                                 )
@@ -458,7 +460,7 @@ fun ParkingTimerScreen(
                                 Spacer(modifier = Modifier.height(10.dp))
 
                                 Text(
-                                    text = "Expires today at",
+                                    text = if (isExpired) "Expired at" else "Expires at",
                                     fontSize = 12.sp,
                                     color = TimerTextMuted
                                 )
@@ -469,7 +471,7 @@ fun ParkingTimerScreen(
                                     text = activeSession.allowedUntilTime,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = TimerProgressGreen
+                                    color = if (isExpired) CurbError else TimerProgressGreen
                                 )
                             }
                         }

@@ -391,34 +391,28 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             _isProcessingScan.value = true
             _processingStatusText.value = "Reading your parking sign…"
 
-            // Build real sign crops from live detection boxes or full image detection
+            // Build real sign crops from captured bitmap or pre-supplied local detections
             val detectedCrops = if (localDetections.isNotEmpty()) {
                 android.util.Log.d("CurbPipeline", "Using pre-supplied local detections: ${localDetections.size}")
                 localDetections
-            } else if (bitmap != null && detectionBoxes.isNotEmpty()) {
-                android.util.Log.d("CurbPipeline", "Cropping signs from ${detectionBoxes.size} live detection box(es) on bitmap ${bitmap.width}x${bitmap.height}")
-                val liveCrops = com.example.data.detection.SignDetectionService.cropSignsFromBoxes(
-                    getApplication(),
-                    bitmap,
-                    detectionBoxes
-                )
-                if (liveCrops.isNotEmpty()) {
-                    liveCrops
-                } else {
-                    // Fallback to on-device text block clustering
-                    val fallbackResult = com.example.data.detection.SignDetectionService.detectAndCropSigns(
-                        getApplication(),
-                        bitmap
-                    )
-                    fallbackResult.signs
-                }
             } else if (bitmap != null) {
                 android.util.Log.d("CurbPipeline", "Running on-device sign detection on captured bitmap ${bitmap.width}x${bitmap.height}")
                 val detectionResult = com.example.data.detection.SignDetectionService.detectAndCropSigns(
                     getApplication(),
                     bitmap
                 )
-                detectionResult.signs
+                if (detectionResult.signs.isNotEmpty()) {
+                    detectionResult.signs
+                } else if (detectionBoxes.isNotEmpty()) {
+                    // Fallback to cropping from live camera preview bounding boxes
+                    com.example.data.detection.SignDetectionService.cropSignsFromBoxes(
+                        getApplication(),
+                        bitmap,
+                        detectionBoxes
+                    )
+                } else {
+                    emptyList()
+                }
             } else {
                 emptyList()
             }
@@ -460,7 +454,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                 locationName = resolvedLocName,
                 cityState = resolvedCityState,
                 isLocationKnown = isKnown,
-                localDetections = detectedCrops
+                localDetections = detectedCrops,
+                context = getApplication()
             )
             val scanId = repository.saveScan(result)
             val savedResult = result.copy(id = scanId)
@@ -581,7 +576,9 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         locationName: String = "Parked Spot",
         durationMinutes: Int = 120,
         allowedUntilTime: String = "",
-        notes: String = ""
+        notes: String = "",
+        timerBasis: String = "",
+        parkingRuleSummary: String = ""
     ) {
         viewModelScope.launch {
             repository.startParkingSession(
@@ -589,7 +586,9 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                 locationName = locationName,
                 durationMinutes = durationMinutes,
                 allowedUntilTime = allowedUntilTime,
-                notes = notes
+                notes = notes,
+                timerBasis = timerBasis,
+                parkingRuleSummary = parkingRuleSummary
             )
         }
     }
@@ -705,7 +704,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
-                val responseText = GeminiService.askParkingAssistant(trimmed, _chatMessages.value)
+                val currentScan = _currentScanResult.value
+                val responseText = GeminiService.askParkingAssistant(trimmed, _chatMessages.value, currentScan)
                 val aiMsg = ChatMessage(text = responseText, isUser = false)
                 _chatMessages.value = _chatMessages.value + aiMsg
             } catch (e: Exception) {

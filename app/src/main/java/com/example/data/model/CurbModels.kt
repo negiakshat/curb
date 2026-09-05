@@ -7,16 +7,16 @@ enum class ScanVerdict {
 
     val displayTitle: String
         get() = when (this) {
-            ALLOWED -> "Yes, you can park here"
-            RESTRICTED -> "No, parking is restricted"
-            AMBIGUOUS -> "Rule unclear — Verify Locally"
+            ALLOWED -> "Parking allowed"
+            RESTRICTED -> "Parking restricted"
+            AMBIGUOUS -> "Rule unclear"
         }
 
     val subtitle: String
         get() = when (this) {
-            ALLOWED -> "You can park here under the rules that apply right now."
-            RESTRICTED -> "Parking is currently prohibited or restricted by active zone rules."
-            AMBIGUOUS -> "Signs contain conflicting, obstructed, or faded text. Please verify physical signage."
+            ALLOWED -> "You can park here under the current rules."
+            RESTRICTED -> "An active rule prohibits parking at this spot right now."
+            AMBIGUOUS -> "Some signage is faded, incomplete, or obstructed. Curb couldn't confidently determine the active parking rule."
         }
 }
 
@@ -36,9 +36,14 @@ data class SignBoundingBox(
 data class DetectedSign(
     val id: String,
     val title: String,
-    val subtitle: String,
-    val ruleText: String,
+    val subtitle: String = "",
+    val applicableDaysHours: String = "",
+    val restrictions: String = "",
+    val exceptions: String = "",
+    val ruleText: String = "",
     val isRestrictingNow: Boolean = false,
+    val isUncertain: Boolean = false,
+    val statusBadge: String = "",
     val rawText: String = "",
     val croppedImageUri: String? = null,
     val confidence: Float = 0.95f
@@ -73,6 +78,8 @@ data class ActiveParkingSession(
     val allowedUntilTime: String = "",
     val reminderMinutesBefore: Int = 15,
     val notes: String = "",
+    val timerBasis: String = "",
+    val parkingRuleSummary: String = "",
     val isActive: Boolean = true
 ) {
     val remainingMillis: Long

@@ -105,7 +105,9 @@ class CurbRepository(context: Context) {
         locationName: String,
         durationMinutes: Int,
         allowedUntilTime: String,
-        notes: String
+        notes: String = "",
+        timerBasis: String = "",
+        parkingRuleSummary: String = ""
     ): Long {
         // End any existing session
         parkingSessionDao.endAllSessions()
@@ -119,6 +121,8 @@ class CurbRepository(context: Context) {
             allowedUntilTime = allowedUntilTime,
             reminderMinutesBefore = 15,
             notes = notes,
+            timerBasis = timerBasis,
+            parkingRuleSummary = parkingRuleSummary,
             isActive = true
         )
         return parkingSessionDao.insertSession(entity)
@@ -260,6 +264,8 @@ class CurbRepository(context: Context) {
             allowedUntilTime = entity.allowedUntilTime,
             reminderMinutesBefore = entity.reminderMinutesBefore,
             notes = entity.notes,
+            timerBasis = entity.timerBasis,
+            parkingRuleSummary = entity.parkingRuleSummary,
             isActive = entity.isActive
         )
     }

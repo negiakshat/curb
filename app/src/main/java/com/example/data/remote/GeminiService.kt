@@ -45,12 +45,41 @@ object GeminiService {
         }
     }
 
+    private fun createFallbackSignCrops(context: Context?, bitmap: Bitmap, count: Int): List<String> {
+        if (bitmap.isRecycled || bitmap.width < 10 || bitmap.height < 10 || count <= 0) return emptyList()
+        val cropsDir = if (context != null) {
+            java.io.File(context.cacheDir, "sign_crops").apply { if (!exists()) mkdirs() }
+        } else {
+            java.io.File(System.getProperty("java.io.tmpdir") ?: "/tmp", "sign_crops").apply { if (!exists()) mkdirs() }
+        }
+        val paths = mutableListOf<String>()
+        val sliceHeight = bitmap.height / count
+        for (i in 0 until count) {
+            val top = i * sliceHeight
+            val height = if (i == count - 1) bitmap.height - top else sliceHeight
+            try {
+                val cropped = Bitmap.createBitmap(bitmap, 0, top, bitmap.width, height)
+                val file = java.io.File(cropsDir, "fallback_crop_${System.currentTimeMillis()}_$i.jpg")
+                java.io.FileOutputStream(file).use { out ->
+                    cropped.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                }
+                if (file.exists() && file.length() > 0) {
+                    paths.add(file.absolutePath)
+                }
+            } catch (e: Exception) {
+                // Ignore fallback crop errors
+            }
+        }
+        return paths
+    }
+
     suspend fun analyzeParkingSigns(
         bitmap: Bitmap?,
         locationName: String,
         cityState: String = "",
         isLocationKnown: Boolean = true,
-        localDetections: List<LocalSignCrop> = emptyList()
+        localDetections: List<LocalSignCrop> = emptyList(),
+        context: Context? = null
     ): ScanResult = withContext(Dispatchers.IO) {
         val apiKey = try {
             BuildConfig.GEMINI_API_KEY
@@ -125,10 +154,14 @@ object GeminiService {
                       "detectedSigns": [
                         {
                           "id": "1",
-                          "title": "Clear headline of sign",
-                          "subtitle": "Hours, days, or permit details",
-                          "ruleText": "Brief rule summary",
-                          "isRestrictingNow": false
+                          "title": "Meaningful title (e.g. '2-Hour Daytime Limit')",
+                          "subtitle": "Short day/time summary (e.g. 'Mon–Fri • 8 AM – 6 PM')",
+                          "applicableDaysHours": "Full applicable schedule (e.g. 'Monday through Friday, 8:00 AM – 6:00 PM')",
+                          "restrictions": "Detailed restriction (e.g. 'Max 2-hour stay enforced during daytime hours')",
+                          "exceptions": "Exemptions (e.g. 'Area G permit holders exempt')",
+                          "isRestrictingNow": false,
+                          "isUncertain": false,
+                          "statusBadge": "Active Restriction" or "Permit / Time Limit" or "Inactive Schedule" or "Unclear / Obstructed"
                         }
                       ]
                     }
@@ -203,11 +236,11 @@ object GeminiService {
                     val cleanJsonStr = text.replace("```json", "").replace("```", "").trim()
                     val parsed = JSONObject(cleanJsonStr)
 
-                    val verdictStr = parsed.optString("verdict", "ALLOWED").uppercase()
+                    val verdictStr = parsed.optString("verdict", "AMBIGUOUS").uppercase()
                     val verdict = when {
                         verdictStr.contains("RESTRICT") -> ScanVerdict.RESTRICTED
-                        verdictStr.contains("AMBIGU") || verdictStr.contains("UNCLEAR") -> ScanVerdict.AMBIGUOUS
-                        else -> ScanVerdict.ALLOWED
+                        verdictStr.contains("ALLOW") || verdictStr == "YES" || verdictStr == "PERMITTED" -> ScanVerdict.ALLOWED
+                        else -> ScanVerdict.AMBIGUOUS
                     }
 
                     val rulesList = mutableListOf<String>()
@@ -224,20 +257,38 @@ object GeminiService {
                         localDetections.forEachIndexed { i, crop ->
                             val signObj = signsArray?.optJSONObject(i)
                             val title = signObj?.optString("title")?.ifBlank { null }
-                                ?: crop.normalizedBox.label
+                                ?: crop.normalizedBox.label.ifBlank { "Sign #${i + 1}" }
                             val subtitle = signObj?.optString("subtitle")?.ifBlank { null }
-                                ?: "Active Zone"
-                            val ruleText = signObj?.optString("ruleText")?.ifBlank { null }
-                                ?: crop.ocrText.replace("\n", " ").take(70)
+                                ?: "Mon–Fri • Posted Schedule"
+                            val daysHours = signObj?.optString("applicableDaysHours")?.ifBlank { null }
+                                ?: subtitle
+                            val restrictions = signObj?.optString("restrictions")?.ifBlank { null }
+                                ?: signObj?.optString("ruleText")?.ifBlank { null }
+                                ?: "Standard parking regulations apply."
+                            val exceptions = signObj?.optString("exceptions")?.ifBlank { null }
+                                ?: ""
                             val isRestrictingNow = signObj?.optBoolean("isRestrictingNow") ?: false
+                            val isUncertain = signObj?.optBoolean("isUncertain") ?: false
+                            val badge = signObj?.optString("statusBadge")?.ifBlank { null }
+                                ?: when {
+                                    isUncertain -> "Unclear / Obstructed"
+                                    isRestrictingNow -> "Active Restriction"
+                                    exceptions.isNotBlank() -> "Permit / Time Limit"
+                                    else -> "Inactive Schedule"
+                                }
 
                             signsList.add(
                                 DetectedSign(
                                     id = crop.id,
                                     title = title,
                                     subtitle = subtitle,
-                                    ruleText = ruleText,
+                                    applicableDaysHours = daysHours,
+                                    restrictions = restrictions,
+                                    exceptions = exceptions,
+                                    ruleText = restrictions,
                                     isRestrictingNow = isRestrictingNow,
+                                    isUncertain = isUncertain,
+                                    statusBadge = badge,
                                     rawText = crop.ocrText,
                                     croppedImageUri = crop.fileUri,
                                     confidence = crop.normalizedBox.confidence
@@ -245,22 +296,38 @@ object GeminiService {
                             )
                         }
                     } else if (signsArray != null && signsArray.length() > 0) {
+                        // Dynamically produce real fallback crop files from bitmap if present
+                        val fallbackCrops = if (bitmap != null && !bitmap.isRecycled) {
+                            createFallbackSignCrops(context, bitmap, signsArray.length())
+                        } else emptyList()
+
                         for (i in 0 until signsArray.length()) {
                             val signObj = signsArray.optJSONObject(i) ?: continue
-                            val title = signObj.optString("title", "Parking Sign")
+                            val title = signObj.optString("title", "Parking Sign #${i + 1}")
                             val subtitle = signObj.optString("subtitle", "Posted schedule")
-                            val ruleText = signObj.optString("ruleText", "Standard regulations")
+                            val daysHours = signObj.optString("applicableDaysHours", subtitle)
+                            val restrictions = signObj.optString("restrictions", signObj.optString("ruleText", "Standard regulations"))
+                            val exceptions = signObj.optString("exceptions", "")
                             val isRestrictingNow = signObj.optBoolean("isRestrictingNow", false)
+                            val isUncertain = signObj.optBoolean("isUncertain", false)
+                            val badge = signObj.optString("statusBadge", if (isRestrictingNow) "Active Restriction" else "Individual Sign Rule")
+
+                            val cropUri = if (i < fallbackCrops.size) fallbackCrops[i] else ""
 
                             signsList.add(
                                 DetectedSign(
                                     id = "sign_${i + 1}",
                                     title = title,
                                     subtitle = subtitle,
-                                    ruleText = ruleText,
+                                    applicableDaysHours = daysHours,
+                                    restrictions = restrictions,
+                                    exceptions = exceptions,
+                                    ruleText = restrictions,
                                     isRestrictingNow = isRestrictingNow,
-                                    rawText = ruleText,
-                                    croppedImageUri = "",
+                                    isUncertain = isUncertain,
+                                    statusBadge = badge,
+                                    rawText = restrictions,
+                                    croppedImageUri = cropUri,
                                     confidence = 1.0f
                                 )
                             )
@@ -293,7 +360,8 @@ object GeminiService {
 
     suspend fun askParkingAssistant(
         query: String,
-        history: List<ChatMessage>
+        history: List<ChatMessage>,
+        scanContext: ScanResult? = null
     ): String = withContext(Dispatchers.IO) {
         val apiKey = try {
             BuildConfig.GEMINI_API_KEY
@@ -301,13 +369,50 @@ object GeminiService {
             ""
         }
 
+        val scanContextPrompt = if (scanContext != null) {
+            val signsSummary = if (scanContext.detectedSigns.isNotEmpty()) {
+                scanContext.detectedSigns.mapIndexed { idx, sign ->
+                    "Sign #${idx + 1} ('${sign.title}'): Schedule: '${sign.applicableDaysHours}', Rule: '${sign.restrictions}', Active restriction now: ${sign.isRestrictingNow}, Uncertain/Obstructed: ${sign.isUncertain}, Raw OCR: '${sign.rawText}'"
+                }.joinToString("\n  ")
+            } else {
+                "No physical sign plates were clearly detected."
+            }
+
+            """
+            CURRENT SCANNED PARKING SPOT CONTEXT:
+            - Location: ${scanContext.locationName} (${scanContext.cityState})
+            - Overall Verdict: ${scanContext.verdict.name} (${scanContext.verdict.displayTitle})
+            - Allowed Until: ${scanContext.allowedUntilTime} (Time remaining: ${scanContext.timeRemaining})
+            - Zone Type: ${scanContext.zoneType}
+            - Payment Info: ${scanContext.paymentInfo}
+            - Vehicle Applicability: ${scanContext.vehicleApplicability}
+            - Rules Established from Evidence:
+              ${scanContext.parkingRules.joinToString("\n  - ")}
+            - Curb Analysis Summary: ${scanContext.explanation}
+            - Physical Signs Read (${scanContext.detectedSigns.size} detected):
+              $signsSummary
+            
+            COPILOT DIRECTIVES:
+            - Answer the user's query specifically about THIS scanned parking spot using the evidence and scan context provided.
+            - Do NOT re-run the scan or pretend you don't know the spot context.
+            - Clearly distinguish physical evidence (e.g., "Sign #1 posted on the pole says...") from your AI interpretation.
+            - If verdict is AMBIGUOUS / Rule Unclear, explain the exact ambiguity or missing physical sign evidence.
+            - If verdict is RESTRICTED, explain which sign or rule prohibits parking and when the restriction ends.
+            - If verdict is ALLOWED, explain permissions and any upcoming inactive restrictions.
+            - Do NOT invent or fabricate rules, signs, or locations not present in this scan context.
+            """.trimIndent()
+        } else {
+            "No current scan context attached. Provide general municipal parking guidance."
+        }
+
         if (!apiKey.isNullOrBlank() && apiKey != "MY_GEMINI_API_KEY") {
             try {
                 val systemPrompt = """
-                    You are Curb AI, an intelligent parking assistant for Android.
-                    Provide clear, concise, actionable parking advice based on common municipal rules, street cleaning, commercial loading zones, meter hours, and permit zones.
-                    Keep responses focused, friendly, and under 3 short paragraphs.
-                    Always remind users gently when appropriate to check local signs as physical conditions may vary.
+                    You are Curb AI, an expert Android parking copilot.
+                    $scanContextPrompt
+                    
+                    Keep responses focused, direct, concise, and helpful (under 3 short paragraphs).
+                    Never repeat information unnecessarily; assume the user already sees the current scan result.
                 """.trimIndent()
 
                 val jsonBody = JSONObject().apply {
@@ -360,11 +465,49 @@ object GeminiService {
         }
 
         // Intelligent parking domain reasoning fallback
-        answerParkingLocally(query)
+        answerParkingLocally(query, scanContext)
     }
 
-    private fun answerParkingLocally(query: String): String {
+    private fun answerParkingLocally(query: String, scanContext: ScanResult? = null): String {
         val lower = query.lowercase(Locale.ROOT)
+
+        if (scanContext != null) {
+            if (lower.contains("why") && (lower.contains("can't") || lower.contains("restrict") || lower.contains("prohibit") || lower.contains("not allow"))) {
+                return when (scanContext.verdict) {
+                    ScanVerdict.RESTRICTED -> {
+                        val activeSigns = scanContext.detectedSigns.filter { it.isRestrictingNow }
+                        if (activeSigns.isNotEmpty()) {
+                            val signDesc = activeSigns.joinToString(", ") { "${it.title} (${it.subtitle})" }
+                            "Parking is restricted because $signDesc is currently in effect at ${scanContext.locationName}. This restriction overrides general daytime parking permissions."
+                        } else {
+                            "Parking is restricted at ${scanContext.locationName} due to an active street regulation or municipal prohibition in this time window."
+                        }
+                    }
+                    ScanVerdict.ALLOWED -> "Parking is actually ALLOWED at ${scanContext.locationName} until ${scanContext.allowedUntilTime}. There are no active restricting signs prohibiting parking right now."
+                    ScanVerdict.AMBIGUOUS -> "The parking rule is unclear because physical signage is ambiguous, partially obscured, or conflicting. Physical verification on-site is required before leaving your vehicle."
+                }
+            }
+
+            if (lower.contains("sign") || lower.contains("which sign")) {
+                if (scanContext.detectedSigns.isNotEmpty()) {
+                    val signListStr = scanContext.detectedSigns.joinToString("\n• ") { sign ->
+                        "${sign.title} (${sign.subtitle}): ${if (sign.isRestrictingNow) "ACTIVE RESTRICTION NOW" else "Inactive schedule"}"
+                    }
+                    return "Here are the physical signs detected at this spot:\n\n• $signListStr\n\nCurb synthesized these signs to establish the current verdict (${scanContext.verdict.displayTitle})."
+                } else {
+                    return "No distinct physical sign plates were clearly resolved from this photo. Curb was unable to extract sign evidence."
+                }
+            }
+
+            if (lower.contains("when can i") || lower.contains("when do i") || lower.contains("time limit")) {
+                return when (scanContext.verdict) {
+                    ScanVerdict.ALLOWED -> "You can park here until ${scanContext.allowedUntilTime} (${scanContext.timeRemaining} remaining). Be sure to move your car or check for upcoming restrictions before this window ends."
+                    ScanVerdict.RESTRICTED -> "Parking is currently prohibited. Check physical signage for when active enforcement ends (usually after 6:00 PM or outside morning commute hours)."
+                    ScanVerdict.AMBIGUOUS -> "Because the signage is unclear, an exact time limit cannot be guaranteed safely. Check the post for physical dates and arrows."
+                }
+            }
+        }
+
         return when {
             lower.contains("after 6") || lower.contains("6 pm") || lower.contains("night") -> {
                 "In most standard metered zones, time limits and meter enforcement end at 6:00 PM on weekdays. After 6:00 PM, parking is usually free and unrestricted until 8:00 AM the next morning, unless a specific evening tow-away zone (e.g., 4–6 PM or 7–9 PM) or overnight street sweeping applies. Always confirm the red tow-away arrows on the post."
@@ -382,7 +525,11 @@ object GeminiService {
                 "On official major city holidays (New Year's Day, Memorial Day, July 4th, Labor Day, Thanksgiving, Christmas), parking meters and street cleaning are typically suspended. However, safety zones (red zones, fire hydrants, transit stops) remain active 24/7."
             }
             else -> {
-                "Based on standard municipal parking regulations, you can park in regular unpainted curb spaces if there are no conflicting red zone markings, active street sweeping windows, or tow-away restrictions. Always make sure to park in the direction of traffic flow within 18 inches of the curb."
+                if (scanContext != null) {
+                    "Regarding your scan at ${scanContext.locationName}: The verdict is ${scanContext.verdict.displayTitle}. ${scanContext.explanation}"
+                } else {
+                    "Based on standard municipal parking regulations, you can park in regular unpainted curb spaces if there are no conflicting red zone markings, active street sweeping windows, or tow-away restrictions. Always make sure to park in the direction of traffic flow within 18 inches of the curb."
+                }
             }
         }
     }
@@ -513,9 +660,9 @@ object GeminiService {
                 ),
                 explanation = "Parking is permitted for up to 2 hours until 6:00 PM today. Street sweeping is not active at this time.",
                 detectedSigns = listOf(
-                    DetectedSign("1", "2 HOUR PARKING", "8 AM TO 6 PM • MON–FRI", "2-hour limit during daytime hours.", false, croppedImageUri = crop2hr),
-                    DetectedSign("2", "NO PARKING", "8 AM TO 10 AM • TUE & THU", "Street cleaning schedule (inactive today).", false, croppedImageUri = cropClean),
-                    DetectedSign("3", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", "Peak commute route restriction.", false, croppedImageUri = cropTow)
+                    DetectedSign("1", "2 HOUR PARKING", "8 AM TO 6 PM • MON–FRI", ruleText = "2-hour limit during daytime hours.", isRestrictingNow = false, croppedImageUri = crop2hr),
+                    DetectedSign("2", "NO PARKING", "8 AM TO 10 AM • TUE & THU", ruleText = "Street cleaning schedule (inactive today).", isRestrictingNow = false, croppedImageUri = cropClean),
+                    DetectedSign("3", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", ruleText = "Peak commute route restriction.", isRestrictingNow = false, croppedImageUri = cropTow)
                 )
             ),
             SampleSignPreset(
@@ -532,8 +679,8 @@ object GeminiService {
                 ),
                 explanation = "Parking is currently prohibited. This location is inside an active peak-hour tow-away commute corridor.",
                 detectedSigns = listOf(
-                    DetectedSign("1", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", "Active commute tow restriction.", isRestrictingNow = true, croppedImageUri = cropTow),
-                    DetectedSign("2", "COMMERCIAL LOADING", "9 AM TO 4 PM • MON–SAT", "Restricted to commercial vehicles only.", isRestrictingNow = true, croppedImageUri = cropLoading)
+                    DetectedSign("1", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", ruleText = "Active commute tow restriction.", isRestrictingNow = true, croppedImageUri = cropTow),
+                    DetectedSign("2", "COMMERCIAL LOADING", "9 AM TO 4 PM • MON–SAT", ruleText = "Restricted to commercial vehicles only.", isRestrictingNow = true, croppedImageUri = cropLoading)
                 )
             ),
             SampleSignPreset(
@@ -550,8 +697,8 @@ object GeminiService {
                 ),
                 explanation = "The visible signs have conflicting directional arrows and temporary construction overlay placards. Please verify physical signage on the post before parking.",
                 detectedSigns = listOf(
-                    DetectedSign("1", "TEMPORARY RESTRICTION", "CONSTRUCTION NOTICE", "Temporary placard posted over post.", isRestrictingNow = true, croppedImageUri = cropTemp),
-                    DetectedSign("2", "PERMIT PARKING ONLY", "AREA G • 8 AM TO 6 PM", "Permit exemption zone.", isRestrictingNow = false, croppedImageUri = cropPermit)
+                    DetectedSign("1", "TEMPORARY RESTRICTION", "CONSTRUCTION NOTICE", ruleText = "Temporary placard posted over post.", isRestrictingNow = true, isUncertain = true, croppedImageUri = cropTemp),
+                    DetectedSign("2", "PERMIT PARKING ONLY", "AREA G • 8 AM TO 6 PM", ruleText = "Permit exemption zone.", isRestrictingNow = false, croppedImageUri = cropPermit)
                 )
             )
         )

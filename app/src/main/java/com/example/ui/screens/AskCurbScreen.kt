@@ -60,6 +60,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.ChatUsageInfo
 import com.example.data.model.ChatMessage
+import com.example.data.model.ScanResult
+import com.example.data.model.ScanVerdict
 import com.example.ui.components.CurbLogo
 import com.example.ui.theme.BentoBorder
 import com.example.ui.theme.BentoPrimary
@@ -91,6 +93,7 @@ data class PromptCardItem(
 fun AskCurbScreen(
     messages: List<ChatMessage>,
     isLoading: Boolean,
+    scanResult: ScanResult? = null,
     usageInfo: ChatUsageInfo = ChatUsageInfo(messagesUsedToday = 0),
     isPro: Boolean = false,
     userName: String = "Alex",
@@ -99,34 +102,120 @@ fun AskCurbScreen(
     onBack: () -> Unit
 ) {
     var inputText by remember { mutableStateOf("") }
+    var showScanDetailsExpanded by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
-    val quickPrompts = listOf(
-        PromptCardItem(
-            title = "Can I park here?",
-            description = "Check current meter or street rules",
-            icon = Icons.Default.DirectionsCar,
-            promptText = "Can I park here right now?"
-        ),
-        PromptCardItem(
-            title = "Explain this parking sign",
-            description = "Understand complex restrictions",
-            icon = Icons.Default.Layers,
-            promptText = "Explain this parking sign and its active rules"
-        ),
-        PromptCardItem(
-            title = "Find parking near me",
-            description = "Locate open curb spots nearby",
-            icon = Icons.Default.Place,
-            promptText = "Find parking options near my current location"
-        ),
-        PromptCardItem(
-            title = "Ask anything",
-            description = "Get instant AI parking guidance",
-            icon = Icons.Default.AutoAwesome,
-            promptText = "What parking rules or curb colors should I watch out for?"
-        )
-    )
+    val quickPrompts = remember(scanResult) {
+        if (scanResult != null) {
+            when (scanResult.verdict) {
+                ScanVerdict.RESTRICTED -> listOf(
+                    PromptCardItem(
+                        title = "Why can't I park here?",
+                        description = "Explain active restriction",
+                        icon = Icons.Default.DirectionsCar,
+                        promptText = "Why can't I park at ${scanResult.locationName} right now?"
+                    ),
+                    PromptCardItem(
+                        title = "Which sign restricts parking?",
+                        description = "Identify prohibiting sign",
+                        icon = Icons.Default.Layers,
+                        promptText = "Which physical sign is restricting parking right now?"
+                    ),
+                    PromptCardItem(
+                        title = "When CAN I park here?",
+                        description = "Find next allowed window",
+                        icon = Icons.Default.Place,
+                        promptText = "When does this restriction end and when can I park here?"
+                    ),
+                    PromptCardItem(
+                        title = "Are there exemptions?",
+                        description = "Check permits or exceptions",
+                        icon = Icons.Default.AutoAwesome,
+                        promptText = "Are there any permit or vehicle exemptions for this restriction?"
+                    )
+                )
+                ScanVerdict.AMBIGUOUS -> listOf(
+                    PromptCardItem(
+                        title = "What makes rule unclear?",
+                        description = "Understand the uncertainty",
+                        icon = Icons.Default.DirectionsCar,
+                        promptText = "Why couldn't Curb establish the active rule with certainty?"
+                    ),
+                    PromptCardItem(
+                        title = "What evidence is missing?",
+                        description = "Photo & sign clarity advice",
+                        icon = Icons.Default.Layers,
+                        promptText = "What additional sign evidence or photo detail is needed?"
+                    ),
+                    PromptCardItem(
+                        title = "How to verify on-site?",
+                        description = "Physical signage check guide",
+                        icon = Icons.Default.Place,
+                        promptText = "How should I safely verify this spot on-site before parking?"
+                    ),
+                    PromptCardItem(
+                        title = "Explain visible signs",
+                        description = "Break down each plate read",
+                        icon = Icons.Default.AutoAwesome,
+                        promptText = "Explain what each detected sign plate means."
+                    )
+                )
+                ScanVerdict.ALLOWED -> listOf(
+                    PromptCardItem(
+                        title = "When do I need to move?",
+                        description = "Time limit & end window",
+                        icon = Icons.Default.DirectionsCar,
+                        promptText = "How long can I stay here and when do I need to move my car?"
+                    ),
+                    PromptCardItem(
+                        title = "Are there upcoming limits?",
+                        description = "Check street sweep or tow",
+                        icon = Icons.Default.Layers,
+                        promptText = "Are there any upcoming street sweeping or tow-away restrictions?"
+                    ),
+                    PromptCardItem(
+                        title = "Is payment required?",
+                        description = "Meter & station guidance",
+                        icon = Icons.Default.Place,
+                        promptText = "Is payment or meter activation required at this spot?"
+                    ),
+                    PromptCardItem(
+                        title = "Summarize spot rules",
+                        description = "Quick full recap",
+                        icon = Icons.Default.AutoAwesome,
+                        promptText = "Summarize all active rules for this parking spot."
+                    )
+                )
+            }
+        } else {
+            listOf(
+                PromptCardItem(
+                    title = "Can I park here?",
+                    description = "Check current meter or street rules",
+                    icon = Icons.Default.DirectionsCar,
+                    promptText = "Can I park here right now?"
+                ),
+                PromptCardItem(
+                    title = "Explain this parking sign",
+                    description = "Understand complex restrictions",
+                    icon = Icons.Default.Layers,
+                    promptText = "Explain this parking sign and its active rules"
+                ),
+                PromptCardItem(
+                    title = "Find parking near me",
+                    description = "Locate open curb spots nearby",
+                    icon = Icons.Default.Place,
+                    promptText = "Find parking options near my current location"
+                ),
+                PromptCardItem(
+                    title = "Ask anything",
+                    description = "Get instant AI parking guidance",
+                    icon = Icons.Default.AutoAwesome,
+                    promptText = "What parking rules or curb colors should I watch out for?"
+                )
+            )
+        }
+    }
 
     val hasUserMessages = remember(messages) {
         messages.any { it.isUser }
@@ -235,6 +324,117 @@ fun AskCurbScreen(
             }
         }
 
+        // SCAN CONTEXT BANNER
+        if (scanResult != null) {
+            val (verdictColor, verdictBgColor) = when (scanResult.verdict) {
+                ScanVerdict.ALLOWED -> Pair(Color(0xFF1B5E20), Color(0xFFE8F5E9))
+                ScanVerdict.RESTRICTED -> Pair(Color(0xFFB71C1C), Color(0xFFFFEBEE))
+                ScanVerdict.AMBIGUOUS -> Pair(Color(0xFFE65100), Color(0xFFFFF3E0))
+            }
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = BentoSand,
+                border = BorderStroke(1.dp, BentoBorder)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showScanDetailsExpanded = !showScanDetailsExpanded },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Place,
+                                contentDescription = null,
+                                tint = BentoPrimaryDark,
+                                modifier = Modifier.size(16.dp)
+                            )
+
+                            Column {
+                                Text(
+                                    text = scanResult.locationName,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BentoPrimaryDark,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = "${scanResult.detectedSigns.size} physical sign(s) attached",
+                                    fontSize = 10.sp,
+                                    color = CurbOnSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = verdictBgColor
+                        ) {
+                            Text(
+                                text = scanResult.verdict.displayTitle,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = verdictColor,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    if (showScanDetailsExpanded) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(BentoBorder)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Scan Summary for Curb AI:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CurbOnSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = scanResult.explanation,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            color = CurbOnSurfaceVariant
+                        )
+
+                        if (scanResult.detectedSigns.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            for (idx in scanResult.detectedSigns.indices) {
+                                val sign = scanResult.detectedSigns[idx]
+                                Text(
+                                    text = "• Sign #${idx + 1}: ${sign.title} — ${sign.subtitle}",
+                                    fontSize = 10.sp,
+                                    color = CurbOnSurface,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // MAIN CONTENT AREA (EMPTY LANDING VS CHAT MESSAGES)
         if (!hasUserMessages) {
             // GEMINI-INSPIRED MINIMAL EMPTY STATE LANDING
@@ -266,8 +466,8 @@ fun AskCurbScreen(
 
                 // Greeting
                 Text(
-                    text = "Hello, $userName",
-                    fontSize = 16.sp,
+                    text = if (scanResult != null) "Asking about ${scanResult.locationName}" else "Hello, $userName",
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = BentoPrimary
                 )
@@ -276,8 +476,8 @@ fun AskCurbScreen(
 
                 // Main Heading
                 Text(
-                    text = "Where should we start?",
-                    fontSize = 28.sp,
+                    text = if (scanResult != null) "What would you like to clarify?" else "Where should we start?",
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = CurbOnSurface,
                     textAlign = TextAlign.Center
@@ -287,22 +487,26 @@ fun AskCurbScreen(
 
                 // Supporting Text
                 Text(
-                    text = "Ask me anything about parking, signs, meters, or your scans.",
-                    fontSize = 14.sp,
+                    text = if (scanResult != null) {
+                        "Curb AI has loaded the scan context (${scanResult.detectedSigns.size} signs, verdict: ${scanResult.verdict.displayTitle}). Ask any follow-up question below."
+                    } else {
+                        "Ask me anything about parking, signs, meters, or your scans."
+                    },
+                    fontSize = 13.sp,
                     color = CurbOnSurfaceVariant,
                     textAlign = TextAlign.Center,
-                    lineHeight = 20.sp,
+                    lineHeight = 18.sp,
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // QUICK PROMPT CARDS GRID (2x2)
                 Column(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    for (i in quickPrompts.indices step 2) {
+                    for (i in 0 until quickPrompts.size step 2) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxWidth()

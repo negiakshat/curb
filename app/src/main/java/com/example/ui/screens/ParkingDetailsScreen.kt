@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,17 +19,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,13 +42,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.data.model.CurbNote
+import com.example.data.model.DetectedSign
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
 import com.example.ui.components.CurbCard
@@ -57,14 +61,28 @@ import com.example.ui.components.CurbNoteSection
 import com.example.ui.components.CurbPrimaryButton
 import com.example.ui.components.CurbProFeatureBottomSheet
 import com.example.ui.components.CurbVerdictBadge
+import com.example.ui.components.ParkingVerdictCard
+import com.example.ui.components.IndividualSignDetailSheet
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbBlack
+import com.example.ui.theme.CurbError
+import com.example.ui.theme.CurbErrorContainer
 import com.example.ui.theme.CurbOnSurface
 import com.example.ui.theme.CurbOnSurfaceVariant
 import com.example.ui.theme.CurbSuccess
+import com.example.ui.theme.CurbSuccessContainer
 import com.example.ui.theme.CurbSurface
 import com.example.ui.theme.CurbSurfaceVariant
-import com.example.ui.theme.CurbWhite
+import com.example.ui.theme.CurbWarning
+import com.example.ui.theme.CurbWarningContainer
+import com.example.ui.theme.RadiusCard
+import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusNested
+import java.io.File
+
+import com.example.ui.components.StartSessionConfirmationSheet
+import com.example.util.ParkingTimerCalculator
+import com.example.util.ParkingTimerConfig
 
 @Composable
 fun ParkingDetailsScreen(
@@ -73,7 +91,7 @@ fun ParkingDetailsScreen(
     isPro: Boolean = false,
     onSaveNote: (String) -> Unit = {},
     onDeleteNote: () -> Unit = {},
-    onStartParkingSession: () -> Unit,
+    onStartParkingSession: (durationMinutes: Int, allowedUntilTime: String, timerBasis: String, ruleSummary: String) -> Unit,
     onReportIssue: () -> Unit,
     onUpgradeToPro: () -> Unit = {},
     onBack: () -> Unit
@@ -82,6 +100,12 @@ fun ParkingDetailsScreen(
     var showExportProSheet by remember { mutableStateOf(false) }
     var showNotesProSheet by remember { mutableStateOf(false) }
     var showNoteDialog by remember { mutableStateOf(false) }
+    var showStartConfirmationSheet by remember { mutableStateOf(false) }
+    var selectedSignForDetail by remember { mutableStateOf<DetectedSign?>(null) }
+
+    val timerConfig = remember(scanResult) {
+        ParkingTimerCalculator.calculateConfig(scanResult)
+    }
 
     Column(
         modifier = Modifier
@@ -139,123 +163,421 @@ fun ParkingDetailsScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp)
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
         ) {
             // HEADER & SUBTITLE
             item {
                 Text(
-                    text = "Here’s everything we found about this spot.",
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp,
+                    text = "Here’s the complete evidence and rule analysis for this spot.",
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
                     color = CurbOnSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // SECTION 1: PARKING STATUS / TIME
+            // SECTION A: COMPACT DECISION CONTEXT
             item {
                 CurbCard(
-                    cornerRadius = 24.dp,
-                    backgroundColor = CurbSurface
+                    cornerRadius = RadiusCard,
+                    backgroundColor = when (scanResult.verdict) {
+                        ScanVerdict.ALLOWED -> CurbSuccessContainer
+                        ScanVerdict.RESTRICTED -> CurbErrorContainer
+                        ScanVerdict.AMBIGUOUS -> CurbWarningContainer
+                    },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CurbVerdictBadge(verdict = scanResult.verdict)
+
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = if (scanResult.verdict == ScanVerdict.ALLOWED) "Allowed until" else "Parking status",
+                                text = when (scanResult.verdict) {
+                                    ScanVerdict.ALLOWED -> if (scanResult.allowedUntilTime.isNotBlank()) "Allowed until ${scanResult.allowedUntilTime}" else "Parking permitted"
+                                    ScanVerdict.RESTRICTED -> scanResult.parkingRules.firstOrNull() ?: "Active restriction in effect"
+                                    ScanVerdict.AMBIGUOUS -> "Signage unreadable or ambiguous"
+                                },
                                 fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = CurbOnSurfaceVariant
+                                fontWeight = FontWeight.Bold,
+                                color = CurbOnSurface
                             )
-                            CurbVerdictBadge(verdict = scanResult.verdict)
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = if (scanResult.verdict == ScanVerdict.ALLOWED) scanResult.allowedUntilTime else scanResult.verdict.displayTitle,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CurbOnSurface
-                        )
-
-                        if (scanResult.verdict == ScanVerdict.ALLOWED) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = scanResult.timeRemaining,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = CurbSuccess
-                            )
+                            if (scanResult.verdict == ScanVerdict.ALLOWED && scanResult.timeRemaining.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "${scanResult.timeRemaining} remaining",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = CurbSuccess
+                                )
+                            }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(18.dp))
             }
 
-            // SECTION 2: PARKING RULES BREAKDOWN
+            // SECTION B: PRIMARY EVIDENCE — SIGNS CURB READ
             item {
                 Text(
-                    text = "Parking rules",
+                    text = if (scanResult.detectedSigns.isNotEmpty()) "Signs Curb read (${scanResult.detectedSigns.size})" else "Physical sign evidence",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = CurbOnSurface
                 )
+                Spacer(modifier = Modifier.height(2.dp))
+                if (scanResult.detectedSigns.isNotEmpty()) {
+                    Text(
+                        text = "Tap any sign to view its sharp crop and detailed breakdown.",
+                        fontSize = 12.sp,
+                        color = CurbOnSurfaceVariant
+                    )
+                }
                 Spacer(modifier = Modifier.height(10.dp))
+            }
 
-                CurbCard(
-                    cornerRadius = 20.dp,
-                    backgroundColor = CurbSurface
-                ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        scanResult.parkingRules.forEachIndexed { idx, rule ->
-                            val parts = rule.split(":")
-                            if (parts.size >= 2) {
-                                Column(modifier = Modifier.padding(vertical = 6.dp)) {
+            if (scanResult.detectedSigns.isNotEmpty()) {
+                itemsIndexed(scanResult.detectedSigns) { index, sign ->
+                    Box(modifier = Modifier.padding(bottom = 12.dp)) {
+                        CurbCard(
+                            cornerRadius = RadiusNested,
+                            backgroundColor = CurbSurface,
+                            modifier = Modifier.clickable {
+                                selectedSignForDetail = sign
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                // Real Cropped Sign Plate Thumbnail
+                                if (!sign.croppedImageUri.isNullOrBlank() && File(sign.croppedImageUri).exists()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 84.dp, height = 84.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(CurbSurfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        AsyncImage(
+                                            model = File(sign.croppedImageUri),
+                                            contentDescription = "Sign crop ${index + 1}",
+                                            contentScale = ContentScale.Fit,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 84.dp, height = 84.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(CurbSurfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.CropFree,
+                                            contentDescription = null,
+                                            tint = CurbOnSurfaceVariant,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = if (sign.id.isNotBlank()) "SIGN ${sign.id.uppercase()}" else "SIGN ${index + 1}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = CurbOnSurfaceVariant
+                                        )
+
+                                        val (badgeText, badgeBg, badgeFg) = when {
+                                            sign.isUncertain -> Triple("Uncertain", CurbWarningContainer, CurbWarning)
+                                            sign.isRestrictingNow -> Triple("Active Restriction", CurbErrorContainer, CurbError)
+                                            !sign.isRestrictingNow -> Triple("Inactive Schedule", CurbSurfaceVariant, CurbOnSurfaceVariant)
+                                            else -> Triple("Individual Rule", CurbSurfaceVariant, CurbOnSurfaceVariant)
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(RadiusChip),
+                                            color = badgeBg
+                                        ) {
+                                            Text(
+                                                text = badgeText,
+                                                color = badgeFg,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
                                     Text(
-                                        text = parts[0].trim(),
+                                        text = sign.title.ifBlank { "Parking Regulation" },
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = CurbOnSurface
                                     )
-                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    val daysHours = sign.applicableDaysHours.ifBlank { sign.subtitle }
+                                    if (daysHours.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = daysHours,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = CurbOnSurfaceVariant
+                                        )
+                                    }
+
+                                    val mainRule = sign.restrictions.ifBlank { sign.ruleText }
+                                    if (mainRule.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = mainRule,
+                                            fontSize = 12.sp,
+                                            lineHeight = 16.sp,
+                                            color = CurbOnSurface
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                item {
+                    CurbCard(
+                        cornerRadius = RadiusCard,
+                        backgroundColor = CurbSurface
+                    ) {
+                        Text(
+                            text = "No clear physical sign plates could be extracted from this image. Please retake the photo with direct alignment and good lighting.",
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            color = CurbOnSurfaceVariant,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(18.dp)) }
+
+            // SECTION C: WHY THIS DECISION (RULE SYNTHESIS)
+            item {
+                Text(
+                    text = "Why this decision",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CurbOnSurface
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val activeSigns = scanResult.detectedSigns.filter { it.isRestrictingNow }
+                val inactiveSigns = scanResult.detectedSigns.filter { !it.isRestrictingNow && !it.isUncertain }
+                val synthesisText = when (scanResult.verdict) {
+                    ScanVerdict.RESTRICTED -> {
+                        if (activeSigns.isNotEmpty()) {
+                            val signNames = activeSigns.joinToString(", ") { "Sign ${it.id.ifBlank { "plate" }}" }
+                            "$signNames imposes an active restriction during this current time window, taking precedence over other posted schedules."
+                        } else {
+                            "An active street rule or municipal regulation prohibits stopping or parking during the current time window."
+                        }
+                    }
+                    ScanVerdict.ALLOWED -> {
+                        if (inactiveSigns.isNotEmpty()) {
+                            "Posted restrictions (such as street cleaning or peak hours) are inactive right now. Permissive rules apply."
+                        } else {
+                            "Signage permits parking under the posted schedule with no active prohibition at this time."
+                        }
+                    }
+                    ScanVerdict.AMBIGUOUS -> {
+                        "Physical signage is faded, partially obscured, or conflicting. Check physical street signs before leaving your vehicle."
+                    }
+                }
+
+                CurbCard(
+                    cornerRadius = RadiusCard,
+                    backgroundColor = CurbSurface
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = CurbOnSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Rule Synthesis",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CurbOnSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = synthesisText,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                            color = CurbOnSurface
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(18.dp))
+            }
+
+            // SECTION D: COMPLETE PARKING RULES (STRICTLY NO FALLBACKS)
+            val activeRulesList = scanResult.parkingRules.filter {
+                scanResult.verdict == ScanVerdict.RESTRICTED || !it.contains("Inactive", ignoreCase = true)
+            }
+            val inactiveSignsList = scanResult.detectedSigns.filter { !it.isRestrictingNow && !it.isUncertain }
+
+            if (activeRulesList.isNotEmpty() || inactiveSignsList.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Complete parking rules",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CurbOnSurface
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    CurbCard(
+                        cornerRadius = RadiusCard,
+                        backgroundColor = CurbSurface
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            if (activeRulesList.isNotEmpty()) {
+                                Text(
+                                    text = "CURRENT ACTIVE CONDITIONS",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp,
+                                    color = if (scanResult.verdict == ScanVerdict.RESTRICTED) CurbError else CurbSuccess
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                activeRulesList.forEach { rule ->
                                     Text(
-                                        text = parts.subList(1, parts.size).joinToString(":").trim(),
+                                        text = "• $rule",
                                         fontSize = 14.sp,
-                                        color = CurbOnSurfaceVariant
+                                        lineHeight = 20.sp,
+                                        color = CurbOnSurface,
+                                        modifier = Modifier.padding(vertical = 3.dp)
                                     )
                                 }
-                            } else {
-                                Text(
-                                    text = rule,
-                                    fontSize = 14.sp,
-                                    lineHeight = 20.sp,
-                                    color = CurbOnSurface,
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
                             }
-                            if (idx < scanResult.parkingRules.size - 1) {
+
+                            if (activeRulesList.isNotEmpty() && inactiveSignsList.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(12.dp))
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(1.dp)
                                         .background(CurbSurfaceVariant)
-                                        .padding(vertical = 4.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+
+                            if (inactiveSignsList.isNotEmpty()) {
+                                Text(
+                                    text = "INACTIVE SCHEDULES & FUTURE RULES",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp,
+                                    color = CurbOnSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                inactiveSignsList.forEach { sign ->
+                                    val scheduleText = sign.applicableDaysHours.ifBlank { sign.subtitle }
+                                    val ruleText = sign.restrictions.ifBlank { sign.ruleText }
+                                    Text(
+                                        text = "• ${sign.title}: $scheduleText ($ruleText)",
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp,
+                                        color = CurbOnSurfaceVariant,
+                                        modifier = Modifier.padding(vertical = 3.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(18.dp))
+                }
+            }
+
+            // SECTION E: ABOUT THIS SPOT (ONLY KNOWN NON-EMPTY FIELDS)
+            val hasLocation = scanResult.locationName.isNotBlank() && scanResult.locationName != "Unknown Location"
+            val hasPayment = scanResult.paymentInfo.isNotBlank() && scanResult.paymentInfo != "Unknown" && scanResult.paymentInfo != "N/A"
+            val hasVehicle = scanResult.vehicleApplicability.isNotBlank() && scanResult.vehicleApplicability != "Unknown"
+
+            if (hasLocation || hasPayment || hasVehicle) {
+                item {
+                    Text(
+                        text = "About this spot",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CurbOnSurface
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    CurbCard(
+                        cornerRadius = RadiusCard,
+                        backgroundColor = CurbSurface
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            if (hasLocation) {
+                                SpotInfoRow(
+                                    icon = Icons.Default.LocationOn,
+                                    label = "Location",
+                                    value = if (scanResult.cityState.isNotBlank()) "${scanResult.locationName}, ${scanResult.cityState}" else scanResult.locationName
+                                )
+                            }
+                            if (hasPayment) {
+                                if (hasLocation) Spacer(modifier = Modifier.height(12.dp))
+                                SpotInfoRow(
+                                    icon = Icons.Default.CreditCard,
+                                    label = scanResult.zoneType.ifBlank { "Payment" },
+                                    value = scanResult.paymentInfo
+                                )
+                            }
+                            if (hasVehicle) {
+                                if (hasLocation || hasPayment) Spacer(modifier = Modifier.height(12.dp))
+                                SpotInfoRow(
+                                    icon = Icons.Default.DirectionsCar,
+                                    label = "Vehicle Applicability",
+                                    value = scanResult.vehicleApplicability
                                 )
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(18.dp))
                 }
-                Spacer(modifier = Modifier.height(20.dp))
             }
 
-            // SECTION 3: ABOUT THIS SPOT
+            // SECTION E: CURB AI EXPLANATION
             item {
                 Text(
-                    text = "About this spot",
+                    text = "Curb AI explanation",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = CurbOnSurface
@@ -263,33 +585,21 @@ fun ParkingDetailsScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 CurbCard(
-                    cornerRadius = 20.dp,
+                    cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface
                 ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        SpotInfoRow(
-                            icon = Icons.Default.LocationOn,
-                            label = "Location",
-                            value = if (scanResult.cityState.isNotBlank()) "${scanResult.locationName}, ${scanResult.cityState}" else scanResult.locationName
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        SpotInfoRow(
-                            icon = Icons.Default.CreditCard,
-                            label = scanResult.zoneType,
-                            value = scanResult.paymentInfo
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        SpotInfoRow(
-                            icon = Icons.Default.DirectionsCar,
-                            label = "Vehicle Type",
-                            value = scanResult.vehicleApplicability
-                        )
-                    }
+                    Text(
+                        text = scanResult.explanation,
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        color = CurbOnSurface,
+                        modifier = Modifier.padding(18.dp)
+                    )
                 }
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
-            // SECTION 3.5: PERSONAL NOTE
+            // PERSONAL NOTE
             item {
                 Text(
                     text = "Personal note",
@@ -312,86 +622,7 @@ fun ParkingDetailsScreen(
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
-            // SECTION 4: SIGNS SCANNED
-            if (scanResult.detectedSigns.isNotEmpty()) {
-                item {
-                    Text(
-                        text = "Signs scanned",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = CurbOnSurface
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(scanResult.detectedSigns) { sign ->
-                            CurbCard(
-                                cornerRadius = 18.dp,
-                                backgroundColor = CurbSurfaceVariant,
-                                modifier = Modifier.width(220.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = CurbBlack
-                                    ) {
-                                        Text(
-                                            text = "SIGN ${sign.id}",
-                                            color = CurbWhite,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = sign.title,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = CurbOnSurface
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = sign.subtitle,
-                                        fontSize = 12.sp,
-                                        color = CurbOnSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(20.dp))
-                }
-            }
-
-            // SECTION 5: CURB AI EXPLANATION
-            item {
-                Text(
-                    text = "Curb AI explanation",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-
-                CurbCard(
-                    cornerRadius = 20.dp,
-                    backgroundColor = CurbSurfaceVariant
-                ) {
-                    Text(
-                        text = scanResult.explanation,
-                        fontSize = 14.sp,
-                        lineHeight = 22.sp,
-                        color = CurbOnSurface,
-                        modifier = Modifier.padding(18.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(20.dp))
-            }
-
-            // OPTIONAL REPORT ISSUE LINK
+            // REPORT ISSUE LINK
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -412,7 +643,7 @@ fun ParkingDetailsScreen(
             }
         }
 
-        // BOTTOM ACTION (Start parking session if allowed)
+        // BOTTOM ACTION
         if (scanResult.verdict == ScanVerdict.ALLOWED) {
             Column(
                 modifier = Modifier
@@ -420,20 +651,51 @@ fun ParkingDetailsScreen(
                     .navigationBarsPadding()
                     .padding(horizontal = 24.dp, vertical = 12.dp)
             ) {
-                CurbPrimaryButton(
-                    text = "Start parking session",
-                    onClick = onStartParkingSession,
-                    testTag = "details_start_session_button"
-                )
+                if (timerConfig.isUnrestricted) {
+                    CurbPrimaryButton(
+                        text = "Parked (No time limit)",
+                        onClick = {
+                            onStartParkingSession(
+                                0,
+                                "No time limit",
+                                "Unrestricted parking",
+                                timerConfig.ruleSummary
+                            )
+                        },
+                        testTag = "details_start_session_unrestricted_button"
+                    )
+                } else {
+                    CurbPrimaryButton(
+                        text = "Start parking session (${timerConfig.formattedDuration})",
+                        onClick = {
+                            showStartConfirmationSheet = true
+                        },
+                        testTag = "details_start_session_button"
+                    )
+                }
             }
         }
+    }
+
+    if (showStartConfirmationSheet) {
+        StartSessionConfirmationSheet(
+            locationName = scanResult.locationName,
+            timerConfig = timerConfig,
+            onConfirmStartTimer = { durationMins, allowedUntil, basis, rules ->
+                showStartConfirmationSheet = false
+                onStartParkingSession(durationMins, allowedUntil, basis, rules)
+            },
+            onDismiss = {
+                showStartConfirmationSheet = false
+            }
+        )
     }
 
     if (showExportProSheet) {
         CurbProFeatureBottomSheet(
             title = "Export with Curb Pro",
             supportingText = "Keep and share your parking records whenever you need them.",
-            icon = Icons.Default.FileDownload,
+            icon = Icons.Outlined.FileDownload,
             onGetPro = onUpgradeToPro,
             onDismiss = { showExportProSheet = false }
         )
@@ -466,6 +728,15 @@ fun ParkingDetailsScreen(
             onDismiss = {
                 showNoteDialog = false
             }
+        )
+    }
+
+    // INDIVIDUAL SIGN DETAIL SHEET
+    selectedSignForDetail?.let { sign ->
+        IndividualSignDetailSheet(
+            sign = sign,
+            overallVerdict = scanResult.verdict,
+            onDismiss = { selectedSignForDetail = null }
         )
     }
 }

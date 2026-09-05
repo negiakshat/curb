@@ -37,6 +37,8 @@ data class ParkingSessionEntity(
     val allowedUntilTime: String,
     val reminderMinutesBefore: Int = 15,
     val notes: String = "",
+    val timerBasis: String = "",
+    val parkingRuleSummary: String = "",
     val isActive: Boolean = true
 )
 

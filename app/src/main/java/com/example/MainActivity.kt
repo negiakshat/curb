@@ -310,6 +310,7 @@ fun CurbApp(
                         savedParkingSpot = savedParkingSpot,
                         recentScans = recentScans,
                         usageInfo = scanUsageInfo,
+                        userLocationResult = userLocationState,
                         onScanClicked = {
                             navController.navigate(Routes.SCAN)
                         },
@@ -412,17 +413,18 @@ fun CurbApp(
                         onViewDetails = {
                             navController.navigate(Routes.PARKING_DETAILS)
                         },
-                        onStartParkingSession = {
+                        onStartParkingSession = { durationMins, allowedUntil, basis, rules ->
                             viewModel.startParkingSession(
                                 scanResultId = currentScan.id,
                                 locationName = currentScan.locationName,
-                                durationMinutes = 135,
-                                allowedUntilTime = currentScan.allowedUntilTime
+                                durationMinutes = durationMins,
+                                allowedUntilTime = allowedUntil,
+                                timerBasis = basis,
+                                parkingRuleSummary = rules
                             )
                             Toast.makeText(context, "Parking session started!", Toast.LENGTH_SHORT).show()
-                            navController.navigate(Routes.HOME) {
+                            navController.navigate(Routes.PARKING_TIMER) {
                                 popUpTo(Routes.HOME) { inclusive = false }
-                                launchSingleTop = true
                             }
                         },
                         onAskCurb = {
@@ -459,17 +461,18 @@ fun CurbApp(
                             viewModel.deleteNote(com.example.data.model.CurbNote.TARGET_SCAN_RESULT, currentScan.id)
                             Toast.makeText(context, "Note deleted", Toast.LENGTH_SHORT).show()
                         },
-                        onStartParkingSession = {
+                        onStartParkingSession = { durationMins, allowedUntil, basis, rules ->
                             viewModel.startParkingSession(
                                 scanResultId = currentScan.id,
                                 locationName = currentScan.locationName,
-                                durationMinutes = 135,
-                                allowedUntilTime = currentScan.allowedUntilTime
+                                durationMinutes = durationMins,
+                                allowedUntilTime = allowedUntil,
+                                timerBasis = basis,
+                                parkingRuleSummary = rules
                             )
                             Toast.makeText(context, "Parking session started!", Toast.LENGTH_SHORT).show()
-                            navController.navigate(Routes.HOME) {
+                            navController.navigate(Routes.PARKING_TIMER) {
                                 popUpTo(Routes.HOME) { inclusive = false }
-                                launchSingleTop = true
                             }
                         },
                         onReportIssue = {
@@ -489,6 +492,7 @@ fun CurbApp(
                     AskCurbScreen(
                         messages = chatMessages,
                         isLoading = isChatLoading,
+                        scanResult = currentScanResult,
                         usageInfo = chatUsageInfo,
                         isPro = isUserPro,
                         userName = userProfile.name,
