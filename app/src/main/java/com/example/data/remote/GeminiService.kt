@@ -277,11 +277,11 @@ object GeminiService {
                         locationName = locationName,
                         cityState = cityState,
                         verdict = verdict,
-                        statusChipText = parsed.optString("statusChipText", "Updated just now"),
-                        allowedUntilTime = parsed.optString("allowedUntilTime", "6:00 PM"),
-                        timeRemaining = parsed.optString("timeRemaining", "2h 00m remaining"),
-                        parkingRules = if (rulesList.isNotEmpty()) rulesList else listOf("Standard parking regulations apply"),
-                        explanation = parsed.optString("explanation", "Curb evaluated the visible signage."),
+                        statusChipText = parsed.optString("statusChipText", if (verdict == ScanVerdict.ALLOWED) "Updated just now" else "Rule unclear"),
+                        allowedUntilTime = parsed.optString("allowedUntilTime", "Verify physical signage").ifBlank { "Verify physical signage" },
+                        timeRemaining = parsed.optString("timeRemaining", "--").ifBlank { "--" },
+                        parkingRules = if (rulesList.isNotEmpty()) rulesList else listOf("No verified parking rule has been established."),
+                        explanation = parsed.optString("explanation", "Parking rules could not be determined from verified sign evidence.").ifBlank { "Parking rules could not be determined from verified sign evidence." },
                         detectedSigns = signsList,
                         zoneType = parsed.optString("zoneType", "Parking zone"),
                         paymentInfo = parsed.optString("paymentInfo", ""),
@@ -527,10 +527,10 @@ object GeminiService {
                 locationName = locationName,
                 cityState = cityState,
                 verdict = verdict,
-                statusChipText = if (verdict == ScanVerdict.ALLOWED) "Updated just now" else if (verdict == ScanVerdict.RESTRICTED) "Enforced now" else "Rule unclear",
-                allowedUntilTime = if (verdict == ScanVerdict.ALLOWED) "6:00 PM" else if (verdict == ScanVerdict.RESTRICTED) "No parking permitted" else "Verify physical signage",
-                timeRemaining = if (verdict == ScanVerdict.ALLOWED) "2h 00m remaining" else "0m",
-                parkingRules = rulesList.ifEmpty { listOf("Standard parking regulations apply based on localized signs.") },
+                statusChipText = if (verdict == ScanVerdict.ALLOWED) "Updated just now" else if (verdict == ScanVerdict.RESTRICTED) "Enforced now" else "Signage unclear",
+                allowedUntilTime = if (verdict == ScanVerdict.ALLOWED) "Verify physical signage" else if (verdict == ScanVerdict.RESTRICTED) "No parking permitted" else "Verify physical signage",
+                timeRemaining = "--",
+                parkingRules = rulesList.ifEmpty { listOf("No verified parking rule has been established.") },
                 explanation = when (verdict) {
                     ScanVerdict.ALLOWED -> "Active parking signage was confirmed. Based on posted hours, daytime parking is permitted at this location."
                     ScanVerdict.RESTRICTED -> "Active municipal restrictions (tow-away or street sweeping window) prohibit parking at this location right now."
@@ -544,9 +544,9 @@ object GeminiService {
         }
 
         val explanationText = if (isLocationKnown && locationName.isNotBlank() && locationName != "Location unavailable" && locationName != "Location access needed") {
-            "No distinct parking signs were resolved in the image at $locationName. Please verify posted curb regulations before leaving your vehicle."
+            "No distinct parking signs were resolved in the image at $locationName. Parking rules could not be determined from verified sign evidence."
         } else {
-            "No distinct parking signs were resolved in the captured image. Please check physical street signs before parking."
+            "No distinct parking signs were resolved in the captured image. Parking rules could not be determined from verified sign evidence."
         }
 
         return ScanResult(
@@ -554,11 +554,10 @@ object GeminiService {
             cityState = cityState,
             verdict = ScanVerdict.AMBIGUOUS,
             statusChipText = "Signage unclear",
-            allowedUntilTime = "Check physical signs",
+            allowedUntilTime = "Verify physical signage",
             timeRemaining = "--",
             parkingRules = listOf(
-                "No clear parking signage could be detected in the captured image.",
-                "Please verify posted curb rules before parking."
+                "No verified parking rule has been established."
             ),
             explanation = explanationText,
             detectedSigns = emptyList(),

@@ -54,14 +54,14 @@ data class ScanResult(
     val timestamp: Long = System.currentTimeMillis(),
     val locationName: String = "Current Location",
     val cityState: String = "",
-    val verdict: ScanVerdict = ScanVerdict.ALLOWED,
-    val statusChipText: String = "Updated just now",
-    val allowedUntilTime: String = "6:00 PM",
-    val timeRemaining: String = "2h 00m remaining",
+    val verdict: ScanVerdict = ScanVerdict.AMBIGUOUS,
+    val statusChipText: String = "Signage unclear",
+    val allowedUntilTime: String = "Verify physical signage",
+    val timeRemaining: String = "--",
     val parkingRules: List<String> = listOf(
-        "Standard parking rules apply based on visible signage."
+        "No verified parking rule has been established."
     ),
-    val explanation: String = "Sign analysis completed for this parking location.",
+    val explanation: String = "Parking rules could not be determined from verified sign evidence.",
     val detectedSigns: List<DetectedSign> = emptyList(),
     val zoneType: String = "Parking zone",
     val paymentInfo: String = "",
@@ -151,7 +151,7 @@ data class SavedPlace(
     val id: Long = 0,
     val name: String,
     val address: String,
-    val parkingNote: String = "2hr limit on weekdays",
+    val parkingNote: String = "",
     val timestamp: Long = System.currentTimeMillis()
 )
 

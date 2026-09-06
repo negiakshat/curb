@@ -159,7 +159,7 @@ object ParkingTimerCalculator {
                 allowedUntilTimeFormatted = "Verify signs",
                 confirmationHeadline = "Parking duration unspecified",
                 confirmationSubtext = "Curb detected that parking is allowed, but could not determine a specific time limit. Check physical signs on-site before parking.",
-                ruleSummary = scanResult.parkingRules.firstOrNull() ?: "Standard parking rules apply"
+                ruleSummary = scanResult.parkingRules.firstOrNull() ?: "No verified parking rule has been established."
             )
         }
 
@@ -199,7 +199,7 @@ object ParkingTimerCalculator {
             }
         }
 
-        val ruleSummary = scanResult.parkingRules.firstOrNull() ?: "Standard parking rules apply"
+        val ruleSummary = scanResult.parkingRules.firstOrNull() ?: "No verified parking rule has been established."
 
         return ParkingTimerConfig(
             isValidAllowed = true,

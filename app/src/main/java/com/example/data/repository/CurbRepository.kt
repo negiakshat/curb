@@ -212,7 +212,7 @@ class CurbRepository(context: Context) {
         val verdict = try {
             ScanVerdict.valueOf(entity.verdict)
         } catch (e: Exception) {
-            ScanVerdict.ALLOWED
+            ScanVerdict.AMBIGUOUS
         }
 
         return ScanResult(
