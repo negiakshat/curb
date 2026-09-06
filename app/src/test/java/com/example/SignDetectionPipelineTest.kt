@@ -201,4 +201,34 @@ class SignDetectionPipelineTest {
         assertTrue(File(scan1[0].fileUri).exists())
         assertTrue(File(scan2[0].fileUri).exists())
     }
+
+    // 9. Gemini output without localDetections cannot create fake croppedImageUri values
+    @Test
+    fun testGeminiOutputWithoutLocalDetectionsHasNoFakeCrops() = runBlocking {
+        val result = GeminiService.generateIntelligentScanResult(
+            locationName = "Market St",
+            cityState = "San Francisco, CA",
+            isLocationKnown = true,
+            localDetections = emptyList()
+        )
+
+        assertTrue(result.detectedSigns.isEmpty())
+        result.detectedSigns.forEach { sign ->
+            assertTrue(sign.croppedImageUri.isNullOrBlank())
+        }
+
+        val analyzeResult = GeminiService.analyzeParkingSigns(
+            bitmap = Bitmap.createBitmap(400, 400, Bitmap.Config.ARGB_8888),
+            locationName = "Market St",
+            cityState = "San Francisco, CA",
+            isLocationKnown = true,
+            localDetections = emptyList(),
+            context = context
+        )
+
+        assertTrue(analyzeResult.detectedSigns.isEmpty())
+        analyzeResult.detectedSigns.forEach { sign ->
+            assertTrue(sign.croppedImageUri.isNullOrBlank())
+        }
+    }
 }

@@ -46,11 +46,6 @@ object GeminiService {
         }
     }
 
-    private fun createFallbackSignCrops(context: Context?, bitmap: Bitmap, count: Int): List<String> {
-        // Do NOT create synthetic fallback crops from full-image slices when no physical sign evidence exists
-        return emptyList()
-    }
-
     suspend fun analyzeParkingSigns(
         bitmap: Bitmap?,
         locationName: String,
@@ -234,8 +229,8 @@ object GeminiService {
 
                     val signsList = mutableListOf<DetectedSign>()
                     val signsArray = parsed.optJSONArray("detectedSigns")
-                    if (localDetections.isNotEmpty()) {
-                        localDetections.forEachIndexed { i, crop ->
+                    if (validDetections.isNotEmpty()) {
+                        validDetections.forEachIndexed { i, crop ->
                             val signObj = signsArray?.optJSONObject(i)
                             val title = signObj?.optString("title")?.ifBlank { null }
                                 ?: crop.normalizedBox.label.ifBlank { "Sign #${i + 1}" }
@@ -273,43 +268,6 @@ object GeminiService {
                                     rawText = crop.ocrText,
                                     croppedImageUri = crop.fileUri,
                                     confidence = crop.normalizedBox.confidence
-                                )
-                            )
-                        }
-                    } else if (signsArray != null && signsArray.length() > 0) {
-                        // Dynamically produce real fallback crop files from bitmap if present
-                        val fallbackCrops = if (bitmap != null && !bitmap.isRecycled) {
-                            createFallbackSignCrops(context, bitmap, signsArray.length())
-                        } else emptyList()
-
-                        for (i in 0 until signsArray.length()) {
-                            val signObj = signsArray.optJSONObject(i) ?: continue
-                            val title = signObj.optString("title", "Parking Sign #${i + 1}")
-                            val subtitle = signObj.optString("subtitle", "Posted schedule")
-                            val daysHours = signObj.optString("applicableDaysHours", subtitle)
-                            val restrictions = signObj.optString("restrictions", signObj.optString("ruleText", "Standard regulations"))
-                            val exceptions = signObj.optString("exceptions", "")
-                            val isRestrictingNow = signObj.optBoolean("isRestrictingNow", false)
-                            val isUncertain = signObj.optBoolean("isUncertain", false)
-                            val badge = signObj.optString("statusBadge", if (isRestrictingNow) "Active Restriction" else "Individual Sign Rule")
-
-                            val cropUri = if (i < fallbackCrops.size) fallbackCrops[i] else ""
-
-                            signsList.add(
-                                DetectedSign(
-                                    id = "sign_${i + 1}",
-                                    title = title,
-                                    subtitle = subtitle,
-                                    applicableDaysHours = daysHours,
-                                    restrictions = restrictions,
-                                    exceptions = exceptions,
-                                    ruleText = restrictions,
-                                    isRestrictingNow = isRestrictingNow,
-                                    isUncertain = isUncertain,
-                                    statusBadge = badge,
-                                    rawText = restrictions,
-                                    croppedImageUri = cropUri,
-                                    confidence = 1.0f
                                 )
                             )
                         }
