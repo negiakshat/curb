@@ -89,6 +89,12 @@ class SignDetectionPipelineTest {
     @Test
     fun testNoSignsInFrame() = runBlocking {
         val blankBitmap = Bitmap.createBitmap(400, 400, Bitmap.Config.ARGB_8888)
+
+        val detectionResult = SignDetectionService.detectAndCropSigns(context, blankBitmap)
+        assertTrue(detectionResult.signs.isEmpty())
+        assertEquals(0, detectionResult.totalDetected)
+        assertEquals("No parking sign detected.", detectionResult.rawSummary)
+
         val result = GeminiService.generateIntelligentScanResult(
             locationName = "Blank Spot",
             cityState = "San Francisco, CA",

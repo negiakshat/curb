@@ -155,25 +155,6 @@ fun HomeScreen(
                             tint = BentoTextPrimary
                         )
                     }
-
-                    // Bento avatar pill
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(BentoPeach)
-                            .border(1.5.dp, BentoWhite, CircleShape)
-                            .clickable { onProfileClicked() }
-                            .testTag("avatar_profile_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = userProfile.name.take(1).uppercase(Locale.ROOT),
-                            color = BentoPrimaryDark,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
                 }
             }
         }
@@ -183,7 +164,7 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp)
+                    .padding(horizontal = 20.dp, vertical = 4.dp)
             ) {
                 val (dotColor, locationLabel) = remember(userLocationResult) {
                     when (userLocationResult) {
@@ -251,21 +232,21 @@ fun HomeScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
                     text = "$greeting, ${userProfile.name}",
-                    fontSize = 30.sp,
+                    fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
                     color = BentoTextPrimary,
-                    letterSpacing = (-0.6).sp
+                    letterSpacing = (-0.5).sp
                 )
 
                 Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
                     text = "Your AI parking co-pilot is ready.",
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     color = BentoTextSecondary,
                     fontWeight = FontWeight.Normal
                 )
@@ -274,7 +255,7 @@ fun HomeScreen(
 
         // BENTO GRID HERO TILE: SCAN THIS SPOT (PRIMARY ACTION)
         item {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                 Card(
                     modifier = Modifier
@@ -290,83 +271,57 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(22.dp)
+                            .padding(16.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
+                            if (userProfile.isPro) {
                                 BentoPillBadge(
-                                    text = "AI SCANNER",
-                                    backgroundColor = BentoWhite.copy(alpha = 0.9f),
-                                    textColor = BentoPrimary
+                                    text = "PRO • UNLIMITED",
+                                    backgroundColor = BentoPrimaryDark,
+                                    textColor = BentoPeach
                                 )
-
-                                if (userProfile.isPro) {
-                                    BentoPillBadge(
-                                        text = "PRO • UNLIMITED",
-                                        backgroundColor = BentoPrimaryDark,
-                                        textColor = BentoPeach
-                                    )
-                                } else {
-                                    BentoPillBadge(
-                                        text = usageInfo.displayText.uppercase(),
-                                        backgroundColor = if (usageInfo.isLimitReached) CurbErrorContainer else BentoSand,
-                                        textColor = if (usageInfo.isLimitReached) CurbError else BentoPrimary
-                                    )
-                                }
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(BentoPrimary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CameraAlt,
-                                    contentDescription = "Scan spot",
-                                    tint = BentoWhite,
-                                    modifier = Modifier.size(22.dp)
+                            } else {
+                                BentoPillBadge(
+                                    text = usageInfo.displayText.uppercase(),
+                                    backgroundColor = if (usageInfo.isLimitReached) CurbErrorContainer else BentoSand,
+                                    textColor = if (usageInfo.isLimitReached) CurbError else BentoPrimary
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Scan this spot",
-                            fontSize = 26.sp,
+                            text = "Scan parking signs",
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = BentoPrimaryDark,
                             letterSpacing = (-0.3).sp
                         )
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
                         Text(
-                            text = "Point your camera at curb signs to check real-time rules, street cleaning, and meter limits.",
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp,
+                            text = "Point camera at signs to check real-time rules, street cleaning, and meter limits.",
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
                             color = BentoTextDark
                         )
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                        // PROMINENT FULL-WIDTH CTA BUTTON
+                        // PROMINENT SINGLE FULL-WIDTH CTA BUTTON
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(14.dp),
                             color = BentoPrimaryDark,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(52.dp)
-                                .clip(RoundedCornerShape(16.dp))
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(14.dp))
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxSize(),
@@ -379,7 +334,7 @@ fun HomeScreen(
                                     tint = BentoWhite,
                                     modifier = Modifier.size(18.dp)
                                 )
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "START INSTANT SCAN",
                                     color = BentoWhite,
@@ -394,341 +349,283 @@ fun HomeScreen(
             }
         }
 
-        // BENTO GRID ROW 1: ACTIVE PARKING (Dark Tile) & SAVED PLACES (Sand Tile)
-        item {
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // LEFT TILE: ACTIVE PARKING (Deep Espresso Umber)
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(168.dp)
-                        .clip(RoundedCornerShape(RadiusCard))
-                        .clickable { onParkingTimerClicked() }
-                        .testTag("bento_active_parking_tile"),
-                    shape = RoundedCornerShape(RadiusCard),
-                    colors = CardDefaults.cardColors(containerColor = BentoPrimaryDark),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Column(
+        // ACTIVE PARKING SESSION PROMINENT BANNER (IF SESSION IS ACTIVE)
+        if (activeSession != null && activeSession.isActive && activeSession.remainingMillis > 0) {
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
+                Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    Card(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(18.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(RadiusCard))
+                            .clickable { onParkingTimerClicked() }
+                            .testTag("bento_active_parking_tile"),
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoPrimaryDark),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(BentoPeach),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.LocalParking,
-                                    contentDescription = null,
-                                    tint = BentoPrimaryDark,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-
-                            if (activeSession != null && activeSession.isActive) {
                                 Box(
                                     modifier = Modifier
-                                        .size(8.dp)
-                                        .background(CurbSuccess, CircleShape)
-                                )
-                            }
-                        }
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(BentoPeach),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocalParking,
+                                        contentDescription = null,
+                                        tint = BentoPrimaryDark,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
 
-                        Column {
-                            if (activeSession != null && activeSession.isActive && activeSession.remainingMillis > 0) {
-                                Text(
-                                    text = activeSession.remainingFormatted,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BentoPeach
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = activeSession.locationName,
-                                    fontSize = 12.sp,
-                                    color = BentoWhite.copy(alpha = 0.8f),
-                                    maxLines = 1
-                                )
-                            } else {
-                                Text(
-                                    text = "Active Timer",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BentoWhite
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "No active session",
-                                    fontSize = 12.sp,
-                                    color = BentoWhite.copy(alpha = 0.65f)
-                                )
+                                Column {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(7.dp)
+                                                .background(CurbSuccess, CircleShape)
+                                        )
+                                        Text(
+                                            text = "PARKED NOW",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = BentoPeach,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                    }
+                                    Text(
+                                        text = activeSession.remainingFormatted,
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BentoWhite
+                                    )
+                                    Text(
+                                        text = activeSession.locationName,
+                                        fontSize = 12.sp,
+                                        color = BentoWhite.copy(alpha = 0.8f),
+                                        maxLines = 1
+                                    )
+                                }
                             }
-                        }
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(RadiusChip),
-                                color = BentoWhite.copy(alpha = 0.15f)
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalAlignment = Alignment.End
                             ) {
-                                Text(
-                                    text = if (activeSession != null && activeSession.isActive) "VIEW TIMER" else "SET TIMER",
-                                    color = BentoWhite,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-
-                            if (savedParkingSpot != null) {
                                 Surface(
                                     shape = RoundedCornerShape(RadiusChip),
-                                    color = BentoPeach,
-                                    modifier = Modifier.clickable { onFindMyCarClicked() }
+                                    color = BentoPeach
                                 ) {
                                     Text(
-                                        text = "FIND CAR",
+                                        text = "VIEW TIMER",
                                         color = BentoPrimaryDark,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
                                         letterSpacing = 0.5.sp,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                                     )
                                 }
+
+                                if (savedParkingSpot != null) {
+                                    Surface(
+                                        shape = RoundedCornerShape(RadiusChip),
+                                        color = BentoWhite.copy(alpha = 0.2f),
+                                        modifier = Modifier.clickable { onFindMyCarClicked() }
+                                    ) {
+                                        Text(
+                                            text = "FIND CAR",
+                                            color = BentoWhite,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                        )
+                                    }
+                                }
                             }
-                        }
-                    }
-                }
-
-                // RIGHT TILE: SAVED PLACES (Warm Sand)
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(168.dp)
-                        .clip(RoundedCornerShape(RadiusCard))
-                        .clickable { onSavedPlacesClicked() }
-                        .testTag("bento_saved_places_tile"),
-                    shape = RoundedCornerShape(RadiusCard),
-                    colors = CardDefaults.cardColors(containerColor = BentoSand),
-                    border = BorderStroke(1.dp, BentoBorder),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(18.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(BentoWhite),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.BookmarkBorder,
-                                contentDescription = null,
-                                tint = BentoPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        Column {
-                            Text(
-                                text = "Saved Spots",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BentoTextPrimary
-                            )
-
-                            Spacer(modifier = Modifier.height(2.dp))
-
-                            Text(
-                                text = "Quick access pins",
-                                fontSize = 12.sp,
-                                color = BentoTextSecondary
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(RadiusChip),
-                            color = BentoWhite,
-                            border = BorderStroke(1.dp, BentoBorder)
-                        ) {
-                            Text(
-                                text = "BROWSE",
-                                color = BentoPrimary,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
                         }
                     }
                 }
             }
         }
 
-        // BENTO GRID ROW 2: ASK AI (Beige Tile) & MY ACTIVITY (Sand Tile)
+        // USEFUL SHORTCUTS
         item {
             Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // LEFT TILE: ASK CURB AI
-                Card(
+            if (savedParkingSpot != null) {
+                // 2-COLUMN ROW WHEN BOTH SAVED SPOTS AND CAR LOCATION EXIST
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(168.dp)
-                        .clip(RoundedCornerShape(RadiusCard))
-                        .clickable { onAskCurbClicked() }
-                        .testTag("bento_ask_curb_tile"),
-                    shape = RoundedCornerShape(RadiusCard),
-                    colors = CardDefaults.cardColors(containerColor = BentoBeige),
-                    border = BorderStroke(1.dp, BentoBorder),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(
+                    Card(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(18.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
+                            .weight(1f)
+                            .height(76.dp)
+                            .clip(RoundedCornerShape(RadiusCard))
+                            .clickable { onSavedPlacesClicked() }
+                            .testTag("bento_saved_places_tile"),
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoSand),
+                        border = BorderStroke(1.dp, BentoBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                     ) {
-                        Box(
+                        Row(
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(BentoWhite),
-                            contentAlignment = Alignment.Center
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.ChatBubbleOutline,
-                                contentDescription = null,
-                                tint = BentoPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(BentoWhite),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BookmarkBorder,
+                                    contentDescription = null,
+                                    tint = BentoPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            Column(verticalArrangement = Arrangement.Center) {
+                                Text(
+                                    text = "Saved Spots",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BentoTextPrimary
+                                )
+                                Text(
+                                    text = "Quick access",
+                                    fontSize = 11.sp,
+                                    color = BentoTextSecondary
+                                )
+                            }
                         }
+                    }
 
-                        Column {
-                            Text(
-                                text = "Ask Curb AI",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BentoTextPrimary
-                            )
-
-                            Spacer(modifier = Modifier.height(2.dp))
-
-                            Text(
-                                text = "Instant sign advice",
-                                fontSize = 12.sp,
-                                color = BentoTextSecondary
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(RadiusChip),
-                            color = BentoPeach
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(76.dp)
+                            .clip(RoundedCornerShape(RadiusCard))
+                            .clickable { onFindMyCarClicked() }
+                            .testTag("bento_find_my_car_tile"),
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoSand),
+                        border = BorderStroke(1.dp, BentoBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text(
-                                text = "ASK NOW",
-                                color = BentoPrimary,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(BentoWhite),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Place,
+                                    contentDescription = null,
+                                    tint = BentoPrimaryDark,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            Column(verticalArrangement = Arrangement.Center) {
+                                Text(
+                                    text = "Find My Car",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BentoTextPrimary
+                                )
+                                Text(
+                                    text = "Parked location",
+                                    fontSize = 11.sp,
+                                    color = BentoTextSecondary
+                                )
+                            }
                         }
                     }
                 }
-
-                // RIGHT TILE: ACTIVITY LOGS & STATS
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(168.dp)
-                        .clip(RoundedCornerShape(RadiusCard))
-                        .clickable { onActivityClicked() }
-                        .testTag("bento_activity_tile"),
-                    shape = RoundedCornerShape(RadiusCard),
-                    colors = CardDefaults.cardColors(containerColor = BentoSand),
-                    border = BorderStroke(1.dp, BentoBorder),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Column(
+            } else {
+                // SINGLE FULL-WIDTH CARD WHEN NO SAVED CAR LOCATION
+                Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    Card(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(18.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
+                            .fillMaxWidth()
+                            .height(76.dp)
+                            .clip(RoundedCornerShape(RadiusCard))
+                            .clickable { onSavedPlacesClicked() }
+                            .testTag("bento_saved_places_tile"),
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoSand),
+                        border = BorderStroke(1.dp, BentoBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                     ) {
-                        Box(
+                        Row(
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(BentoWhite),
-                            contentAlignment = Alignment.Center
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.History,
-                                contentDescription = null,
-                                tint = BentoPrimaryDark,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(BentoWhite),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BookmarkBorder,
+                                    contentDescription = null,
+                                    tint = BentoPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
 
-                        Column {
-                            Text(
-                                text = "Activity Log",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BentoTextPrimary
-                            )
-
-                            Spacer(modifier = Modifier.height(2.dp))
-
-                            Text(
-                                text = "${recentScans.size} spots scanned",
-                                fontSize = 12.sp,
-                                color = BentoTextSecondary
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(RadiusChip),
-                            color = BentoWhite,
-                            border = BorderStroke(1.dp, BentoBorder)
-                        ) {
-                            Text(
-                                text = "VIEW LOGS",
-                                color = BentoPrimaryDark,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                            Column(verticalArrangement = Arrangement.Center) {
+                                Text(
+                                    text = "Saved Spots",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BentoTextPrimary
+                                )
+                                Text(
+                                    text = "Keep track of frequent parking locations",
+                                    fontSize = 11.sp,
+                                    color = BentoTextSecondary
+                                )
+                            }
                         }
                     }
                 }
@@ -737,7 +634,7 @@ fun HomeScreen(
 
         // BENTO SUMMARY SECTION: RECENT SCANS
         item {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -747,7 +644,7 @@ fun HomeScreen(
             ) {
                 Text(
                     text = "Recent Activity",
-                    fontSize = 20.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = BentoTextPrimary,
                     letterSpacing = (-0.3).sp
@@ -827,19 +724,20 @@ fun HomeScreen(
                         .padding(horizontal = 20.dp)
                 ) {
                     CurbCard(
-                        cornerRadius = 24.dp,
+                        cornerRadius = 16.dp,
                         backgroundColor = BentoWhite,
                         borderColor = BentoBorder
                     ) {
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(44.dp)
+                                    .size(32.dp)
                                     .clip(CircleShape)
                                     .background(BentoSand),
                                 contentAlignment = Alignment.Center
@@ -848,22 +746,22 @@ fun HomeScreen(
                                     imageVector = Icons.Default.Place,
                                     contentDescription = null,
                                     tint = BentoPrimary,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = "No scans yet",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BentoTextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Tap 'Start instant scan' above to check a spot.",
-                                fontSize = 13.sp,
-                                color = BentoTextSecondary
-                            )
+                            Column {
+                                Text(
+                                    text = "No recent scans",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BentoTextPrimary
+                                )
+                                Text(
+                                    text = "Tap 'Start instant scan' above to check a spot.",
+                                    fontSize = 11.sp,
+                                    color = BentoTextSecondary
+                                )
+                            }
                         }
                     }
                 }

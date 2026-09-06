@@ -164,7 +164,9 @@ fun ScanOutputScreen(
                 CurbCard(
                     cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface,
-                    modifier = Modifier.clickable { onViewDetails() }
+                    modifier = Modifier
+                        .clickable { onViewDetails() }
+                        .testTag("view_details_card")
                 ) {
                     Row(
                         modifier = Modifier
@@ -286,42 +288,34 @@ fun ScanOutputScreen(
                         )
                     } else {
                         CurbSecondaryButton(
-                            text = "View details",
-                            onClick = onViewDetails,
-                            testTag = "view_details_button"
-                        )
-                    }
-                }
-                ScanVerdict.RESTRICTED -> {
-                    CurbPrimaryButton(
-                        text = "View details",
-                        onClick = onViewDetails,
-                        testTag = "view_details_button"
-                    )
-                    if (hasUnresolvedAmbiguity) {
-                        CurbSecondaryButton(
-                            text = "Clarify with Curb AI",
-                            onClick = onAskCurb,
-                            testTag = "clarify_curb_ai_button"
-                        )
-                    } else {
-                        CurbSecondaryButton(
                             text = "Retake scan",
                             onClick = onRetake,
                             testTag = "retake_scan_button"
                         )
                     }
                 }
-                ScanVerdict.AMBIGUOUS -> {
+                ScanVerdict.RESTRICTED -> {
                     CurbPrimaryButton(
+                        text = "Retake scan",
+                        onClick = onRetake,
+                        testTag = "retake_scan_button"
+                    )
+                    CurbSecondaryButton(
                         text = "Clarify with Curb AI",
                         onClick = onAskCurb,
                         testTag = "clarify_curb_ai_button"
                     )
-                    CurbSecondaryButton(
-                        text = "Retake",
+                }
+                ScanVerdict.AMBIGUOUS -> {
+                    CurbPrimaryButton(
+                        text = "Retake scan",
                         onClick = onRetake,
                         testTag = "retake_scan_button"
+                    )
+                    CurbSecondaryButton(
+                        text = "Clarify with Curb AI",
+                        onClick = onAskCurb,
+                        testTag = "clarify_curb_ai_button"
                     )
                 }
             }

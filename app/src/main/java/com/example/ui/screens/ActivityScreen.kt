@@ -147,13 +147,13 @@ fun ActivityScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.FileDownload,
-                                contentDescription = "Export",
+                                imageVector = if (isPro) Icons.Outlined.FileDownload else Icons.Default.Lock,
+                                contentDescription = if (isPro) "Export" else "Export locked",
                                 tint = BentoPrimaryDark,
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = if (isPro) "Export" else "Export 🔒",
+                                text = "Export",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = BentoPrimaryDark

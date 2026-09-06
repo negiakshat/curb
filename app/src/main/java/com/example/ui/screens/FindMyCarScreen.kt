@@ -637,81 +637,28 @@ fun FindMyCarScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                        // Controls: Recenter on Car / Recenter on Me
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        // Primary Action: View Active Parking Timer
+                        Button(
+                            onClick = onNavigateToParkingTimer,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = BentoPrimaryDark,
+                                contentColor = Color.White
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("find_my_car_timer_button")
                         ) {
-                            Button(
-                                onClick = {
-                                    mapViewRef?.controller?.animateTo(
-                                        GeoPoint(savedParkingSpot.latitude, savedParkingSpot.longitude)
-                                    )
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = BentoPrimaryDark,
-                                    contentColor = Color.White
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(46.dp)
-                                    .testTag("recenter_car_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DirectionsCar,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Center Car", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    if (successUserLoc != null) {
-                                        mapViewRef?.controller?.animateTo(
-                                            GeoPoint(successUserLoc.latitude, successUserLoc.longitude)
-                                        )
-                                    } else {
-                                        val hasPermission = ContextCompat.checkSelfPermission(
-                                            context,
-                                            Manifest.permission.ACCESS_FINE_LOCATION
-                                        ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
-                                            context,
-                                            Manifest.permission.ACCESS_COARSE_LOCATION
-                                        ) == PackageManager.PERMISSION_GRANTED
-
-                                        if (hasPermission) {
-                                            onRefreshLocation()
-                                        } else {
-                                            locationPermissionLauncher.launch(
-                                                arrayOf(
-                                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                                                )
-                                            )
-                                        }
-                                    }
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                border = BorderStroke(1.dp, BentoBorder),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(46.dp)
-                                    .testTag("recenter_user_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.MyLocation,
-                                    contentDescription = null,
-                                    tint = MapTextDark,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Center Me", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MapTextDark)
-                            }
+                            Icon(
+                                imageVector = Icons.Default.DirectionsCar,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("View Parking Timer", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

@@ -15,6 +15,8 @@ import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import com.example.data.model.SignBoundingBox
+import com.example.util.CandidateValidation
+import com.example.util.SignCandidateValidator
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
@@ -54,7 +56,11 @@ data class InternalSignDetection(
 
 object SignDetectionService {
     private val recognizer by lazy {
-        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        try {
+            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        } catch (e: Throwable) {
+            null
+        }
     }
 
     private val backgroundExecutor: ExecutorService by lazy {
@@ -111,11 +117,15 @@ object SignDetectionService {
         bitmap: Bitmap
     ): LocalDetectionResult = withContext(Dispatchers.Default) {
         if (bitmap.isRecycled || bitmap.width < 50 || bitmap.height < 50) {
-            return@withContext LocalDetectionResult(emptyList(), 0, "Image not usable.")
+            return@withContext LocalDetectionResult(emptyList(), 0, "No parking sign detected.")
         }
 
-        val inputImage = InputImage.fromBitmap(bitmap, 0)
-        val visionText = processImageAsync(inputImage)
+        val visionText = try {
+            val inputImage = InputImage.fromBitmap(bitmap, 0)
+            processImageAsync(inputImage)
+        } catch (e: Throwable) {
+            null
+        }
 
         val blocks = visionText?.textBlocks ?: emptyList()
         val clusteredBoxes = if (blocks.isNotEmpty()) {
@@ -132,7 +142,14 @@ object SignDetectionService {
 
         if (clusteredBoxes.isNotEmpty()) {
             clusteredBoxes.forEachIndexed { index, cluster ->
-                val signId = "sign_${index + 1}"
+                // Validate OCR content: Reject URLs, hashes, UUIDs, code, and non-parking garbage
+                val ocrValidation = SignCandidateValidator.validateOcr(cluster.text)
+                if (!ocrValidation.isValid) {
+                    android.util.Log.d("CurbPipeline", "Rejecting garbage OCR block: '${cluster.text.take(30)}' (${(ocrValidation as? CandidateValidation.Invalid)?.reason})")
+                    return@forEachIndexed
+                }
+
+                val signId = "sign_${signCrops.size + 1}"
                 val rect = cluster.rect
 
                 // Generous padding around bounding box (18% padding to capture full physical sign border)
@@ -189,45 +206,10 @@ object SignDetectionService {
             }
         }
 
-        // Fallback: If no text clusters were isolated, create a full source image crop
-        if (signCrops.isEmpty() && bitmap.width >= 50 && bitmap.height >= 50) {
-            try {
-                val cropFile = File(cropsDir, "crop_${System.currentTimeMillis()}_sign_1.jpg")
-                FileOutputStream(cropFile).use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
-                }
-                if (cropFile.exists() && cropFile.length() > 0) {
-                    val normalizedBox = SignBoundingBox(
-                        id = "sign_1",
-                        left = 0f,
-                        top = 0f,
-                        right = 1f,
-                        bottom = 1f,
-                        label = "PARKING SIGN",
-                        ocrText = "PARKING SIGN",
-                        confidence = 0.90f,
-                        sourceWidth = bmpWidth,
-                        sourceHeight = bmpHeight
-                    )
-                    signCrops.add(
-                        LocalSignCrop(
-                            id = "sign_1",
-                            normalizedBox = normalizedBox,
-                            ocrText = "PARKING SIGN",
-                            fileUri = cropFile.absolutePath,
-                            bitmap = bitmap
-                        )
-                    )
-                }
-            } catch (e: Exception) {
-                // Ignore fallback creation failure
-            }
-        }
-
         val summary = if (signCrops.isNotEmpty()) {
             "Found ${signCrops.size} sign(s): " + signCrops.joinToString("; ") { "[${it.normalizedBox.label}]: \"${it.ocrText.replace("\n", " ").take(40)}\"" }
         } else {
-            "Sign text was not clearly resolved."
+            "No parking sign detected."
         }
 
         LocalDetectionResult(
@@ -258,7 +240,10 @@ object SignDetectionService {
         val bmpHeight = bitmap.height.toFloat()
 
         boxes.forEachIndexed { index, box ->
-            val signId = "sign_${index + 1}"
+            if (!SignCandidateValidator.validateOcr(box.ocrText).isValid) {
+                return@forEachIndexed
+            }
+            val signId = "sign_${crops.size + 1}"
             val rawLeft = (box.left * bmpWidth).toInt()
             val rawTop = (box.top * bmpHeight).toInt()
             val rawRight = (box.right * bmpWidth).toInt()
@@ -414,13 +399,22 @@ object SignDetectionService {
 
     private suspend fun processImageAsync(inputImage: InputImage): Text? =
         suspendCancellableCoroutine { continuation ->
-            recognizer.process(inputImage)
-                .addOnSuccessListener { text ->
-                    continuation.resume(text)
-                }
-                .addOnFailureListener {
-                    continuation.resume(null)
-                }
+            val client = recognizer
+            if (client == null) {
+                if (continuation.isActive) continuation.resume(null)
+                return@suspendCancellableCoroutine
+            }
+            try {
+                client.process(inputImage)
+                    .addOnSuccessListener { text ->
+                        if (continuation.isActive) continuation.resume(text)
+                    }
+                    .addOnFailureListener {
+                        if (continuation.isActive) continuation.resume(null)
+                    }
+            } catch (e: Throwable) {
+                if (continuation.isActive) continuation.resume(null)
+            }
         }
 
     private data class TextCluster(
@@ -502,6 +496,9 @@ object SignDetectionService {
     }
 
     fun determineSignCategory(ocrText: String): String {
+        if (!SignCandidateValidator.validateOcr(ocrText).isValid) {
+            return "UNREADABLE_EVIDENCE"
+        }
         val upper = ocrText.uppercase()
         return when {
             upper.contains("TOW") || upper.contains("CLEAN") || upper.contains("SWEEP") || upper.contains("NO STOP") -> "STREET_RESTRICTION"
@@ -514,6 +511,9 @@ object SignDetectionService {
     }
 
     fun determineSignLabel(ocrText: String): String {
+        if (!SignCandidateValidator.validateOcr(ocrText).isValid) {
+            return "UNCLEAR SIGN"
+        }
         val upper = ocrText.uppercase()
         return when {
             upper.contains("TOW") || upper.contains("CLEAN") || upper.contains("SWEEP") || upper.contains("NO STOP") -> "STREET RESTRICTION"
@@ -571,6 +571,11 @@ object SignDetectionService {
             val rect = getBoundingBoxForCluster(c)
             val combinedText = c.joinToString(" ") { it.text }.trim()
             if (combinedText.isBlank()) continue
+
+            // Validate OCR text to discard garbage tokens / URLs / hashes
+            if (!SignCandidateValidator.validateOcr(combinedText).isValid) {
+                continue
+            }
 
             // Extract real confidence from model text lines
             val lineConfidences = c.flatMap { it.lines }

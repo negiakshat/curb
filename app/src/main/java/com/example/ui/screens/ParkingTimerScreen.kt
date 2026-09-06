@@ -6,13 +6,9 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -79,16 +75,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -97,8 +90,6 @@ import com.example.data.model.ParkingSpot
 import com.example.ui.theme.RadiusCard
 import com.example.ui.theme.RadiusChip
 import com.example.ui.theme.RadiusHero
-import com.example.ui.theme.RadiusNested
-import com.example.ui.theme.RadiusSmall
 import com.example.ui.theme.BentoBorder
 import com.example.ui.theme.BentoCanvas
 import com.example.ui.theme.BentoPeach
@@ -112,10 +103,8 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.cos
-import kotlin.math.sin
 
-// Precise Vibrant Green Palette matching the screenshot layout
+// Vibrant Theme Palette matching Curb design identity
 private val TimerTrackGreen = Color(0xFFE2F6EA)
 private val TimerProgressGreen = Color(0xFF1DB954)
 private val TimerTextDark = Color(0xFF121212)
@@ -186,7 +175,7 @@ fun ParkingTimerScreen(
             .navigationBarsPadding()
             .testTag("parking_timer_screen")
     ) {
-        // TOP APP BAR: Back button | "Parking Timer" | 3-dots More Menu
+        // 1. TOP APP BAR: Back button | "Parking Timer" | 3-dots Overflow Menu
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -293,22 +282,22 @@ fun ParkingTimerScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (activeSession != null && activeSession.isActive) {
-                // Pre-calculated values for the cards
+                // Pre-calculated timer state
                 val totalDuration = (activeSession.endTime - activeSession.startTime).coerceAtLeast(1000L)
                 val remaining = (activeSession.endTime - currentTimeMillis)
                 val isExpired = remaining <= 0
-                val rawProgress = if (isExpired) 0f else (remaining.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
-
-                val animatedProgress by animateFloatAsState(
-                    targetValue = rawProgress,
-                    animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
-                    label = "timer_progress"
-                )
 
                 val totalSeconds = (remaining / 1000).coerceAtLeast(0L)
                 val hours = totalSeconds / 3600
                 val minutes = (totalSeconds % 3600) / 60
-                val timeDisplay = if (isExpired) "0m" else if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+
+                val remainingText = if (isExpired) {
+                    "Expired"
+                } else if (hours > 0) {
+                    "${hours}h ${minutes}m remaining"
+                } else {
+                    "${minutes}m remaining"
+                }
 
                 val totalSecs = totalDuration / 1000
                 val totalHours = totalSecs / 3600
@@ -321,8 +310,21 @@ fun ParkingTimerScreen(
                     "${totalMins}m"
                 }
 
+                val expiryTimeStr = if (activeSession.allowedUntilTime.isNotBlank()) {
+                    activeSession.allowedUntilTime
+                } else {
+                    SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(activeSession.endTime))
+                }
+
+                val ruleText = when {
+                    activeSession.parkingRuleSummary.isNotBlank() -> activeSession.parkingRuleSummary
+                    activeSession.notes.isNotBlank() -> activeSession.notes
+                    activeSession.timerBasis.isNotBlank() -> activeSession.timerBasis
+                    else -> "$limitDisplay limit"
+                }
+
                 // ==========================================
-                // 1. TOP HERO CARD (CIRCULAR GAUGE & LOCATION)
+                // 2. PRIMARY TIMER CARD
                 // ==========================================
                 Card(
                     modifier = Modifier
@@ -337,224 +339,113 @@ fun ParkingTimerScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 22.dp, bottom = 18.dp, start = 18.dp, end = 18.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.Start
                     ) {
-                        // Header pill (Active vs Expired)
+                        // Header Status Pill
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(RadiusChip))
+                                .background(if (isExpired) CurbErrorContainer else TimerBannerBg)
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(24.dp)
+                                    .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(if (isExpired) CurbErrorContainer else TimerBannerBg),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (isExpired) "!" else "P",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isExpired) CurbError else TimerBannerGreen
-                                )
-                            }
-
+                                    .background(if (isExpired) CurbError else TimerBannerGreen)
+                            )
                             Text(
-                                text = if (isExpired) "Restriction active • Expired" else "Active parking",
+                                text = if (isExpired) "SESSION EXPIRED" else "ACTIVE PARKING",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isExpired) CurbError else TimerBannerGreen,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Large Remaining Time Display (Hero Information)
+                        Text(
+                            text = remainingText,
+                            fontSize = 38.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isExpired) CurbError else TimerTextDark,
+                            letterSpacing = (-0.5).sp
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Exact Local Expiry Time
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccessTime,
+                                contentDescription = null,
+                                tint = if (isExpired) CurbError else TimerTextMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = if (isExpired) "Expired at $expiryTimeStr" else "Expires at $expiryTimeStr",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (isExpired) CurbError else TimerBannerGreen
+                                color = if (isExpired) CurbError else TimerTextDark
                             )
                         }
 
                         Spacer(modifier = Modifier.height(18.dp))
 
-                        // CIRCULAR GAUGE (Exact visual recreation)
-                        Box(
-                            modifier = Modifier
-                                .size(240.dp)
-                                .padding(8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Canvas(modifier = Modifier.fillMaxSize()) {
-                                val strokeWidth = 11.dp.toPx()
-                                val diameter = size.minDimension - strokeWidth
-                                val topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f)
-                                val arcSize = Size(diameter, diameter)
-
-                                // 1. Background full track
-                                drawArc(
-                                    color = if (isExpired) CurbErrorContainer else TimerTrackGreen,
-                                    startAngle = 0f,
-                                    sweepAngle = 360f,
-                                    useCenter = false,
-                                    topLeft = topLeft,
-                                    size = arcSize,
-                                    style = Stroke(width = strokeWidth)
-                                )
-
-                                // 2. Foreground active progress arc
-                                val sweep = if (isExpired) 360f else animatedProgress * 360f
-                                drawArc(
-                                    color = if (isExpired) CurbError else TimerProgressGreen,
-                                    startAngle = -90f,
-                                    sweepAngle = sweep,
-                                    useCenter = false,
-                                    topLeft = topLeft,
-                                    size = arcSize,
-                                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                                )
-
-                                // 3. Indicator knob at the progress endpoint
-                                val radius = diameter / 2f
-                                val centerOffset = Offset(size.width / 2f, size.height / 2f)
-                                val endAngleRad = Math.toRadians((-90f + sweep).toDouble())
-                                val knobCenter = Offset(
-                                    x = centerOffset.x + (radius * cos(endAngleRad)).toFloat(),
-                                    y = centerOffset.y + (radius * sin(endAngleRad)).toFloat()
-                                )
-
-                                drawCircle(
-                                    color = TimerCardBg,
-                                    radius = strokeWidth * 0.85f,
-                                    center = knobCenter
-                                )
-                                drawCircle(
-                                    color = if (isExpired) CurbError else TimerProgressGreen,
-                                    radius = strokeWidth * 0.55f,
-                                    center = knobCenter
-                                )
-                            }
-
-                            // Center Content Inside Circle
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    text = if (isExpired) "Status" else "Time remaining",
-                                    fontSize = 13.sp,
-                                    color = TimerTextMuted,
-                                    fontWeight = FontWeight.Medium
-                                )
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
-                                Text(
-                                    text = if (isExpired) "EXPIRED" else timeDisplay,
-                                    fontSize = if (isExpired) 26.sp else 38.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isExpired) CurbError else TimerTextDark,
-                                    letterSpacing = (-0.5).sp
-                                )
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
-                                Text(
-                                    text = "Limit: $limitDisplay",
-                                    fontSize = 13.sp,
-                                    color = TimerTextMuted
-                                )
-
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                Text(
-                                    text = if (isExpired) "Expired at" else "Expires at",
-                                    fontSize = 12.sp,
-                                    color = TimerTextMuted
-                                )
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
-                                Text(
-                                    text = activeSession.allowedUntilTime,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isExpired) CurbError else TimerProgressGreen
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        // LOCATION ROW (Inside Hero Card)
+                        // 3. RULE CONTEXT (Immediately below timer)
                         Surface(
-                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(RadiusCard),
                             color = BentoCanvas,
-                            border = BorderStroke(1.dp, BentoBorder),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showMapSheet = true }
-                                .testTag("timer_location_bar")
+                            border = BorderStroke(1.dp, BentoBorder)
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    modifier = Modifier.weight(1f)
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(TimerBannerBg),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(38.dp)
-                                            .clip(CircleShape)
-                                            .background(TimerCardBg)
-                                            .border(1.dp, BentoBorder, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Place,
-                                            contentDescription = null,
-                                            tint = TimerTextDark,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-
-                                    Column {
-                                        Text(
-                                            text = activeSession.locationName,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = TimerTextDark
-                                        )
-                                        Text(
-                                            text = if (activeSession.notes.isNotBlank()) activeSession.notes else "Active parking spot",
-                                            fontSize = 12.sp,
-                                            color = TimerTextMuted
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = TimerBannerGreen,
+                                        modifier = Modifier.size(16.dp)
+                                    )
                                 }
 
-                                Surface(
-                                    shape = RoundedCornerShape(RadiusChip),
-                                    color = TimerCardBg,
-                                    border = BorderStroke(1.dp, BentoBorder),
-                                    modifier = Modifier.clip(RoundedCornerShape(RadiusChip))
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.NearMe,
-                                            contentDescription = null,
-                                            tint = TimerTextDark,
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Text(
-                                            text = "View on map",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = TimerTextDark
-                                        )
-                                    }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "PARKING RULE",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TimerTextMuted,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = ruleText,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TimerTextDark,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
                             }
                         }
@@ -562,158 +453,96 @@ fun ParkingTimerScreen(
                 }
 
                 // ==========================================
-                // SAVE PARKING SPOT ACTION
+                // 4. PARKING LOCATION (Compact Card)
                 // ==========================================
-                if (savedParkingSpot != null) {
-                    Surface(
-                        shape = RoundedCornerShape(RadiusCard),
-                        color = TimerCardBg,
-                        border = BorderStroke(1.dp, BentoBorder),
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(RadiusCard))
+                        .clickable { showMapSheet = true }
+                        .testTag("timer_location_bar"),
+                    shape = RoundedCornerShape(RadiusCard),
+                    colors = CardDefaults.cardColors(containerColor = TimerCardBg),
+                    border = BorderStroke(1.dp, BentoBorder),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .testTag("saved_parking_spot_card")
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFFE6F4EA)),
+                                    .background(BentoCanvas)
+                                    .border(1.dp, BentoBorder, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.CheckCircle,
+                                    imageVector = Icons.Default.Place,
                                     contentDescription = null,
-                                    tint = Color(0xFF137333),
+                                    tint = TimerTextDark,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
+
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Parking spot saved",
+                                    text = activeSession.locationName,
                                     fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TimerTextDark,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Active parking spot",
+                                    fontSize = 12.sp,
+                                    color = TimerTextMuted
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Surface(
+                            shape = RoundedCornerShape(RadiusChip),
+                            color = BentoCanvas,
+                            border = BorderStroke(1.dp, BentoBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.NearMe,
+                                    contentDescription = null,
+                                    tint = TimerTextDark,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = "View on map",
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = TimerTextDark
                                 )
-                                if (savedParkingSpot.locationName.isNotBlank()) {
-                                    Text(
-                                        text = savedParkingSpot.locationName,
-                                        fontSize = 12.sp,
-                                        color = TimerTextMuted
-                                    )
-                                }
                             }
-                            Button(
-                                onClick = onNavigateToFindMyCar,
-                                shape = RoundedCornerShape(RadiusCard),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = BentoPrimaryDark,
-                                    contentColor = Color.White
-                                ),
-                                modifier = Modifier.testTag("find_my_car_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Place,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "FIND MY CAR",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                val hasPermission = ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.ACCESS_FINE_LOCATION
-                                ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                                ) == PackageManager.PERMISSION_GRANTED
-
-                                if (hasPermission) {
-                                    onSaveParkingSpot()
-                                } else {
-                                    locationPermissionLauncher.launch(
-                                        arrayOf(
-                                            Manifest.permission.ACCESS_FINE_LOCATION,
-                                            Manifest.permission.ACCESS_COARSE_LOCATION
-                                        )
-                                    )
-                                }
-                            },
-                            enabled = !isSavingParkingSpot,
-                            shape = RoundedCornerShape(RadiusCard),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = BentoPrimaryDark,
-                                contentColor = Color.White,
-                                disabledContainerColor = TimerCardBg,
-                                disabledContentColor = TimerTextMuted
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                                .testTag("save_parking_spot_button")
-                        ) {
-                            if (isSavingParkingSpot) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = "Saving parking spot…",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Place,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "SAVE MY PARKING SPOT",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
-                                )
-                            }
-                        }
-
-                        if (!parkingSpotSaveError.isNullOrBlank()) {
-                            Text(
-                                text = parkingSpotSaveError,
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 12.sp,
-                                modifier = Modifier
-                                    .padding(horizontal = 8.dp)
-                                    .testTag("parking_spot_save_error")
-                            )
                         }
                     }
                 }
 
                 // ==========================================
-                // 2. DETAILS LIST CARD
+                // 5. SESSION DETAILS (Clean Compact List)
                 // ==========================================
                 Card(
                     modifier = Modifier
@@ -728,7 +557,7 @@ fun ParkingTimerScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp)
+                            .padding(vertical = 4.dp)
                     ) {
                         // Row 1: Started at
                         val startedSdf = SimpleDateFormat("h:mm a", Locale.getDefault())
@@ -795,35 +624,166 @@ fun ParkingTimerScreen(
                                 )
                             }
                         )
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = TimerDividerColor,
-                            thickness = 1.dp
-                        )
-
-                        // Row 4: Parking rules
-                        TimerDetailRow(
-                            icon = Icons.Default.Info,
-                            title = "Parking rules",
-                            subtitle = "2 Hour Parking, 8 AM – 6 PM, Mon – Fri",
-                            isClickable = true,
-                            onClick = { showRulesSheet = true },
-                            trailingContent = {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                    contentDescription = "View rules",
-                                    tint = TimerTextMuted,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        )
                     }
                 }
 
                 // ==========================================
-                // 3. NOTIFICATION BANNER
+                // 6. SAVE SPOT (Secondary CTA with Clear Contrast)
                 // ==========================================
+                if (savedParkingSpot != null) {
+                    Surface(
+                        shape = RoundedCornerShape(RadiusCard),
+                        color = TimerCardBg,
+                        border = BorderStroke(1.dp, BentoBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("saved_parking_spot_card")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFE6F4EA)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF137333),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Parking spot saved",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TimerTextDark
+                                )
+                                if (savedParkingSpot.locationName.isNotBlank()) {
+                                    Text(
+                                        text = savedParkingSpot.locationName,
+                                        fontSize = 12.sp,
+                                        color = TimerTextMuted,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            Button(
+                                onClick = onNavigateToFindMyCar,
+                                shape = RoundedCornerShape(RadiusCard),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = BentoPrimaryDark,
+                                    contentColor = Color.White
+                                ),
+                                modifier = Modifier.testTag("find_my_car_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Place,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "FIND MY CAR",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val hasPermission = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.ACCESS_FINE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED
+
+                                if (hasPermission) {
+                                    onSaveParkingSpot()
+                                } else {
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    )
+                                }
+                            },
+                            enabled = !isSavingParkingSpot,
+                            shape = RoundedCornerShape(RadiusCard),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = BentoPrimaryDark,
+                                contentColor = Color.White,
+                                disabledContainerColor = BentoPrimaryDark.copy(alpha = 0.7f),
+                                disabledContentColor = Color.White.copy(alpha = 0.9f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("save_parking_spot_button")
+                        ) {
+                            if (isSavingParkingSpot) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Saving parking spot…",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Place,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "SAVE MY PARKING SPOT",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+
+                        if (!parkingSpotSaveError.isNullOrBlank()) {
+                            Text(
+                                text = parkingSpotSaveError,
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 12.sp,
+                                modifier = Modifier
+                                    .padding(horizontal = 8.dp)
+                                    .testTag("parking_spot_save_error")
+                            )
+                        }
+                    }
+                }
+
+                // Notification Alert Banner
                 AnimatedVisibility(
                     visible = isNotificationBannerVisible,
                     enter = fadeIn(),
@@ -831,38 +791,38 @@ fun ParkingTimerScreen(
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(RadiusCard),
                         color = TimerBannerBg
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = null,
                                     tint = TimerBannerGreen,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
 
                                 Column {
                                     Text(
-                                        text = "We’ll notify you before your time runs out.",
+                                        text = "Smart push alerts enabled",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = TimerTextDark
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "You can update reminders in Settings.",
+                                        text = "We'll notify you before your parking limit expires.",
                                         fontSize = 12.sp,
                                         color = TimerTextMuted
                                     )
@@ -988,7 +948,7 @@ fun ParkingTimerScreen(
         }
 
         // ==========================================
-        // 4. BOTTOM ACTION BUTTONS
+        // 7. PRIMARY STICKY ACTIONS
         // ==========================================
         Row(
             modifier = Modifier
@@ -999,7 +959,7 @@ fun ParkingTimerScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (activeSession != null && activeSession.isActive) {
-                // LEFT BUTTON: "Add time" (White/Sand outlined card button)
+                // LEFT BUTTON: "Add time" (Outlined button)
                 OutlinedButton(
                     onClick = { showAddTimeSheet = true },
                     modifier = Modifier
@@ -1021,7 +981,7 @@ fun ParkingTimerScreen(
                     )
                 }
 
-                // RIGHT BUTTON: "End parking session" (Black filled button)
+                // RIGHT BUTTON: "End parking session" (Filled strong/destructive action)
                 Button(
                     onClick = { onEndSession(activeSession.id) },
                     modifier = Modifier
@@ -1280,11 +1240,14 @@ fun ParkingTimerScreen(
                     border = BorderStroke(1.dp, BentoBorder)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        RuleItem("2 HR PARKING", "8:00 AM – 6:00 PM, Mon – Fri. Meter rate $3.50/hr applies.")
+                        val activeRuleStr = activeSession?.parkingRuleSummary?.ifBlank { null }
+                            ?: activeSession?.notes?.ifBlank { null }
+                            ?: "2 HR PARKING"
+                        RuleItem("ACTIVE REGULATION", activeRuleStr)
                         Spacer(modifier = Modifier.height(10.dp))
-                        RuleItem("STREET SWEEPING", "Tue & Thu, 8:00 AM – 10:00 AM. Vehicles will be ticketed/towed.")
+                        RuleItem("NOTIFICATIONS", "Smart push notifications will alert you prior to restriction enforcement.")
                         Spacer(modifier = Modifier.height(10.dp))
-                        RuleItem("FREE PARKING", "Evenings after 6:00 PM and all day Sundays & City Holidays.")
+                        RuleItem("HOLIDAY EXCEPTIONS", "Free parking on Sundays and major City Holidays unless posted otherwise.")
                     }
                 }
 
@@ -1334,7 +1297,8 @@ fun ParkingTimerScreen(
                 Text(
                     text = if (activeSession.notes.isNotBlank()) "${activeSession.locationName} • ${activeSession.notes}" else activeSession.locationName,
                     fontSize = 13.sp,
-                    color = TimerTextMuted
+                    color = TimerTextMuted,
+                    textAlign = TextAlign.Center
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
@@ -1376,7 +1340,7 @@ fun ParkingTimerScreen(
                                 color = TimerTextDark
                             )
                             Text(
-                                text = "2 min walk (180 ft from current spot)",
+                                text = "2 min walk from current location",
                                 fontSize = 11.sp,
                                 color = TimerTextMuted
                             )
@@ -1569,3 +1533,4 @@ private fun RuleItem(title: String, description: String) {
         )
     }
 }
+

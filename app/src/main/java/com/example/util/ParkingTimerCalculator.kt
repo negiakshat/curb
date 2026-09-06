@@ -58,7 +58,7 @@ object ParkingTimerCalculator {
             )
         }
 
-        // 2. If AMBIGUOUS or any sign is uncertain -> No timer allowed
+        // 2. If AMBIGUOUS or any detected sign is uncertain -> No timer allowed
         val hasUncertainty = scanResult.verdict == ScanVerdict.AMBIGUOUS ||
                 scanResult.detectedSigns.any { it.isUncertain }
 
@@ -84,8 +84,8 @@ object ParkingTimerCalculator {
             append(scanResult.timeRemaining)
             append(" ")
             scanResult.parkingRules.forEach { append(it).append(" ") }
-            scanResult.detectedSigns.forEach { append(it.title).append(" ").append(it.restrictions).append(" ") }
-        }.lowercase(Locale.getDefault())
+            scanResult.detectedSigns.forEach { append(it.title).append(" ").append(it.restrictions).append(" ").append(it.subtitle).append(" ") }
+        }.lowercase(Locale.US)
 
         val isUnrestrictedKeywords = listOf(
             "no time limit",
@@ -97,8 +97,8 @@ object ParkingTimerCalculator {
         )
 
         val isUnrestricted = isUnrestrictedKeywords.any { combinedText.contains(it) } ||
-                (scanResult.allowedUntilTime.contains("no time limit", ignoreCase = true) ||
-                 scanResult.allowedUntilTime.contains("unrestricted", ignoreCase = true))
+                scanResult.allowedUntilTime.contains("no time limit", ignoreCase = true) ||
+                scanResult.allowedUntilTime.contains("unrestricted", ignoreCase = true)
 
         if (isUnrestricted) {
             return ParkingTimerConfig(
@@ -115,75 +115,87 @@ object ParkingTimerCalculator {
             )
         }
 
-        // 4. ALLOWED WITH TIME LIMIT -> Calculate usable duration based on current time & detected limits
+        // 4. ALLOWED WITH TIME LIMIT OR CUTOFF
         val nowCal = Calendar.getInstance().apply { timeInMillis = currentTimeMillis }
 
-        // Step A: Parse clock end time (e.g., "6:00 PM", "4:00 PM", "18:00")
-        val parsedClockTimeMillis = parseClockEndTime(scanResult.allowedUntilTime, nowCal)
-
-        var minutesUntilClockCutoff: Int? = null
-        var formattedClockTimeStr = scanResult.allowedUntilTime
-
-        if (parsedClockTimeMillis != null) {
-            val diffMs = parsedClockTimeMillis - currentTimeMillis
-            if (diffMs > 0) {
-                minutesUntilClockCutoff = (diffMs / 60000L).toInt()
-            }
-            val sdfOut = SimpleDateFormat("h:mm a", Locale.getDefault())
-            formattedClockTimeStr = sdfOut.format(Date(parsedClockTimeMillis))
-        }
-
-        // Step B: Parse posted limit from rules or signs (e.g. "2 Hour Parking" -> 120 mins)
+        // Step A: Parse posted duration limit (e.g., "2 Hour Parking" -> 120 mins, "1 Hour" -> 60 mins)
         val postedLimitMinutes = parsePostedDurationLimitMinutes(combinedText)
 
-        // Step C: Determine final usable minutes
-        val finalMinutes: Int = when {
-            postedLimitMinutes != null && minutesUntilClockCutoff != null -> {
-                minOf(postedLimitMinutes, minutesUntilClockCutoff)
+        // Step B: Parse clock cutoff time (e.g., "6:00 PM", "4:00 PM", "18:00")
+        val clockCutoffMillis = parseClockEndTime(scanResult.allowedUntilTime, combinedText, nowCal, currentTimeMillis)
+
+        var minutesUntilClockCutoff: Int? = null
+        var formattedClockCutoffStr: String? = null
+
+        if (clockCutoffMillis != null && clockCutoffMillis > currentTimeMillis) {
+            val diffMs = clockCutoffMillis - currentTimeMillis
+            val mins = Math.round(diffMs / 60000.0).toInt()
+            if (mins > 0) {
+                minutesUntilClockCutoff = mins
+                val sdfOut = SimpleDateFormat("h:mm a", Locale.US)
+                formattedClockCutoffStr = sdfOut.format(Date(clockCutoffMillis))
             }
-            postedLimitMinutes != null -> {
-                postedLimitMinutes
-            }
-            minutesUntilClockCutoff != null -> {
-                minutesUntilClockCutoff
-            }
-            else -> {
-                parseRemainingMinutesFallback(scanResult.timeRemaining) ?: 120
-            }
-        }.coerceAtLeast(1)
+        }
+
+        // Step C: Parse remaining time fallback from scanResult.timeRemaining
+        val timeRemainingMinutes = parseRemainingMinutesFallback(scanResult.timeRemaining)
+
+        // Step D: Candidate minutes list (take the minimum of all valid positive constraints)
+        val candidateMinutesList = listOfNotNull(
+            postedLimitMinutes,
+            minutesUntilClockCutoff,
+            timeRemainingMinutes
+        ).filter { it > 0 }
+
+        if (candidateMinutesList.isEmpty()) {
+            // Cannot confidently determine a specific duration or clock cutoff -> do not start a misleading timer!
+            return ParkingTimerConfig(
+                isValidAllowed = false,
+                isUnrestricted = false,
+                isRestrictedOrAmbiguous = true,
+                calculatedMinutes = 0,
+                formattedDuration = "Duration unspecified",
+                timerBasis = "Unspecified limit",
+                allowedUntilTimeFormatted = "Verify signs",
+                confirmationHeadline = "Parking duration unspecified",
+                confirmationSubtext = "Curb detected that parking is allowed, but could not determine a specific time limit. Check physical signs on-site before parking.",
+                ruleSummary = scanResult.parkingRules.firstOrNull() ?: "Standard parking rules apply"
+            )
+        }
+
+        // Final usable minutes is strictly capped by the strictest candidate restriction
+        val finalMinutes = candidateMinutesList.minOrNull()!!
+
+        // Calculate exact end time formatted
+        val calculatedEndTimeMillis = currentTimeMillis + (finalMinutes * 60000L)
+        val sdfEnd = SimpleDateFormat("h:mm a", Locale.US)
+        val formattedEndTimeStr = sdfEnd.format(Date(calculatedEndTimeMillis))
 
         val formattedDuration = formatMinutesToDisplay(finalMinutes)
 
         val basisText = when {
             postedLimitMinutes != null && finalMinutes == postedLimitMinutes -> {
-                "${formatMinutesToDisplay(postedLimitMinutes)} limit"
+                "$formattedDuration limit"
             }
-            minutesUntilClockCutoff != null -> {
-                "Allowed until $formattedClockTimeStr"
+            formattedClockCutoffStr != null && finalMinutes == minutesUntilClockCutoff -> {
+                "Allowed until $formattedClockCutoffStr"
             }
             else -> {
-                "Scanned $formattedDuration limit"
+                "$formattedDuration limit"
             }
         }
 
-        val headline = if (formattedClockTimeStr.isNotBlank() && !formattedClockTimeStr.contains("remaining", ignoreCase = true)) {
-            "Parking allowed until $formattedClockTimeStr."
-        } else {
-            "Parking allowed for $formattedDuration."
-        }
+        val headline = "Parking allowed until $formattedEndTimeStr."
 
         val subtext = when {
             postedLimitMinutes != null && finalMinutes == postedLimitMinutes -> {
-                "Timer set for $formattedDuration based on the ${formatMinutesToDisplay(postedLimitMinutes)} limit."
+                "Timer set for $formattedDuration based on the $formattedDuration limit."
             }
-            minutesUntilClockCutoff != null && postedLimitMinutes != null && finalMinutes < postedLimitMinutes -> {
-                "Timer set for $formattedDuration ($finalMinutes mins remaining before the $formattedClockTimeStr restriction cutoff)."
-            }
-            minutesUntilClockCutoff != null -> {
-                "Timer set for $formattedDuration ($finalMinutes mins remaining until $formattedClockTimeStr)."
+            minutesUntilClockCutoff != null && finalMinutes == minutesUntilClockCutoff -> {
+                "Timer set for $formattedDuration ($finalMinutes mins remaining before the $formattedClockCutoffStr restriction cutoff)."
             }
             else -> {
-                "Timer set for $formattedDuration based on detected parking rules."
+                "Timer set for $formattedDuration based on validated parking rules."
             }
         }
 
@@ -196,86 +208,157 @@ object ParkingTimerCalculator {
             calculatedMinutes = finalMinutes,
             formattedDuration = formattedDuration,
             timerBasis = basisText,
-            allowedUntilTimeFormatted = if (formattedClockTimeStr.isNotBlank()) formattedClockTimeStr else "End of window",
+            allowedUntilTimeFormatted = formattedEndTimeStr,
             confirmationHeadline = headline,
             confirmationSubtext = subtext,
             ruleSummary = ruleSummary
         )
     }
 
-    private fun parseClockEndTime(timeStr: String, nowCal: Calendar): Long? {
-        if (timeStr.isBlank()) return null
+    private fun parseClockEndTime(
+        allowedUntilTime: String,
+        combinedText: String,
+        nowCal: Calendar,
+        currentTimeMillis: Long
+    ): Long? {
+        val candidateStrings = listOf(allowedUntilTime, combinedText)
 
-        val clean = timeStr.trim().uppercase()
-        val matcher1 = Pattern.compile("(\\d{1,2})(?::(\\d{2}))?\\s*(AM|PM)?").matcher(clean)
+        for (timeStr in candidateStrings) {
+            if (timeStr.isBlank()) continue
+            val lower = timeStr.lowercase(Locale.US)
 
-        if (matcher1.find()) {
-            val hourStr = matcher1.group(1) ?: return null
-            val minStr = matcher1.group(2) ?: "0"
-            val amPmStr = matcher1.group(3)
-
-            var hour = hourStr.toIntOrNull() ?: return null
-            val min = minStr.toIntOrNull() ?: 0
-
-            if (amPmStr == "PM" && hour < 12) hour += 12
-            if (amPmStr == "AM" && hour == 12) hour = 0
-
-            val targetCal = nowCal.clone() as Calendar
-            targetCal.set(Calendar.HOUR_OF_DAY, hour)
-            targetCal.set(Calendar.MINUTE, min)
-            targetCal.set(Calendar.SECOND, 0)
-            targetCal.set(Calendar.MILLISECOND, 0)
-
-            if (targetCal.timeInMillis < nowCal.timeInMillis - 1800000L) {
-                targetCal.add(Calendar.DAY_OF_YEAR, 1)
+            // Ignore duration-only or unrestricted/prohibited phrases
+            if (lower.contains("no time limit") || lower.contains("unrestricted") ||
+                lower.contains("prohibited") || lower.contains("unclear") || lower.contains("uncertain")) {
+                continue
             }
 
-            return targetCal.timeInMillis
+            // Check if string is purely a duration expression (e.g. "2 hour parking", "2 hours", "30 min") without AM/PM or :
+            val isDurationOnly = (lower.contains("hour") || lower.contains("hr") || lower.contains("min")) &&
+                    !lower.contains("am") && !lower.contains("pm") && !lower.contains(":")
+            if (isDurationOnly) {
+                continue
+            }
+
+            val clean = timeStr.trim().uppercase(Locale.US)
+
+            // Pattern 1: HH:MM AM/PM or HH AM/PM (e.g. "6:00 PM", "6 PM", "12:00 AM", "8 AM")
+            val amPmMatcher = Pattern.compile("(?:UNTIL|ENDS?\\s+AT|BY)?\\s*(\\d{1,2})(?::(\\d{2}))?\\s*(AM|PM)").matcher(clean)
+            if (amPmMatcher.find()) {
+                val hStr = amPmMatcher.group(1) ?: continue
+                val mStr = amPmMatcher.group(2) ?: "0"
+                val amPm = amPmMatcher.group(3)
+
+                var hour = hStr.toIntOrNull() ?: continue
+                val min = mStr.toIntOrNull() ?: 0
+
+                if (hour < 1 || hour > 12 || min < 0 || min > 59) continue
+
+                if (amPm == "PM" && hour < 12) hour += 12
+                if (amPm == "AM" && hour == 12) hour = 0
+
+                val targetCal = nowCal.clone() as Calendar
+                targetCal.set(Calendar.HOUR_OF_DAY, hour)
+                targetCal.set(Calendar.MINUTE, min)
+                targetCal.set(Calendar.SECOND, 0)
+                targetCal.set(Calendar.MILLISECOND, 0)
+
+                if (targetCal.timeInMillis <= currentTimeMillis - 1800000L) {
+                    // Crossing midnight or target clock cutoff is tomorrow
+                    targetCal.add(Calendar.DAY_OF_YEAR, 1)
+                }
+
+                if (targetCal.timeInMillis > currentTimeMillis) {
+                    return targetCal.timeInMillis
+                }
+            }
+
+            // Pattern 2: 24-hour military clock (e.g. "18:00", "08:00")
+            val militaryMatcher = Pattern.compile("\\b([01]?\\d|2[0-3]):([0-5]\\d)\\b").matcher(clean)
+            if (militaryMatcher.find()) {
+                val hour = militaryMatcher.group(1)?.toIntOrNull() ?: continue
+                val min = militaryMatcher.group(2)?.toIntOrNull() ?: 0
+
+                val targetCal = nowCal.clone() as Calendar
+                targetCal.set(Calendar.HOUR_OF_DAY, hour)
+                targetCal.set(Calendar.MINUTE, min)
+                targetCal.set(Calendar.SECOND, 0)
+                targetCal.set(Calendar.MILLISECOND, 0)
+
+                if (targetCal.timeInMillis <= currentTimeMillis - 1800000L) {
+                    targetCal.add(Calendar.DAY_OF_YEAR, 1)
+                }
+
+                if (targetCal.timeInMillis > currentTimeMillis) {
+                    return targetCal.timeInMillis
+                }
+            }
         }
+
         return null
     }
 
     private fun parsePostedDurationLimitMinutes(text: String): Int? {
-        val lower = text.lowercase(Locale.getDefault())
+        val lower = text.lowercase(Locale.US)
+        var lowestMinutes: Int? = null
 
-        val hourMatcher = Pattern.compile("(\\d+)\\s*(?:hour|hr|h|\\-hour)").matcher(lower)
-        if (hourMatcher.find()) {
+        // Match hour patterns like "2 hour", "2-hour", "2 hr", "2 hrs", "1h", "2h"
+        val hourMatcher = Pattern.compile("(\\d+)\\s*(?:-?\\s*hour|hr|hrs|h|\\-hour)").matcher(lower)
+        while (hourMatcher.find()) {
             val hrs = hourMatcher.group(1)?.toIntOrNull()
-            if (hrs != null && hrs in 1..24) {
-                return hrs * 60
+            if (hrs != null && hrs in 1..12) { // Sanity check: posted limits are 1-12 hours
+                val mins = hrs * 60
+                if (lowestMinutes == null || mins < lowestMinutes) {
+                    lowestMinutes = mins
+                }
             }
         }
 
-        val minMatcher = Pattern.compile("(\\d+)\\s*(?:min|minute|m)").matcher(lower)
-        if (minMatcher.find()) {
+        // Match minute patterns like "30 min", "15 minute", "45 mins", "30m"
+        val minMatcher = Pattern.compile("(\\d+)\\s*(?:-?\\s*min|minute|mins|minutes|m)").matcher(lower)
+        while (minMatcher.find()) {
             val mins = minMatcher.group(1)?.toIntOrNull()
             if (mins != null && mins in 5..300) {
-                return mins
+                if (lowestMinutes == null || mins < lowestMinutes) {
+                    lowestMinutes = mins
+                }
             }
         }
 
-        return null
+        return lowestMinutes
     }
 
     private fun parseRemainingMinutesFallback(remainingStr: String): Int? {
         if (remainingStr.isBlank()) return null
-        val lower = remainingStr.lowercase()
+        val lower = remainingStr.lowercase(Locale.US)
+
+        if (lower.contains("no time limit") || lower.contains("unrestricted") ||
+            lower.contains("prohibited") || lower.contains("unclear")) {
+            return null
+        }
+
         var totalMins = 0
         var found = false
 
         val hMatch = Pattern.compile("(\\d+)\\s*h").matcher(lower)
         if (hMatch.find()) {
-            totalMins += (hMatch.group(1)?.toIntOrNull() ?: 0) * 60
-            found = true
+            val h = hMatch.group(1)?.toIntOrNull() ?: 0
+            if (h in 1..12) {
+                totalMins += h * 60
+                found = true
+            }
         }
 
         val mMatch = Pattern.compile("(\\d+)\\s*m").matcher(lower)
         if (mMatch.find()) {
-            totalMins += (mMatch.group(1)?.toIntOrNull() ?: 0)
-            found = true
+            val m = mMatch.group(1)?.toIntOrNull() ?: 0
+            if (m in 1..59) {
+                totalMins += m
+                found = true
+            }
         }
 
-        return if (found && totalMins > 0) totalMins else null
+        return if (found && totalMins in 5..720) totalMins else null
     }
 
     private fun formatMinutesToDisplay(minutes: Int): String {

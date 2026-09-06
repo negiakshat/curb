@@ -131,17 +131,6 @@ fun SavedPlacesScreen(
                         color = CurbOnSurface
                     )
                 }
-
-                IconButton(
-                    onClick = handleAddRequest,
-                    modifier = Modifier.testTag("add_place_top_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add Place",
-                        tint = CurbBlack
-                    )
-                }
             }
 
             LazyColumn(

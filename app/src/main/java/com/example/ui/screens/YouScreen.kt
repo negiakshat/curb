@@ -103,57 +103,37 @@ fun YouScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // PROFILE HEADER CARD
+                // PROFILE HEADER CARD (Informative User Summary)
                 CurbCard(
                     cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface,
-                    borderColor = BentoBorder,
-                    onClick = onAccountInfoClicked
+                    borderColor = BentoBorder
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 18.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            // Avatar container with subtle edit badge indicator
-                            Box(modifier = Modifier.size(52.dp)) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .clip(CircleShape)
-                                        .background(CurbBlack),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = userProfile.name.take(1).uppercase(Locale.ROOT),
-                                        color = CurbWhite,
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .align(Alignment.BottomEnd)
-                                        .clip(CircleShape)
-                                        .background(BentoPrimary),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = null,
-                                        tint = CurbWhite,
-                                        modifier = Modifier.size(10.dp)
-                                    )
-                                }
+                            // Avatar container
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(CircleShape)
+                                    .background(CurbBlack),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = userProfile.name.take(1).uppercase(Locale.ROOT),
+                                    color = CurbWhite,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
 
                             Column(
@@ -204,7 +184,7 @@ fun YouScreen(
                                 val subtitleText = if (userProfile.email.isNotBlank()) {
                                     userProfile.email
                                 } else {
-                                    "Tap to edit profile & details"
+                                    "Curb Account"
                                 }
 
                                 Text(
@@ -213,21 +193,6 @@ fun YouScreen(
                                     color = CurbOnSurfaceVariant
                                 )
                             }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(BentoSand.copy(alpha = 0.7f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = "Edit Profile",
-                                tint = BentoPrimaryDark,
-                                modifier = Modifier.size(18.dp)
-                            )
                         }
                     }
                 }

@@ -10,6 +10,7 @@ import com.example.data.model.DetectedSign
 import com.example.data.model.SampleSignPreset
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
+import com.example.util.SignCandidateValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -46,31 +47,8 @@ object GeminiService {
     }
 
     private fun createFallbackSignCrops(context: Context?, bitmap: Bitmap, count: Int): List<String> {
-        if (bitmap.isRecycled || bitmap.width < 10 || bitmap.height < 10 || count <= 0) return emptyList()
-        val cropsDir = if (context != null) {
-            java.io.File(context.cacheDir, "sign_crops").apply { if (!exists()) mkdirs() }
-        } else {
-            java.io.File(System.getProperty("java.io.tmpdir") ?: "/tmp", "sign_crops").apply { if (!exists()) mkdirs() }
-        }
-        val paths = mutableListOf<String>()
-        val sliceHeight = bitmap.height / count
-        for (i in 0 until count) {
-            val top = i * sliceHeight
-            val height = if (i == count - 1) bitmap.height - top else sliceHeight
-            try {
-                val cropped = Bitmap.createBitmap(bitmap, 0, top, bitmap.width, height)
-                val file = java.io.File(cropsDir, "fallback_crop_${System.currentTimeMillis()}_$i.jpg")
-                java.io.FileOutputStream(file).use { out ->
-                    cropped.compress(Bitmap.CompressFormat.JPEG, 95, out)
-                }
-                if (file.exists() && file.length() > 0) {
-                    paths.add(file.absolutePath)
-                }
-            } catch (e: Exception) {
-                // Ignore fallback crop errors
-            }
-        }
-        return paths
+        // Do NOT create synthetic fallback crops from full-image slices when no physical sign evidence exists
+        return emptyList()
     }
 
     suspend fun analyzeParkingSigns(
@@ -94,11 +72,13 @@ object GeminiService {
             "Location Context: Device location is unavailable. Analyze regulations strictly from the visible signs in the photo."
         }
 
-        val signContextText = if (localDetections.isNotEmpty()) {
+        val validDetections = localDetections.filter { SignCandidateValidator.validateOcr(it.ocrText).isValid }
+
+        val signContextText = if (validDetections.isNotEmpty()) {
             """
             SCANNED PARKING SIGNS:
-            ${localDetections.size} distinct sign plate(s) were captured at this parking spot:
-            ${localDetections.mapIndexed { idx, crop ->
+            ${validDetections.size} distinct sign plate(s) were captured at this parking spot:
+            ${validDetections.mapIndexed { idx, crop ->
                 "- Sign #${idx + 1} (${crop.normalizedBox.label}): Visible text: \"${crop.ocrText.replace("\n", " ")}\""
             }.joinToString("\n")}
             
@@ -108,7 +88,7 @@ object GeminiService {
             "Inspect the captured image to detect all parking signs and posted regulations at this location."
         }
 
-        val hasValidImages = (bitmap != null && !bitmap.isRecycled) || localDetections.any { 
+        val hasValidImages = (bitmap != null && !bitmap.isRecycled) || validDetections.any { 
             (!it.bitmap.isRecycled && it.bitmap.width > 0) || (it.fileUri.isNotBlank() && java.io.File(it.fileUri).exists()) 
         }
 
@@ -134,10 +114,11 @@ object GeminiService {
                     - Visual symbols and curb rules
                     - Stated exceptions (holidays, weekends)
                     
-                    ACCURACY RULES:
-                    - Rely strictly on visible text and symbols. Do NOT invent unreadable text or imagined rules.
-                    - If signs are conflicting, damaged, or unreadable, set verdict to "AMBIGUOUS".
-                    - If parking is not permitted right now, set verdict to "RESTRICTED".
+                    ACCURACY & SAFETY RULES:
+                    - CRITICAL: Never interpret URLs, web addresses, hashes, UUIDs, filenames, machine tokens, image metadata, or random alphanumeric noise as parking signs or rules.
+                    - Rely strictly on visible parking sign text and symbols. Do NOT invent unreadable text or imagined rules.
+                    - If signs are conflicting, damaged, unreadable, or insufficient, set verdict to "AMBIGUOUS" and explain that signage is unclear.
+                    - If parking is prohibited right now, set verdict to "RESTRICTED".
                     - If parking is permitted right now, set verdict to "ALLOWED".
                     
                     Return a strict JSON object with this exact structure:
@@ -172,8 +153,8 @@ object GeminiService {
                 partsArray.put(JSONObject().apply { put("text", prompt) })
 
                 // 1. Add real cropped sign images
-                if (localDetections.isNotEmpty()) {
-                    for (crop in localDetections) {
+                if (validDetections.isNotEmpty()) {
+                    for (crop in validDetections) {
                         val cropBmp = if (!crop.bitmap.isRecycled && crop.bitmap.width > 0) {
                             crop.bitmap
                         } else if (crop.fileUri.isNotBlank()) {
@@ -540,30 +521,34 @@ object GeminiService {
         isLocationKnown: Boolean = true,
         localDetections: List<LocalSignCrop> = emptyList()
     ): ScanResult {
-        if (localDetections.isNotEmpty()) {
+        val validDetections = localDetections.filter { SignCandidateValidator.validateOcr(it.ocrText).isValid }
+
+        if (validDetections.isNotEmpty()) {
             var hasRestriction = false
             var hasUnclear = false
             val parsedSigns = mutableListOf<DetectedSign>()
             val rulesList = mutableListOf<String>()
 
-            localDetections.forEachIndexed { idx, crop ->
+            validDetections.forEachIndexed { idx, crop ->
                 val text = crop.ocrText.uppercase()
                 val isRestrict = text.contains("TOW") || text.contains("CLEAN") || text.contains("SWEEP") || text.contains("NO PARK") || text.contains("NO STOP")
                 val isUnclear = text.contains("TEMP") || text.length < 5
                 if (isRestrict) hasRestriction = true
                 if (isUnclear) hasUnclear = true
 
+                val cleanRule = SignCandidateValidator.sanitizeOcrText(crop.ocrText)
+
                 parsedSigns.add(
                     DetectedSign(
                         id = crop.id,
-                        title = crop.normalizedBox.label,
+                        title = crop.normalizedBox.label.ifBlank { "Sign #${idx + 1}" },
                         subtitle = when {
                             text.contains("MON") || text.contains("FRI") -> "Mon–Fri posted schedule"
                             text.contains("TUE") -> "Tuesday scheduled window"
                             text.contains("DAILY") -> "Daily posted window"
                             else -> "Standard zone hours"
                         },
-                        ruleText = crop.ocrText.replace("\n", " ").take(70),
+                        ruleText = cleanRule,
                         isRestrictingNow = isRestrict,
                         rawText = crop.ocrText,
                         croppedImageUri = crop.fileUri,
@@ -571,7 +556,7 @@ object GeminiService {
                     )
                 )
 
-                rulesList.add("${crop.normalizedBox.label}: ${crop.ocrText.replace("\n", " ").take(50)}")
+                rulesList.add("${crop.normalizedBox.label}: $cleanRule")
             }
 
             val verdict = when {
