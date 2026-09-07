@@ -39,7 +39,8 @@ data class ParkingSessionEntity(
     val notes: String = "",
     val timerBasis: String = "",
     val parkingRuleSummary: String = "",
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val maxAllowedEndTimeMillis: Long? = null
 )
 
 @Entity(tableName = "saved_places")

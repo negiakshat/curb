@@ -74,13 +74,14 @@ data class ActiveParkingSession(
     val scanResultId: Long = 0,
     val locationName: String = "Parked Spot",
     val startTime: Long = System.currentTimeMillis(),
-    val endTime: Long = System.currentTimeMillis() + (120 * 60 * 1000), // 2h default
+    val endTime: Long = System.currentTimeMillis(),
     val allowedUntilTime: String = "",
     val reminderMinutesBefore: Int = 15,
     val notes: String = "",
     val timerBasis: String = "",
     val parkingRuleSummary: String = "",
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val maxAllowedEndTimeMillis: Long? = null
 ) {
     val remainingMillis: Long
         get() = (endTime - System.currentTimeMillis()).coerceAtLeast(0)

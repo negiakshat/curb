@@ -574,11 +574,13 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     fun startParkingSession(
         scanResultId: Long = 0,
         locationName: String = "Parked Spot",
-        durationMinutes: Int = 120,
+        durationMinutes: Int = 0,
         allowedUntilTime: String = "",
         notes: String = "",
         timerBasis: String = "",
-        parkingRuleSummary: String = ""
+        parkingRuleSummary: String = "",
+        scanResult: ScanResult? = null,
+        maxAllowedEndTimeMillis: Long? = null
     ) {
         viewModelScope.launch {
             repository.startParkingSession(
@@ -588,7 +590,9 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                 allowedUntilTime = allowedUntilTime,
                 notes = notes,
                 timerBasis = timerBasis,
-                parkingRuleSummary = parkingRuleSummary
+                parkingRuleSummary = parkingRuleSummary,
+                scanResult = scanResult,
+                maxAllowedEndTimeMillis = maxAllowedEndTimeMillis
             )
         }
     }

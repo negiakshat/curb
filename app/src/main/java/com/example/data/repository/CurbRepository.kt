@@ -14,6 +14,7 @@ import com.example.data.model.ParkingSpot
 import com.example.data.model.SavedPlace
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
+import com.example.util.ParkingTimerCalculator
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -101,29 +102,97 @@ class CurbRepository(context: Context) {
     }
 
     suspend fun startParkingSession(
-        scanResultId: Long,
-        locationName: String,
-        durationMinutes: Int,
-        allowedUntilTime: String,
+        scanResultId: Long = 0,
+        locationName: String = "Parked Spot",
+        durationMinutes: Int = 0,
+        allowedUntilTime: String = "",
         notes: String = "",
         timerBasis: String = "",
-        parkingRuleSummary: String = ""
+        parkingRuleSummary: String = "",
+        scanResult: ScanResult? = null,
+        maxAllowedEndTimeMillis: Long? = null
     ): Long {
-        // End any existing session
-        parkingSessionDao.endAllSessions()
         val now = System.currentTimeMillis()
-        val endTime = now + (durationMinutes * 60 * 1000L)
+
+        // 1. Resolve target scan result
+        val targetScan: ScanResult? = scanResult ?: if (scanResultId > 0) {
+            getScanById(scanResultId)
+        } else null
+
+        var canonicalMaxEndTime: Long? = maxAllowedEndTimeMillis
+        var finalTimerBasis = timerBasis
+        var finalRuleSummary = parkingRuleSummary
+        var finalAllowedUntil = allowedUntilTime
+
+        if (targetScan != null) {
+            // Must be ALLOWED verdict
+            if (targetScan.verdict != ScanVerdict.ALLOWED) {
+                return -1L // Reject AMBIGUOUS or RESTRICTED scans
+            }
+
+            val timerConfig = ParkingTimerCalculator.calculateConfig(targetScan, now)
+            if (!timerConfig.isValidAllowed) {
+                return -1L // Reject if duration/rule is unparseable or unknown
+            }
+
+            val computedMax = if (timerConfig.isUnrestricted) {
+                Long.MAX_VALUE
+            } else {
+                now + (timerConfig.calculatedMinutes * 60 * 1000L)
+            }
+
+            canonicalMaxEndTime = computedMax
+            if (finalTimerBasis.isBlank()) finalTimerBasis = timerConfig.timerBasis
+            if (finalRuleSummary.isBlank()) finalRuleSummary = timerConfig.ruleSummary
+            if (finalAllowedUntil.isBlank()) finalAllowedUntil = timerConfig.allowedUntilTimeFormatted
+        } else {
+            // No scan result provided
+            if (canonicalMaxEndTime == null) {
+                if (durationMinutes > 0) {
+                    // Quick timer preset or explicit duration
+                    canonicalMaxEndTime = now + (durationMinutes * 60 * 1000L)
+                } else {
+                    return -1L // No valid scan, no max authority, no duration -> Reject!
+                }
+            }
+        }
+
+        // Determine requested end time
+        val requestedEndTime = if (durationMinutes > 0) {
+            now + (durationMinutes * 60 * 1000L)
+        } else {
+            canonicalMaxEndTime ?: (now + 60 * 1000L)
+        }
+
+        // Clamp effective end time to canonical max authority
+        val effectiveEndTime = if (canonicalMaxEndTime != null) {
+            minOf(requestedEndTime, canonicalMaxEndTime)
+        } else {
+            requestedEndTime
+        }
+
+        if (effectiveEndTime <= now) {
+            return -1L
+        }
+
+        val sdf = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+        if (finalAllowedUntil.isBlank() && effectiveEndTime != Long.MAX_VALUE) {
+            finalAllowedUntil = sdf.format(java.util.Date(effectiveEndTime))
+        }
+
+        parkingSessionDao.endAllSessions()
         val entity = ParkingSessionEntity(
             scanResultId = scanResultId,
-            locationName = locationName,
+            locationName = if (locationName != "Parked Spot" || targetScan == null) locationName else targetScan.locationName,
             startTime = now,
-            endTime = endTime,
-            allowedUntilTime = allowedUntilTime,
+            endTime = effectiveEndTime,
+            allowedUntilTime = finalAllowedUntil,
             reminderMinutesBefore = 15,
             notes = notes,
-            timerBasis = timerBasis,
-            parkingRuleSummary = parkingRuleSummary,
-            isActive = true
+            timerBasis = finalTimerBasis,
+            parkingRuleSummary = finalRuleSummary,
+            isActive = true,
+            maxAllowedEndTimeMillis = canonicalMaxEndTime
         )
         return parkingSessionDao.insertSession(entity)
     }
@@ -132,11 +201,37 @@ class CurbRepository(context: Context) {
         parkingSessionDao.endSession(id)
     }
 
-    suspend fun extendActiveSession(id: Long, additionalMinutes: Int, currentEndTime: Long) {
-        val newEndTime = currentEndTime + (additionalMinutes * 60 * 1000L)
+    suspend fun extendActiveSession(
+        id: Long,
+        additionalMinutes: Int,
+        currentEndTime: Long = 0
+    ): Boolean {
+        val session = parkingSessionDao.getSessionById(id) ?: return false
+        if (!session.isActive) return false
+
+        val maxAllowed = session.maxAllowedEndTimeMillis ?: return false // No reliable max -> reject extension
+        val baseEndTime = if (currentEndTime > 0) currentEndTime else session.endTime
+
+        if (baseEndTime >= maxAllowed) {
+            return false // Already at or beyond maximum authority
+        }
+
+        val requestedNewEndTime = baseEndTime + (additionalMinutes * 60 * 1000L)
+        val clampedEndTime = minOf(requestedNewEndTime, maxAllowed)
+
+        if (clampedEndTime <= session.endTime) {
+            return false // Clamping yields no additional time
+        }
+
         val sdf = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
-        val newAllowedUntil = sdf.format(java.util.Date(newEndTime))
-        parkingSessionDao.extendSession(id, additionalMinutes * 60 * 1000L, newAllowedUntil)
+        val newAllowedUntil = sdf.format(java.util.Date(clampedEndTime))
+
+        val updatedSession = session.copy(
+            endTime = clampedEndTime,
+            allowedUntilTime = newAllowedUntil
+        )
+        parkingSessionDao.updateSession(updatedSession)
+        return true
     }
 
     suspend fun updateSessionReminder(id: Long, reminderMinutes: Int) {
@@ -266,7 +361,8 @@ class CurbRepository(context: Context) {
             notes = entity.notes,
             timerBasis = entity.timerBasis,
             parkingRuleSummary = entity.parkingRuleSummary,
-            isActive = entity.isActive
+            isActive = entity.isActive,
+            maxAllowedEndTimeMillis = entity.maxAllowedEndTimeMillis
         )
     }
 

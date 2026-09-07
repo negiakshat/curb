@@ -1037,6 +1037,11 @@ fun ParkingTimerScreen(
     // ==========================================
     if (showAddTimeSheet && activeSession != null) {
         val sheetState = rememberModalBottomSheetState()
+        val maxAllowed = activeSession.maxAllowedEndTimeMillis
+        val maxExtensionMillis = if (maxAllowed != null) {
+            if (maxAllowed == Long.MAX_VALUE) Long.MAX_VALUE else (maxAllowed - activeSession.endTime).coerceAtLeast(0L)
+        } else 0L
+
         ModalBottomSheet(
             onDismissRequest = { showAddTimeSheet = false },
             sheetState = sheetState,
@@ -1057,12 +1062,21 @@ fun ParkingTimerScreen(
                     color = TimerTextDark
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Choose how many minutes to add to your current session.",
-                    fontSize = 13.sp,
-                    color = TimerTextMuted,
-                    textAlign = TextAlign.Center
-                )
+                if (maxExtensionMillis <= 0L) {
+                    Text(
+                        text = "This session has reached the maximum authorized time limit for this spot. Extension is not permitted.",
+                        fontSize = 13.sp,
+                        color = TimerTextMuted,
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    Text(
+                        text = "Choose how many minutes to add to your current session.",
+                        fontSize = 13.sp,
+                        color = TimerTextMuted,
+                        textAlign = TextAlign.Center
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -1070,12 +1084,14 @@ fun ParkingTimerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    AddTimeOptionButton("+15 min", 15, modifier = Modifier.weight(1f)) {
+                    val canAdd15 = maxExtensionMillis >= 15 * 60 * 1000L
+                    AddTimeOptionButton("+15 min", 15, enabled = canAdd15, modifier = Modifier.weight(1f)) {
                         onExtendSession(activeSession.id, 15, activeSession.endTime)
                         showAddTimeSheet = false
                         Toast.makeText(context, "Added 15 minutes to session", Toast.LENGTH_SHORT).show()
                     }
-                    AddTimeOptionButton("+30 min", 30, modifier = Modifier.weight(1f)) {
+                    val canAdd30 = maxExtensionMillis >= 30 * 60 * 1000L
+                    AddTimeOptionButton("+30 min", 30, enabled = canAdd30, modifier = Modifier.weight(1f)) {
                         onExtendSession(activeSession.id, 30, activeSession.endTime)
                         showAddTimeSheet = false
                         Toast.makeText(context, "Added 30 minutes to session", Toast.LENGTH_SHORT).show()
@@ -1088,12 +1104,14 @@ fun ParkingTimerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    AddTimeOptionButton("+1 hour", 60, modifier = Modifier.weight(1f)) {
+                    val canAdd60 = maxExtensionMillis >= 60 * 60 * 1000L
+                    AddTimeOptionButton("+1 hour", 60, enabled = canAdd60, modifier = Modifier.weight(1f)) {
                         onExtendSession(activeSession.id, 60, activeSession.endTime)
                         showAddTimeSheet = false
                         Toast.makeText(context, "Added 1 hour to session", Toast.LENGTH_SHORT).show()
                     }
-                    AddTimeOptionButton("+2 hours", 120, modifier = Modifier.weight(1f)) {
+                    val canAdd120 = maxExtensionMillis >= 120 * 60 * 1000L
+                    AddTimeOptionButton("+2 hours", 120, enabled = canAdd120, modifier = Modifier.weight(1f)) {
                         onExtendSession(activeSession.id, 120, activeSession.endTime)
                         showAddTimeSheet = false
                         Toast.makeText(context, "Added 2 hours to session", Toast.LENGTH_SHORT).show()
@@ -1488,6 +1506,7 @@ private fun QuickPresetPill(
 private fun AddTimeOptionButton(
     text: String,
     minutes: Int,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
@@ -1495,10 +1514,10 @@ private fun AddTimeOptionButton(
         modifier = modifier
             .height(52.dp)
             .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() },
+            .clickable(enabled = enabled) { onClick() },
         shape = RoundedCornerShape(16.dp),
-        color = BentoCanvas,
-        border = BorderStroke(1.dp, BentoBorder)
+        color = if (enabled) BentoCanvas else BentoCanvas.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, if (enabled) BentoBorder else BentoBorder.copy(alpha = 0.4f))
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -1508,7 +1527,7 @@ private fun AddTimeOptionButton(
                 text = text,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = TimerTextDark
+                color = if (enabled) TimerTextDark else TimerTextMuted.copy(alpha = 0.5f)
             )
         }
     }

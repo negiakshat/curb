@@ -30,6 +30,9 @@ interface ParkingSessionDao {
     @Query("SELECT * FROM parking_sessions WHERE isActive = 1 ORDER BY endTime ASC LIMIT 1")
     fun getActiveSession(): Flow<ParkingSessionEntity?>
 
+    @Query("SELECT * FROM parking_sessions WHERE id = :id LIMIT 1")
+    suspend fun getSessionById(id: Long): ParkingSessionEntity?
+
     @Query("SELECT * FROM parking_sessions ORDER BY startTime DESC")
     fun getAllSessions(): Flow<List<ParkingSessionEntity>>
 
