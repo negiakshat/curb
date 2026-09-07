@@ -235,12 +235,12 @@ object GeminiService {
                             val title = signObj?.optString("title")?.ifBlank { null }
                                 ?: crop.normalizedBox.label.ifBlank { "Sign #${i + 1}" }
                             val subtitle = signObj?.optString("subtitle")?.ifBlank { null }
-                                ?: "Mon–Fri • Posted Schedule"
+                                ?: ""
                             val daysHours = signObj?.optString("applicableDaysHours")?.ifBlank { null }
                                 ?: subtitle
                             val restrictions = signObj?.optString("restrictions")?.ifBlank { null }
                                 ?: signObj?.optString("ruleText")?.ifBlank { null }
-                                ?: "Standard parking regulations apply."
+                                ?: crop.ocrText.ifBlank { "Unspecified rule" }
                             val exceptions = signObj?.optString("exceptions")?.ifBlank { null }
                                 ?: ""
                             val isRestrictingNow = signObj?.optBoolean("isRestrictingNow") ?: false
@@ -285,7 +285,7 @@ object GeminiService {
                         detectedSigns = signsList,
                         zoneType = parsed.optString("zoneType", "Parking zone"),
                         paymentInfo = parsed.optString("paymentInfo", ""),
-                        vehicleApplicability = parsed.optString("vehicleApplicability", "Standard passenger vehicles")
+                        vehicleApplicability = parsed.optString("vehicleApplicability", "")
                     )
 
                     return@withContext enforceEvidenceGatedVerdict(parsedResult, validDetections)
@@ -328,8 +328,29 @@ object GeminiService {
                 timeRemaining = "--",
                 parkingRules = listOf("No verified parking rule has been established."),
                 explanation = explanationText,
-                detectedSigns = emptyList()
+                detectedSigns = emptyList(),
+                paymentInfo = "",
+                vehicleApplicability = ""
             )
+        }
+
+        if (rawScanResult.verdict == ScanVerdict.ALLOWED) {
+            val hasValidRules = rawScanResult.parkingRules.isNotEmpty() &&
+                    rawScanResult.parkingRules.none { it.contains("No verified parking rule") }
+            val hasValidTimeOrUnrestricted = (rawScanResult.allowedUntilTime.isNotBlank() &&
+                    rawScanResult.allowedUntilTime != "Verify physical signage") ||
+                    rawScanResult.parkingRules.any { it.contains("unrestricted", ignoreCase = true) || it.contains("no time limit", ignoreCase = true) }
+
+            if (!hasValidRules || !hasValidTimeOrUnrestricted) {
+                return rawScanResult.copy(
+                    verdict = ScanVerdict.AMBIGUOUS,
+                    statusChipText = "Signage unclear",
+                    allowedUntilTime = "Verify physical signage",
+                    timeRemaining = "--",
+                    parkingRules = if (hasValidRules) rawScanResult.parkingRules else listOf("No verified parking rule has been established."),
+                    explanation = "Signage was detected, but no specific parking permissions or time limits were established from the sign evidence."
+                )
+            }
         }
         return rawScanResult
     }
@@ -534,15 +555,22 @@ object GeminiService {
         if (validDetections.isNotEmpty()) {
             var hasRestriction = false
             var hasUnclear = false
+            var hasExplicitPermission = false
+            var hasPaymentMention = false
             val parsedSigns = mutableListOf<DetectedSign>()
             val rulesList = mutableListOf<String>()
 
             validDetections.forEachIndexed { idx, crop ->
-                val text = crop.ocrText.uppercase()
+                val text = crop.ocrText.uppercase(Locale.ROOT)
                 val isRestrict = text.contains("TOW") || text.contains("CLEAN") || text.contains("SWEEP") || text.contains("NO PARK") || text.contains("NO STOP")
                 val isUnclear = text.contains("TEMP") || text.length < 5
+                val isPermitOrTime = text.contains("PARK") || text.contains("HR") || text.contains("HOUR") || text.contains("MIN") || text.contains("PERMIT") || text.contains("ALLOWED")
+                val isPayment = text.contains("METER") || text.contains("PAY") || text.contains("RATE") || text.contains("COIN") || text.contains("FEE")
+
                 if (isRestrict) hasRestriction = true
                 if (isUnclear) hasUnclear = true
+                if (isPermitOrTime) hasExplicitPermission = true
+                if (isPayment) hasPaymentMention = true
 
                 val cleanRule = SignCandidateValidator.sanitizeOcrText(crop.ocrText)
 
@@ -554,7 +582,7 @@ object GeminiService {
                             text.contains("MON") || text.contains("FRI") -> "Mon–Fri posted schedule"
                             text.contains("TUE") -> "Tuesday scheduled window"
                             text.contains("DAILY") -> "Daily posted window"
-                            else -> "Standard zone hours"
+                            else -> ""
                         },
                         ruleText = cleanRule,
                         isRestrictingNow = isRestrict,
@@ -564,13 +592,14 @@ object GeminiService {
                     )
                 )
 
-                rulesList.add("${crop.normalizedBox.label}: $cleanRule")
+                rulesList.add("${crop.normalizedBox.label.ifBlank { "Sign #${idx + 1}" }}: $cleanRule")
             }
 
             val verdict = when {
                 hasRestriction -> ScanVerdict.RESTRICTED
                 hasUnclear -> ScanVerdict.AMBIGUOUS
-                else -> ScanVerdict.ALLOWED
+                hasExplicitPermission -> ScanVerdict.ALLOWED
+                else -> ScanVerdict.AMBIGUOUS
             }
 
             val res = ScanResult(
@@ -587,9 +616,9 @@ object GeminiService {
                     ScanVerdict.AMBIGUOUS -> "Some signage text was unclear or partially obscured. Please verify the physical signs before leaving your vehicle."
                 },
                 detectedSigns = parsedSigns,
-                zoneType = if (verdict == ScanVerdict.ALLOWED) "Metered parking zone" else "Restricted zone",
-                paymentInfo = if (verdict == ScanVerdict.ALLOWED) "Pay at meter or pay station" else "",
-                vehicleApplicability = "Standard passenger vehicles"
+                zoneType = if (hasPaymentMention) "Metered parking zone" else if (verdict == ScanVerdict.RESTRICTED) "Restricted zone" else "Parking zone",
+                paymentInfo = if (hasPaymentMention) "Pay at meter or pay station" else "",
+                vehicleApplicability = ""
             )
             return enforceEvidenceGatedVerdict(res, validDetections)
         }
@@ -614,7 +643,7 @@ object GeminiService {
             detectedSigns = emptyList(),
             zoneType = "Parking zone",
             paymentInfo = "",
-            vehicleApplicability = "Standard passenger vehicles"
+            vehicleApplicability = ""
         )
         return enforceEvidenceGatedVerdict(emptyRes, validDetections)
     }

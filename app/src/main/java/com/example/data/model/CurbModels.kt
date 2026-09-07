@@ -65,7 +65,7 @@ data class ScanResult(
     val detectedSigns: List<DetectedSign> = emptyList(),
     val zoneType: String = "Parking zone",
     val paymentInfo: String = "",
-    val vehicleApplicability: String = "Standard passenger vehicles",
+    val vehicleApplicability: String = "",
     val imageUri: String? = null
 )
 

@@ -393,7 +393,19 @@ fun CurbApp(
 
                 // 07. SCAN OUTPUT
                 composable(Routes.SCAN_OUTPUT) {
-                    val currentScan = currentScanResult ?: recentScans.firstOrNull() ?: com.example.data.remote.GeminiService.generateIntelligentScanResult("Mission Street")
+                    val currentScan = currentScanResult ?: recentScans.firstOrNull() ?: com.example.data.model.ScanResult(
+                        locationName = "Location unavailable",
+                        verdict = com.example.data.model.ScanVerdict.AMBIGUOUS,
+                        statusChipText = "Signage unclear",
+                        allowedUntilTime = "Verify physical signage",
+                        timeRemaining = "--",
+                        parkingRules = listOf("No verified parking rule has been established."),
+                        explanation = "No active scan result available. Please capture a parking sign photo.",
+                        detectedSigns = emptyList(),
+                        zoneType = "Parking zone",
+                        paymentInfo = "",
+                        vehicleApplicability = ""
+                    )
                     val currentScanNote = allNotes.firstOrNull {
                         it.targetType == com.example.data.model.CurbNote.TARGET_SCAN_RESULT && it.targetId == currentScan.id
                     }
@@ -444,7 +456,19 @@ fun CurbApp(
 
                 // 08. PARKING DETAILS
                 composable(Routes.PARKING_DETAILS) {
-                    val currentScan = currentScanResult ?: recentScans.firstOrNull() ?: com.example.data.remote.GeminiService.generateIntelligentScanResult("Mission Street")
+                    val currentScan = currentScanResult ?: recentScans.firstOrNull() ?: com.example.data.model.ScanResult(
+                        locationName = "Location unavailable",
+                        verdict = com.example.data.model.ScanVerdict.AMBIGUOUS,
+                        statusChipText = "Signage unclear",
+                        allowedUntilTime = "Verify physical signage",
+                        timeRemaining = "--",
+                        parkingRules = listOf("No verified parking rule has been established."),
+                        explanation = "No active scan result available. Please capture a parking sign photo.",
+                        detectedSigns = emptyList(),
+                        zoneType = "Parking zone",
+                        paymentInfo = "",
+                        vehicleApplicability = ""
+                    )
                     val currentScanNote = allNotes.firstOrNull {
                         it.targetType == com.example.data.model.CurbNote.TARGET_SCAN_RESULT && it.targetId == currentScan.id
                     }

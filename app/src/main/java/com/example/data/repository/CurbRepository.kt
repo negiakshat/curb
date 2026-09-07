@@ -304,25 +304,34 @@ class CurbRepository(context: Context) {
             emptyList()
         }
 
-        val verdict = try {
+        var verdict = try {
             ScanVerdict.valueOf(entity.verdict)
         } catch (e: Exception) {
             ScanVerdict.AMBIGUOUS
         }
 
+        val finalRules = if (rules.isNotEmpty()) rules else listOf("No verified parking rule has been established.")
+        val finalAllowedUntil = entity.allowedUntilTime.ifBlank { "Verify physical signage" }
+        val finalExplanation = entity.explanation.ifBlank { "Parking rules could not be determined from verified sign evidence." }
+        val finalStatusChip = entity.statusChipText.ifBlank { "Signage unclear" }
+
+        if (verdict == ScanVerdict.ALLOWED && (rules.isEmpty() || rules.all { it.contains("No verified parking rule") })) {
+            verdict = ScanVerdict.AMBIGUOUS
+        }
+
         return ScanResult(
             id = entity.id,
             timestamp = entity.timestamp,
-            locationName = entity.locationName,
+            locationName = entity.locationName.ifBlank { "Location unavailable" },
             cityState = entity.cityState,
             verdict = verdict,
-            statusChipText = entity.statusChipText,
-            allowedUntilTime = entity.allowedUntilTime,
-            timeRemaining = entity.timeRemaining,
-            parkingRules = rules,
-            explanation = entity.explanation,
+            statusChipText = finalStatusChip,
+            allowedUntilTime = finalAllowedUntil,
+            timeRemaining = entity.timeRemaining.ifBlank { "--" },
+            parkingRules = finalRules,
+            explanation = finalExplanation,
             detectedSigns = signs,
-            zoneType = entity.zoneType,
+            zoneType = entity.zoneType.ifBlank { "Parking zone" },
             paymentInfo = entity.paymentInfo,
             vehicleApplicability = entity.vehicleApplicability,
             imageUri = entity.imageUri
