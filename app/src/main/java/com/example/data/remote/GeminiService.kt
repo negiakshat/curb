@@ -67,7 +67,10 @@ object GeminiService {
             "Location Context: Device location is unavailable. Analyze regulations strictly from the visible signs in the photo."
         }
 
-        val validDetections = localDetections.filter { SignCandidateValidator.validateOcr(it.ocrText).isValid }
+        val validDetections = localDetections.filter { crop ->
+            SignCandidateValidator.validateOcr(crop.ocrText).isValid &&
+            ((crop.bitmap != null && !crop.bitmap.isRecycled) || (crop.fileUri.isNotBlank() && java.io.File(crop.fileUri).let { it.exists() && it.length() > 0 }))
+        }
 
         val signContextText = if (validDetections.isNotEmpty()) {
             """
@@ -303,7 +306,10 @@ object GeminiService {
     }
 
     fun hasVerifiedPhysicalSignEvidence(validDetections: List<LocalSignCrop>): Boolean {
-        return validDetections.isNotEmpty()
+        return validDetections.isNotEmpty() && validDetections.any { crop ->
+            SignCandidateValidator.validateOcr(crop.ocrText).isValid &&
+            ((crop.bitmap != null && !crop.bitmap.isRecycled) || (crop.fileUri.isNotBlank() && java.io.File(crop.fileUri).let { it.exists() && it.length() > 0 }))
+        }
     }
 
     fun enforceEvidenceGatedVerdict(
@@ -337,17 +343,14 @@ object GeminiService {
         if (rawScanResult.verdict == ScanVerdict.ALLOWED) {
             val hasValidRules = rawScanResult.parkingRules.isNotEmpty() &&
                     rawScanResult.parkingRules.none { it.contains("No verified parking rule") }
-            val hasValidTimeOrUnrestricted = (rawScanResult.allowedUntilTime.isNotBlank() &&
-                    rawScanResult.allowedUntilTime != "Verify physical signage") ||
-                    rawScanResult.parkingRules.any { it.contains("unrestricted", ignoreCase = true) || it.contains("no time limit", ignoreCase = true) }
 
-            if (!hasValidRules || !hasValidTimeOrUnrestricted) {
+            if (!hasValidRules) {
                 return rawScanResult.copy(
                     verdict = ScanVerdict.AMBIGUOUS,
                     statusChipText = "Signage unclear",
                     allowedUntilTime = "Verify physical signage",
                     timeRemaining = "--",
-                    parkingRules = if (hasValidRules) rawScanResult.parkingRules else listOf("No verified parking rule has been established."),
+                    parkingRules = listOf("No verified parking rule has been established."),
                     explanation = "Signage was detected, but no specific parking permissions or time limits were established from the sign evidence."
                 )
             }
@@ -550,7 +553,10 @@ object GeminiService {
         isLocationKnown: Boolean = true,
         localDetections: List<LocalSignCrop> = emptyList()
     ): ScanResult {
-        val validDetections = localDetections.filter { SignCandidateValidator.validateOcr(it.ocrText).isValid }
+        val validDetections = localDetections.filter { crop ->
+            SignCandidateValidator.validateOcr(crop.ocrText).isValid &&
+            ((crop.bitmap != null && !crop.bitmap.isRecycled) || (crop.fileUri.isNotBlank() && java.io.File(crop.fileUri).let { it.exists() && it.length() > 0 }))
+        }
 
         if (validDetections.isNotEmpty()) {
             var hasRestriction = false

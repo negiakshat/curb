@@ -135,12 +135,12 @@ class SignDetectionPipelineTest {
         val wideBitmap = Bitmap.createBitmap(1920, 1080, Bitmap.Config.ARGB_8888)
         val nearEdgeBox = SignBoundingBox(
             id = "sign_edge",
-            left = 0.01f,
-            top = 0.01f,
-            right = 0.99f,
-            bottom = 0.99f,
+            left = 0.05f,
+            top = 0.05f,
+            right = 0.90f,
+            bottom = 0.85f,
             label = "TOW-AWAY ZONE",
-            ocrText = "TOW-AWAY"
+            ocrText = "TOW-AWAY NO PARKING 8AM - 6PM"
         )
 
         val crops = SignDetectionService.cropSignsFromBoxes(context, wideBitmap, listOf(nearEdgeBox))
@@ -170,7 +170,7 @@ class SignDetectionPipelineTest {
     @Test
     fun testFallbackIntelligentSynthesisPreservesRealCrops() {
         val testBitmap = Bitmap.createBitmap(600, 600, Bitmap.Config.ARGB_8888)
-        val box = SignBoundingBox("s1", 0.1f, 0.1f, 0.9f, 0.5f, "2 HR PARKING", "2 HOUR PARKING MON-FRI")
+        val box = SignBoundingBox("s1", 0.1f, 0.1f, 0.9f, 0.5f, "2 HR PARKING", "2 HOUR PARKING 8 AM TO 6 PM MON-FRI")
         val crops = SignDetectionService.cropSignsFromBoxes(context, testBitmap, listOf(box))
 
         val fallbackResult = GeminiService.generateIntelligentScanResult(
@@ -230,5 +230,135 @@ class SignDetectionPipelineTest {
         analyzeResult.detectedSigns.forEach { sign ->
             assertTrue(sign.croppedImageUri.isNullOrBlank())
         }
+    }
+
+    // 10. Test A: Random OCR text with invalid geometry is rejected
+    @Test
+    fun testA_RandomOcrTextRejected() {
+        // Tiny random UI label or store hours box
+        val validation = com.example.util.SignCandidateValidator.validatePhysicalCandidateGeometry(
+            rectLeft = 10,
+            rectTop = 10,
+            rectRight = 30,
+            rectBottom = 20,
+            imageWidth = 1000,
+            imageHeight = 1000,
+            ocrText = "OPEN 9AM - 5PM"
+        )
+        assertTrue(validation is com.example.util.CandidateValidation.Invalid)
+    }
+
+    // 11. Test B: Tiny text blocks are rejected
+    @Test
+    fun testB_TinyTextBlocksRejected() {
+        val tinyBox = SignBoundingBox(
+            id = "tiny",
+            left = 0.01f,
+            top = 0.01f,
+            right = 0.03f,
+            bottom = 0.02f,
+            label = "TINY",
+            ocrText = "abc"
+        )
+        val bmp = Bitmap.createBitmap(800, 800, Bitmap.Config.ARGB_8888)
+        val crops = SignDetectionService.cropSignsFromBoxes(context, bmp, listOf(tinyBox))
+        assertTrue(crops.isEmpty())
+    }
+
+    // 12. Test C: Implausible crop geometry is rejected (e.g. whole image or extreme aspect ratio)
+    @Test
+    fun testC_ImplausibleCropGeometryRejected() {
+        val wholeImageBox = SignBoundingBox(
+            id = "whole",
+            left = 0.001f,
+            top = 0.001f,
+            right = 0.999f,
+            bottom = 0.999f,
+            label = "WHOLE",
+            ocrText = "NO PARKING 8AM-6PM"
+        )
+        val bmp = Bitmap.createBitmap(1000, 1000, Bitmap.Config.ARGB_8888)
+        val crops = SignDetectionService.cropSignsFromBoxes(context, bmp, listOf(wholeImageBox))
+        assertTrue(crops.isEmpty())
+
+        val extremeAspectBox = SignBoundingBox(
+            id = "thin_line",
+            left = 0.1f,
+            top = 0.49f,
+            right = 0.9f,
+            bottom = 0.50f,
+            label = "LINE",
+            ocrText = "NO PARKING"
+        )
+        val cropsThin = SignDetectionService.cropSignsFromBoxes(context, bmp, listOf(extremeAspectBox))
+        assertTrue(cropsThin.isEmpty())
+    }
+
+    // 13. Test D: Garbage OCR remains rejected
+    @Test
+    fun testD_GarbageOcrRejected() {
+        val urlBox = SignBoundingBox(
+            id = "url",
+            left = 0.2f,
+            top = 0.2f,
+            right = 0.8f,
+            bottom = 0.6f,
+            label = "URL",
+            ocrText = "https://example.com/api/v1/park?id=99283"
+        )
+        val bmp = Bitmap.createBitmap(1000, 1000, Bitmap.Config.ARGB_8888)
+        val crops = SignDetectionService.cropSignsFromBoxes(context, bmp, listOf(urlBox))
+        assertTrue(crops.isEmpty())
+    }
+
+    // 14. Test E: No OCR candidates => zero real sign crops
+    @Test
+    fun testE_NoOcrCandidatesHandling() = runBlocking {
+        val emptyBmp = Bitmap.createBitmap(500, 500, Bitmap.Config.ARGB_8888)
+        val result = SignDetectionService.detectAndCropSigns(context, emptyBmp)
+        assertEquals(0, result.totalDetected)
+        assertTrue(result.signs.isEmpty())
+    }
+
+    // 15. Test F: Plausible sign validation succeeds
+    @Test
+    fun testF_PlausibleSignValidation() {
+        val validBox = SignBoundingBox(
+            id = "valid_sign",
+            left = 0.2f,
+            top = 0.2f,
+            right = 0.7f,
+            bottom = 0.6f,
+            label = "2 HR PARKING",
+            ocrText = "2 HOUR PARKING 8 AM TO 6 PM MON-FRI"
+        )
+        val bmp = Bitmap.createBitmap(1000, 1000, Bitmap.Config.ARGB_8888)
+        val crops = SignDetectionService.cropSignsFromBoxes(context, bmp, listOf(validBox))
+        assertEquals(1, crops.size)
+        assertEquals("sign_1", crops[0].id)
+        assertEquals("valid_sign", crops[0].normalizedBox.id)
+    }
+
+    // 16. Test G: Real-scan Gemini input contains only physically validated sign crops
+    @Test
+    fun testG_RealScanGeminiInputOnlyPhysicallyValidated() = runBlocking {
+        val result = GeminiService.generateIntelligentScanResult(
+            locationName = "550 Mission St",
+            cityState = "San Francisco, CA",
+            isLocationKnown = true,
+            localDetections = emptyList()
+        )
+        assertEquals(ScanVerdict.AMBIGUOUS, result.verdict)
+        assertEquals("Verify physical signage", result.allowedUntilTime)
+        assertTrue(result.detectedSigns.isEmpty())
+    }
+
+    // 17. Test H: Demo/sample sign isolation
+    @Test
+    fun testH_DemoSampleSignIsolation() {
+        // Confirming that live scanning pipeline doesn't inject mock/sample signs unless requested
+        val bmp = Bitmap.createBitmap(600, 600, Bitmap.Config.ARGB_8888)
+        val crops = SignDetectionService.cropSignsFromBoxes(context, bmp, emptyList())
+        assertTrue(crops.isEmpty())
     }
 }

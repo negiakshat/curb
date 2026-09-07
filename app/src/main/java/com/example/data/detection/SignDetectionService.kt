@@ -45,6 +45,27 @@ data class LocalDetectionResult(
     val rawSummary: String
 )
 
+/**
+ * Phase 1 Candidate Generation Signal: Raw OCR text block region.
+ * OCR text alone is ONLY a candidate signal, NOT proof of a physical sign.
+ */
+data class OcrCandidateBox(
+    val rect: Rect,
+    val text: String,
+    val confidence: Float
+)
+
+/**
+ * Phase 2 Candidate Validation Signal: A physically grounded candidate that has satisfied
+ * geometry, relative area, aspect ratio, and OCR validity rules.
+ */
+data class PhysicallyValidatedSignCandidate(
+    val id: String,
+    val ocrCandidate: OcrCandidateBox,
+    val paddedCropRect: Rect,
+    val isUncertain: Boolean = false
+)
+
 data class InternalSignDetection(
     val id: String,
     val boundingBox: RectF,
@@ -128,86 +149,117 @@ object SignDetectionService {
         }
 
         val blocks = visionText?.textBlocks ?: emptyList()
-        val clusteredBoxes = if (blocks.isNotEmpty()) {
+
+        // Phase 1 Candidate Generation: Raw OCR text block regions
+        val ocrCandidates: List<OcrCandidateBox> = if (blocks.isNotEmpty()) {
             clusterTextBlocks(blocks, bitmap.width, bitmap.height)
         } else emptyList()
+
+        if (ocrCandidates.isEmpty()) {
+            return@withContext LocalDetectionResult(emptyList(), 0, "No parking sign detected.")
+        }
 
         val cropsDir = File(context.cacheDir, "sign_crops").apply {
             if (!exists()) mkdirs()
         }
 
+        val bmpWidth = bitmap.width
+        val bmpHeight = bitmap.height
+
+        // Phase 2 Physical Candidate Validation Layer
+        val validatedCandidates = mutableListOf<PhysicallyValidatedSignCandidate>()
+
+        ocrCandidates.forEachIndexed { index, candidate ->
+            val validation = SignCandidateValidator.validatePhysicalCandidateGeometry(
+                rectLeft = candidate.rect.left,
+                rectTop = candidate.rect.top,
+                rectRight = candidate.rect.right,
+                rectBottom = candidate.rect.bottom,
+                imageWidth = bmpWidth,
+                imageHeight = bmpHeight,
+                ocrText = candidate.text
+            )
+
+            if (!validation.isValid) {
+                val reason = (validation as? CandidateValidation.Invalid)?.reason ?: "Failed physical candidate validation"
+                android.util.Log.d("CurbPipeline", "Rejecting OCR candidate box #${index + 1}: $reason")
+                return@forEachIndexed
+            }
+
+            // Context-preserving padding around physical candidate box (18% padding for sign border)
+            val rect = candidate.rect
+            val padX = (rect.width() * 0.18f).toInt().coerceAtLeast(20)
+            val padY = (rect.height() * 0.18f).toInt().coerceAtLeast(20)
+
+            val cropLeft = (rect.left - padX).coerceIn(0, bmpWidth - 1)
+            val cropTop = (rect.top - padY).coerceIn(0, bmpHeight - 1)
+            val cropRight = (rect.right + padX).coerceIn(cropLeft + 1, bmpWidth)
+            val cropBottom = (rect.bottom + padY).coerceIn(cropTop + 1, bmpHeight)
+
+            val cleanText = candidate.text.trim()
+            val isSparseText = cleanText.length <= 6 || !SignCandidateValidator.containsExplicitParkingRule(cleanText)
+
+            validatedCandidates.add(
+                PhysicallyValidatedSignCandidate(
+                    id = "sign_${validatedCandidates.size + 1}",
+                    ocrCandidate = candidate,
+                    paddedCropRect = Rect(cropLeft, cropTop, cropRight, cropBottom),
+                    isUncertain = isSparseText
+                )
+            )
+        }
+
+        if (validatedCandidates.isEmpty()) {
+            return@withContext LocalDetectionResult(emptyList(), 0, "No parking sign detected.")
+        }
+
+        // Phase 3 Bounded Sign Crop Creation
         val signCrops = mutableListOf<LocalSignCrop>()
-        val bmpWidth = bitmap.width.toFloat()
-        val bmpHeight = bitmap.height.toFloat()
+        validatedCandidates.forEach { candidate ->
+            val cropRect = candidate.paddedCropRect
+            val cropWidth = cropRect.width()
+            val cropHeight = cropRect.height()
 
-        if (clusteredBoxes.isNotEmpty()) {
-            clusteredBoxes.forEachIndexed { index, cluster ->
-                // Validate OCR content: Reject URLs, hashes, UUIDs, code, and non-parking garbage
-                val ocrValidation = SignCandidateValidator.validateOcr(cluster.text)
-                if (!ocrValidation.isValid) {
-                    android.util.Log.d("CurbPipeline", "Rejecting garbage OCR block: '${cluster.text.take(30)}' (${(ocrValidation as? CandidateValidation.Invalid)?.reason})")
-                    return@forEachIndexed
-                }
+            try {
+                val croppedBmp = Bitmap.createBitmap(bitmap, cropRect.left, cropRect.top, cropWidth, cropHeight)
+                if (!croppedBmp.isRecycled && croppedBmp.width > 0 && croppedBmp.height > 0) {
+                    val cropFile = File(cropsDir, "crop_${System.currentTimeMillis()}_${candidate.id}.jpg")
+                    FileOutputStream(cropFile).use { out ->
+                        croppedBmp.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                    }
 
-                val signId = "sign_${signCrops.size + 1}"
-                val rect = cluster.rect
+                    if (cropFile.exists() && cropFile.length() > 0) {
+                        val normalizedBox = SignBoundingBox(
+                            id = candidate.id,
+                            left = cropRect.left.toFloat() / bmpWidth.toFloat(),
+                            top = cropRect.top.toFloat() / bmpHeight.toFloat(),
+                            right = cropRect.right.toFloat() / bmpWidth.toFloat(),
+                            bottom = cropRect.bottom.toFloat() / bmpHeight.toFloat(),
+                            label = determineSignLabel(candidate.ocrCandidate.text),
+                            ocrText = candidate.ocrCandidate.text,
+                            confidence = if (candidate.isUncertain) 0.50f else candidate.ocrCandidate.confidence,
+                            sourceWidth = bmpWidth.toFloat(),
+                            sourceHeight = bmpHeight.toFloat()
+                        )
 
-                // Generous padding around bounding box (18% padding to capture full physical sign border)
-                val padX = (rect.width() * 0.18f).toInt().coerceAtLeast(24)
-                val padY = (rect.height() * 0.18f).toInt().coerceAtLeast(24)
-
-                val cropLeft = (rect.left - padX).coerceIn(0, bitmap.width - 1)
-                val cropTop = (rect.top - padY).coerceIn(0, bitmap.height - 1)
-                val cropRight = (rect.right + padX).coerceIn(cropLeft + 1, bitmap.width)
-                val cropBottom = (rect.bottom + padY).coerceIn(cropTop + 1, bitmap.height)
-
-                val cropWidth = cropRight - cropLeft
-                val cropHeight = cropBottom - cropTop
-
-                // Validate crop rectangle
-                if (cropWidth >= 30 && cropHeight >= 30 && cropLeft >= 0 && cropTop >= 0 && cropRight <= bitmap.width && cropBottom <= bitmap.height) {
-                    try {
-                        val croppedBmp = Bitmap.createBitmap(bitmap, cropLeft, cropTop, cropWidth, cropHeight)
-                        if (!croppedBmp.isRecycled && croppedBmp.width > 0 && croppedBmp.height > 0) {
-                            val cropFile = File(cropsDir, "crop_${System.currentTimeMillis()}_$signId.jpg")
-                            FileOutputStream(cropFile).use { out ->
-                                croppedBmp.compress(Bitmap.CompressFormat.JPEG, 95, out)
-                            }
-
-                            if (cropFile.exists() && cropFile.length() > 0) {
-                                val normalizedBox = SignBoundingBox(
-                                    id = signId,
-                                    left = cropLeft / bmpWidth,
-                                    top = cropTop / bmpHeight,
-                                    right = cropRight / bmpWidth,
-                                    bottom = cropBottom / bmpHeight,
-                                    label = determineSignLabel(cluster.text),
-                                    ocrText = cluster.text,
-                                    confidence = cluster.confidence,
-                                    sourceWidth = bmpWidth,
-                                    sourceHeight = bmpHeight
-                                )
-
-                                signCrops.add(
-                                    LocalSignCrop(
-                                        id = signId,
-                                        normalizedBox = normalizedBox,
-                                        ocrText = cluster.text,
-                                        fileUri = cropFile.absolutePath,
-                                        bitmap = croppedBmp
-                                    )
-                                )
-                            }
-                        }
-                    } catch (e: Exception) {
-                        // Ignore individual crop failure
+                        signCrops.add(
+                            LocalSignCrop(
+                                id = candidate.id,
+                                normalizedBox = normalizedBox,
+                                ocrText = candidate.ocrCandidate.text,
+                                fileUri = cropFile.absolutePath,
+                                bitmap = croppedBmp
+                            )
+                        )
                     }
                 }
+            } catch (e: Exception) {
+                // Ignore individual crop failure
             }
         }
 
         val summary = if (signCrops.isNotEmpty()) {
-            "Found ${signCrops.size} sign(s): " + signCrops.joinToString("; ") { "[${it.normalizedBox.label}]: \"${it.ocrText.replace("\n", " ").take(40)}\"" }
+            "Validated ${signCrops.size} physical sign candidate(s): " + signCrops.joinToString("; ") { "[${it.normalizedBox.label}]: \"${it.ocrText.replace("\n", " ").take(40)}\"" }
         } else {
             "No parking sign detected."
         }
@@ -220,7 +272,8 @@ object SignDetectionService {
     }
 
     /**
-     * Crops regions from the captured bitmap using normalized bounding boxes (e.g. from live camera detection)
+     * Crops regions from the captured bitmap using normalized bounding boxes (e.g. from live camera detection),
+     * enforcing strict physical candidate validation before crop generation.
      */
     fun cropSignsFromBoxes(
         context: Context,
@@ -236,26 +289,37 @@ object SignDetectionService {
         }
 
         val crops = mutableListOf<LocalSignCrop>()
-        val bmpWidth = bitmap.width.toFloat()
-        val bmpHeight = bitmap.height.toFloat()
+        val bmpWidth = bitmap.width
+        val bmpHeight = bitmap.height
 
         boxes.forEachIndexed { index, box ->
-            if (!SignCandidateValidator.validateOcr(box.ocrText).isValid) {
-                return@forEachIndexed
-            }
-            val signId = "sign_${crops.size + 1}"
             val rawLeft = (box.left * bmpWidth).toInt()
             val rawTop = (box.top * bmpHeight).toInt()
             val rawRight = (box.right * bmpWidth).toInt()
             val rawBottom = (box.bottom * bmpHeight).toInt()
 
-            val padX = ((rawRight - rawLeft) * 0.12f).toInt().coerceAtLeast(14)
-            val padY = ((rawBottom - rawTop) * 0.12f).toInt().coerceAtLeast(14)
+            val validation = SignCandidateValidator.validatePhysicalCandidateGeometry(
+                rectLeft = rawLeft,
+                rectTop = rawTop,
+                rectRight = rawRight,
+                rectBottom = rawBottom,
+                imageWidth = bmpWidth,
+                imageHeight = bmpHeight,
+                ocrText = box.ocrText
+            )
 
-            val cropLeft = (rawLeft - padX).coerceIn(0, bitmap.width - 1)
-            val cropTop = (rawTop - padY).coerceIn(0, bitmap.height - 1)
-            val cropRight = (rawRight + padX).coerceIn(cropLeft + 1, bitmap.width)
-            val cropBottom = (rawBottom + padY).coerceIn(cropTop + 1, bitmap.height)
+            if (!validation.isValid) {
+                return@forEachIndexed
+            }
+
+            val signId = "sign_${crops.size + 1}"
+            val padX = ((rawRight - rawLeft) * 0.15f).toInt().coerceAtLeast(14)
+            val padY = ((rawBottom - rawTop) * 0.15f).toInt().coerceAtLeast(14)
+
+            val cropLeft = (rawLeft - padX).coerceIn(0, bmpWidth - 1)
+            val cropTop = (rawTop - padY).coerceIn(0, bmpHeight - 1)
+            val cropRight = (rawRight + padX).coerceIn(cropLeft + 1, bmpWidth)
+            val cropBottom = (rawBottom + padY).coerceIn(cropTop + 1, bmpHeight)
 
             val cropWidth = cropRight - cropLeft
             val cropHeight = cropBottom - cropTop
@@ -274,12 +338,12 @@ object SignDetectionService {
                                 LocalSignCrop(
                                     id = signId,
                                     normalizedBox = box.copy(
-                                        left = cropLeft / bmpWidth,
-                                        top = cropTop / bmpHeight,
-                                        right = cropRight / bmpWidth,
-                                        bottom = cropBottom / bmpHeight,
-                                        sourceWidth = bmpWidth,
-                                        sourceHeight = bmpHeight
+                                        left = cropLeft.toFloat() / bmpWidth.toFloat(),
+                                        top = cropTop.toFloat() / bmpHeight.toFloat(),
+                                        right = cropRight.toFloat() / bmpWidth.toFloat(),
+                                        bottom = cropBottom.toFloat() / bmpHeight.toFloat(),
+                                        sourceWidth = bmpWidth.toFloat(),
+                                        sourceHeight = bmpHeight.toFloat()
                                     ),
                                     ocrText = box.ocrText,
                                     fileUri = cropFile.absolutePath,
@@ -417,17 +481,11 @@ object SignDetectionService {
             }
         }
 
-    private data class TextCluster(
-        val rect: Rect,
-        val text: String,
-        val confidence: Float
-    )
-
     private fun clusterTextBlocks(
         blocks: List<Text.TextBlock>,
         imageWidth: Int,
         imageHeight: Int
-    ): List<TextCluster> {
+    ): List<OcrCandidateBox> {
         val clusters = mutableListOf<MutableList<Text.TextBlock>>()
 
         // Sort blocks primarily top-to-bottom
@@ -473,7 +531,7 @@ object SignDetectionService {
             } else {
                 0.80f
             }
-            TextCluster(clusterRect, combinedText, avgConfidence)
+            OcrCandidateBox(clusterRect, combinedText, avgConfidence)
         }.filter { it.text.isNotBlank() }
         .sortedBy { it.rect.top }
     }
@@ -572,8 +630,17 @@ object SignDetectionService {
             val combinedText = c.joinToString(" ") { it.text }.trim()
             if (combinedText.isBlank()) continue
 
-            // Validate OCR text to discard garbage tokens / URLs / hashes
-            if (!SignCandidateValidator.validateOcr(combinedText).isValid) {
+            // Validate physical candidate geometry and OCR text validity
+            val validation = SignCandidateValidator.validatePhysicalCandidateGeometry(
+                rectLeft = rect.left,
+                rectTop = rect.top,
+                rectRight = rect.right,
+                rectBottom = rect.bottom,
+                imageWidth = imgWidth.toInt(),
+                imageHeight = imgHeight.toInt(),
+                ocrText = combinedText
+            )
+            if (!validation.isValid) {
                 continue
             }
 

@@ -72,8 +72,8 @@ class ScanResultDefaultsTest {
     fun testC_GeminiAllowedWithValidEvidencePreservesAllowed() {
         val rawResult = ScanResult(
             verdict = ScanVerdict.ALLOWED,
-            allowedUntilTime = "Verify physical signage",
-            timeRemaining = "--",
+            allowedUntilTime = "6:00 PM",
+            timeRemaining = "2h 00m remaining",
             parkingRules = listOf("2 Hour Parking 8 AM - 6 PM")
         )
         val validCrops = listOf(createValidLocalCrop())

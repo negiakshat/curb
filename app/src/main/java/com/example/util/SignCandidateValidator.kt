@@ -53,8 +53,11 @@ object SignCandidateValidator {
 
         // 2. Check for URLs or tracking parameter strings
         val textWithoutUrls = text.replace(URL_REGEX, "").trim()
-        if (URL_REGEX.containsMatchIn(text) && !containsExplicitParkingRule(textWithoutUrls)) {
-            return CandidateValidation.Invalid("Contains web URL or tracking address without parking rule")
+        if (URL_REGEX.containsMatchIn(text)) {
+            val textWithoutUrlPath = textWithoutUrls.replace(Regex("""(?i)^[a-z0-9_/?:&=-]+"""), "").trim()
+            if (textWithoutUrlPath.isBlank() || !containsExplicitParkingRule(textWithoutUrlPath)) {
+                return CandidateValidation.Invalid("Contains web URL or tracking address without parking rule")
+            }
         }
 
         // 3. Check for UUIDs
@@ -101,6 +104,66 @@ object SignCandidateValidator {
         }
 
         return CandidateValidation.Invalid("No recognizable parking sign vocabulary or schedule detected")
+    }
+
+    /**
+     * Validates physical sign candidate geometry, relative canvas area, aspect ratio,
+     * and OCR text content before confirming a candidate for sign cropping.
+     *
+     * OCR text alone is ONLY a candidate signal, NOT proof of a physical sign.
+     */
+    fun validatePhysicalCandidateGeometry(
+        rectLeft: Int,
+        rectTop: Int,
+        rectRight: Int,
+        rectBottom: Int,
+        imageWidth: Int,
+        imageHeight: Int,
+        ocrText: String
+    ): CandidateValidation {
+        if (imageWidth <= 0 || imageHeight <= 0) {
+            return CandidateValidation.Invalid("Invalid image dimensions ($imageWidth x $imageHeight)")
+        }
+
+        val width = rectRight - rectLeft
+        val height = rectBottom - rectTop
+
+        if (width <= 0 || height <= 0) {
+            return CandidateValidation.Invalid("Invalid candidate box dimensions (${width}x${height})")
+        }
+
+        // 1. OCR text validity check (reject code, URLs, hashes, UUIDs, non-parking garbage)
+        val ocrValidation = validateOcr(ocrText)
+        if (!ocrValidation.isValid) {
+            return ocrValidation
+        }
+
+        // 2. Minimum absolute candidate size (reject tiny text fragments / isolated UI labels)
+        if (width < 35 || height < 25) {
+            return CandidateValidation.Invalid("Candidate dimensions too small (${width}x${height}px)")
+        }
+
+        // 3. Minimum candidate area relative to image (reject tiny text fragments / isolated labels)
+        val imageArea = imageWidth.toFloat() * imageHeight.toFloat()
+        val candidateArea = width.toFloat() * height.toFloat()
+        val areaFraction = candidateArea / imageArea
+
+        if (areaFraction < 0.0012f) {
+            return CandidateValidation.Invalid("Candidate relative area too small (${String.format(Locale.US, "%.4f", areaFraction)} < 0.0012)")
+        }
+
+        // 4. Maximum area check (Do not use entire input bitmap as a sign crop)
+        if (areaFraction > 0.95f) {
+            return CandidateValidation.Invalid("Candidate covers entire image without distinct sign boundary (${String.format(Locale.US, "%.2f", areaFraction)} > 0.95)")
+        }
+
+        // 5. Plausible rectangular aspect ratio check
+        val aspect = width.toFloat() / height.toFloat()
+        if (aspect < 0.15f || aspect > 4.2f) {
+            return CandidateValidation.Invalid("Implausible sign aspect ratio (${String.format(Locale.US, "%.2f", aspect)})")
+        }
+
+        return CandidateValidation.Valid
     }
 
     fun containsExplicitParkingRule(text: String): Boolean {
