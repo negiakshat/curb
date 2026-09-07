@@ -273,7 +273,7 @@ object GeminiService {
                         }
                     }
 
-                    return@withContext ScanResult(
+                    val parsedResult = ScanResult(
                         locationName = locationName,
                         cityState = cityState,
                         verdict = verdict,
@@ -287,6 +287,8 @@ object GeminiService {
                         paymentInfo = parsed.optString("paymentInfo", ""),
                         vehicleApplicability = parsed.optString("vehicleApplicability", "Standard passenger vehicles")
                     )
+
+                    return@withContext enforceEvidenceGatedVerdict(parsedResult, validDetections)
                 }
             } catch (e: Exception) {
                 // Fallback to intelligent local parking analyzer
@@ -294,7 +296,42 @@ object GeminiService {
         }
 
         // Intelligent local parking analysis generator for robust experience:
-        generateIntelligentScanResult(locationName, cityState, isLocationKnown, localDetections)
+        enforceEvidenceGatedVerdict(
+            generateIntelligentScanResult(locationName, cityState, isLocationKnown, localDetections),
+            validDetections
+        )
+    }
+
+    fun hasVerifiedPhysicalSignEvidence(validDetections: List<LocalSignCrop>): Boolean {
+        return validDetections.isNotEmpty()
+    }
+
+    fun enforceEvidenceGatedVerdict(
+        rawScanResult: ScanResult,
+        validDetections: List<LocalSignCrop>
+    ): ScanResult {
+        if (!hasVerifiedPhysicalSignEvidence(validDetections)) {
+            val explanationText = if (rawScanResult.locationName.isNotBlank() &&
+                rawScanResult.locationName != "Current Location" &&
+                rawScanResult.locationName != "Location unavailable" &&
+                rawScanResult.locationName != "Location access needed"
+            ) {
+                "No distinct parking signs were resolved in the image at ${rawScanResult.locationName}. No verified physical parking sign evidence was established."
+            } else {
+                "No distinct parking signs were resolved in the captured image. No verified physical parking sign evidence was established."
+            }
+
+            return rawScanResult.copy(
+                verdict = ScanVerdict.AMBIGUOUS,
+                statusChipText = "Signage unclear",
+                allowedUntilTime = "Verify physical signage",
+                timeRemaining = "--",
+                parkingRules = listOf("No verified parking rule has been established."),
+                explanation = explanationText,
+                detectedSigns = emptyList()
+            )
+        }
+        return rawScanResult
     }
 
     suspend fun askParkingAssistant(
@@ -523,7 +560,7 @@ object GeminiService {
                 else -> ScanVerdict.ALLOWED
             }
 
-            return ScanResult(
+            val res = ScanResult(
                 locationName = locationName,
                 cityState = cityState,
                 verdict = verdict,
@@ -541,6 +578,7 @@ object GeminiService {
                 paymentInfo = if (verdict == ScanVerdict.ALLOWED) "Pay at meter or pay station" else "",
                 vehicleApplicability = "Standard passenger vehicles"
             )
+            return enforceEvidenceGatedVerdict(res, validDetections)
         }
 
         val explanationText = if (isLocationKnown && locationName.isNotBlank() && locationName != "Location unavailable" && locationName != "Location access needed") {
@@ -549,7 +587,7 @@ object GeminiService {
             "No distinct parking signs were resolved in the captured image. Parking rules could not be determined from verified sign evidence."
         }
 
-        return ScanResult(
+        val emptyRes = ScanResult(
             locationName = locationName,
             cityState = cityState,
             verdict = ScanVerdict.AMBIGUOUS,
@@ -565,6 +603,7 @@ object GeminiService {
             paymentInfo = "",
             vehicleApplicability = "Standard passenger vehicles"
         )
+        return enforceEvidenceGatedVerdict(emptyRes, validDetections)
     }
 
     fun getPreparedPresets(context: Context): List<SampleSignPreset> {
