@@ -444,23 +444,23 @@ object GeminiService {
         answerParkingLocally(query, scanContext)
     }
 
-    private fun answerParkingLocally(query: String, scanContext: ScanResult? = null): String {
+    fun answerParkingLocally(query: String, scanContext: ScanResult? = null): String {
         val lower = query.lowercase(Locale.ROOT)
 
         if (scanContext != null) {
-            if (lower.contains("why") && (lower.contains("can't") || lower.contains("restrict") || lower.contains("prohibit") || lower.contains("not allow"))) {
+            if (lower.contains("why") && (lower.contains("can't") || lower.contains("restrict") || lower.contains("prohibit") || lower.contains("not allow") || lower.contains("allow"))) {
                 return when (scanContext.verdict) {
                     ScanVerdict.RESTRICTED -> {
                         val activeSigns = scanContext.detectedSigns.filter { it.isRestrictingNow }
                         if (activeSigns.isNotEmpty()) {
                             val signDesc = activeSigns.joinToString(", ") { "${it.title} (${it.subtitle})" }
-                            "Parking is restricted because $signDesc is currently in effect at ${scanContext.locationName}. This restriction overrides general daytime parking permissions."
+                            "Parking is restricted because $signDesc is currently in effect at ${scanContext.locationName} based on verified scan evidence."
                         } else {
-                            "Parking is restricted at ${scanContext.locationName} due to an active street regulation or municipal prohibition in this time window."
+                            "Parking is restricted at ${scanContext.locationName} based on the verified scan result: ${scanContext.explanation}"
                         }
                     }
-                    ScanVerdict.ALLOWED -> "Parking is actually ALLOWED at ${scanContext.locationName} until ${scanContext.allowedUntilTime}. There are no active restricting signs prohibiting parking right now."
-                    ScanVerdict.AMBIGUOUS -> "The parking rule is unclear because physical signage is ambiguous, partially obscured, or conflicting. Physical verification on-site is required before leaving your vehicle."
+                    ScanVerdict.ALLOWED -> "Based on the verified scan for ${scanContext.locationName}, parking is ALLOWED until ${scanContext.allowedUntilTime}. Rules established: ${scanContext.parkingRules.joinToString("; ")}."
+                    ScanVerdict.AMBIGUOUS -> "The parking rule is unclear because physical signage is ambiguous, partially obscured, or insufficient. Physical verification on-site is required before leaving your vehicle."
                 }
             }
 
@@ -475,37 +475,50 @@ object GeminiService {
                 }
             }
 
-            if (lower.contains("when can i") || lower.contains("when do i") || lower.contains("time limit")) {
+            if (lower.contains("when") || lower.contains("limit") || lower.contains("after 6") || lower.contains("after") || lower.contains("time") || lower.contains("park")) {
                 return when (scanContext.verdict) {
-                    ScanVerdict.ALLOWED -> "You can park here until ${scanContext.allowedUntilTime} (${scanContext.timeRemaining} remaining). Be sure to move your car or check for upcoming restrictions before this window ends."
-                    ScanVerdict.RESTRICTED -> "Parking is currently prohibited. Check physical signage for when active enforcement ends (usually after 6:00 PM or outside morning commute hours)."
-                    ScanVerdict.AMBIGUOUS -> "Because the signage is unclear, an exact time limit cannot be guaranteed safely. Check the post for physical dates and arrows."
+                    ScanVerdict.ALLOWED -> "Based on the verified scan for ${scanContext.locationName}, parking is ALLOWED until ${scanContext.allowedUntilTime} (${scanContext.timeRemaining} remaining). Established rules: ${scanContext.parkingRules.joinToString("; ")}."
+                    ScanVerdict.RESTRICTED -> "Parking is currently RESTRICTED at ${scanContext.locationName} based on the verified scan context: ${scanContext.explanation}. Please check the physical sign on-site for posted enforcement hours."
+                    ScanVerdict.AMBIGUOUS -> "The signage is unclear, so I cannot safely confirm whether parking is allowed or what time limits apply. Check the physical sign on-site for active hours, exceptions, and arrows."
                 }
+            }
+
+            return when (scanContext.verdict) {
+                ScanVerdict.RESTRICTED -> "Regarding your scan at ${scanContext.locationName}: Parking is RESTRICTED. ${scanContext.explanation}"
+                ScanVerdict.ALLOWED -> "Regarding your scan at ${scanContext.locationName}: Parking is ALLOWED until ${scanContext.allowedUntilTime}. ${scanContext.explanation}"
+                ScanVerdict.AMBIGUOUS -> "Regarding your scan at ${scanContext.locationName}: The signage is unclear, so I cannot safely confirm whether parking is allowed. Check the physical sign on-site for active hours, exceptions, and arrows."
             }
         }
 
+        val generalDisclaimer = "General Information: Parking rules vary by city and posted signage. I can explain general concepts, but I cannot confirm rules for a specific street without posted sign evidence or an official local source."
+
         return when {
-            lower.contains("after 6") || lower.contains("6 pm") || lower.contains("night") -> {
-                "In most standard metered zones, time limits and meter enforcement end at 6:00 PM on weekdays. After 6:00 PM, parking is usually free and unrestricted until 8:00 AM the next morning, unless a specific evening tow-away zone (e.g., 4–6 PM or 7–9 PM) or overnight street sweeping applies. Always confirm the red tow-away arrows on the post."
+            lower.contains("after 6") || lower.contains("6 pm") || lower.contains("night") || lower.contains("after hours") -> {
+                "$generalDisclaimer I can explain what an after-hours rule usually means, but I cannot confirm that a specific street allows parking after 6 PM without posted signage or a verified local rule. Check posted signs on-site for active enforcement hours, evening tow-away windows, and overnight restrictions."
             }
             lower.contains("sunday") || lower.contains("weekend") -> {
-                "On Sundays, standard timed parking (e.g. 2-hour limits) and street cleaning are generally not enforced in most cities, making parking free for the day. However, special event zones, 24/7 red curbs, bus stops, and loading zones remain enforced around the clock."
+                "$generalDisclaimer While some municipalities relax metered time limits on Sundays or weekends, many cities enforce 24/7 restrictions, special event zones, loading zones, and red curbs. Always verify posted street signs for weekend enforcement."
             }
-            lower.contains("green") || lower.contains("colored curb") || lower.contains("yellow") || lower.contains("red") || lower.contains("white") -> {
-                "Here is the standard curb color guide:\n\n• Red: No stopping, standing, or parking at any time (24/7).\n• Green: Short-term parking (usually 10 to 30 minutes) during business hours.\n• White: Passenger loading/unloading only (5-minute maximum limit).\n• Yellow: Commercial vehicle loading zone during posted hours (often 7 AM–6 PM).\n• Blue: Disabled persons with valid placard/license plate only."
+            lower.contains("green") || lower.contains("colored curb") || lower.contains("yellow") || lower.contains("red") || lower.contains("white") || lower.contains("blue") || lower.contains("curb color") -> {
+                "$generalDisclaimer Standard curb color designations vary by municipality, but conceptually represent:\n\n• Red: No stopping, standing, or parking at any time.\n• Green: Short-term parking during posted hours.\n• White: Passenger loading/unloading only.\n• Yellow: Commercial loading zone during posted hours.\n• Blue: Disabled persons with valid placard/plate.\n\nThese are general concepts. Local city codes and posted signs govern exact rules for any spot."
             }
             lower.contains("street clean") || lower.contains("sweep") -> {
-                "Street cleaning restrictions are strictly enforced during the exact hours posted on the broom icon sign (e.g. 8:00 AM – 10:00 AM). Vehicles parked during sweeping hours are subject to immediate ticketing and possible tow. Enforcement ends promptly when the posted window expires."
+                "$generalDisclaimer Street cleaning restrictions prohibit parking during specific posted time windows (e.g., for sweeping or maintenance). Vehicles parked during active sweeping hours are subject to citations or towing. Check physical street signs for exact days and times."
             }
-            lower.contains("holiday") || lower.contains("city holiday") -> {
-                "On official major city holidays (New Year's Day, Memorial Day, July 4th, Labor Day, Thanksgiving, Christmas), parking meters and street cleaning are typically suspended. However, safety zones (red zones, fire hydrants, transit stops) remain active 24/7."
+            lower.contains("holiday") -> {
+                "$generalDisclaimer Some cities suspend meter enforcement or street cleaning on official city holidays, but holiday rules vary significantly by municipality and location. Safety restrictions (red zones, fire hydrants, bus stops) remain enforced. Check local city policy and posted signs."
+            }
+            lower.contains("meter") -> {
+                "$generalDisclaimer A parking meter indicates a paid parking zone with maximum time limits during active hours. Enforcement hours and rates are posted on the meter, pay station, or nearby sign plate."
+            }
+            lower.contains("tow") -> {
+                "$generalDisclaimer A tow-away zone prohibits stopping or parking during specified hours. Vehicles parked during tow-away windows are subject to immediate towing and impoundment."
+            }
+            lower.contains("arrow") -> {
+                "$generalDisclaimer Arrows on parking signs indicate the physical zone where the restriction applies (e.g., to the left or right of the post). Stacked signs on the same post interact, with restrictive rules taking precedence."
             }
             else -> {
-                if (scanContext != null) {
-                    "Regarding your scan at ${scanContext.locationName}: The verdict is ${scanContext.verdict.displayTitle}. ${scanContext.explanation}"
-                } else {
-                    "Based on standard municipal parking regulations, you can park in regular unpainted curb spaces if there are no conflicting red zone markings, active street sweeping windows, or tow-away restrictions. Always make sure to park in the direction of traffic flow within 18 inches of the curb."
-                }
+                "$generalDisclaimer I can explain general parking concepts, but I cannot confirm the rule for a specific street without posted sign evidence or an official local source. Please scan the posted parking sign or check local city regulations."
             }
         }
     }

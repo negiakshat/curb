@@ -211,4 +211,78 @@ class ScanResultDefaultsTest {
         assertEquals("2 Hour Parking", allowedScan.allowedUntilTime)
         assertEquals("2h 00m remaining", allowedScan.timeRemaining)
     }
+
+    // Issue #5 Test A: With no scan context, "Can I park after 6?" does NOT return confident authorization
+    @Test
+    fun testIssue5_NoScanContext_CanIParkAfter6_NoConfidentAuthorization() {
+        val response = GeminiService.answerParkingLocally("Can I park after 6?", scanContext = null)
+        assertTrue(response.contains("General Information"))
+        assertFalse(response.lowercase().contains("parking is free"))
+        assertFalse(response.lowercase().contains("unrestricted"))
+        assertFalse(response.lowercase().contains("18 inches"))
+    }
+
+    // Issue #5 Test B: With no scan context, curb color questions are educational guidance
+    @Test
+    fun testIssue5_NoScanContext_CurbColorQuestions_AnsweredAsEducationalGuidance() {
+        val response = GeminiService.answerParkingLocally("What does a green curb mean?", scanContext = null)
+        assertTrue(response.contains("General Information"))
+        assertTrue(response.contains("Standard curb color designations vary by municipality"))
+        assertTrue(response.contains("Local city codes and posted signs govern exact rules"))
+    }
+
+    // Issue #5 Test C: With AMBIGUOUS scan context, fallback does NOT convert ambiguity into parking permission
+    @Test
+    fun testIssue5_AmbiguousScanContext_FallbackDoesNotGrantPermission() {
+        val ambiguousScan = ScanResult(
+            verdict = ScanVerdict.AMBIGUOUS,
+            locationName = "Unclear Corner"
+        )
+        val response = GeminiService.answerParkingLocally("Can I park here after 6?", scanContext = ambiguousScan)
+        assertFalse(response.lowercase().contains("yes, parking is free"))
+        assertFalse(response.lowercase().contains("unrestricted"))
+        assertTrue(response.contains("unclear") || response.contains("cannot safely confirm"))
+    }
+
+    // Issue #5 Test D: With RESTRICTED scan context, fallback does NOT invent a generic restriction end time
+    @Test
+    fun testIssue5_RestrictedScanContext_FallbackDoesNotInventRestrictionEndTime() {
+        val restrictedScan = ScanResult(
+            verdict = ScanVerdict.RESTRICTED,
+            locationName = "Tow Away Zone",
+            explanation = "No parking during commute hours."
+        )
+        val response = GeminiService.answerParkingLocally("When can I park?", scanContext = restrictedScan)
+        assertFalse(response.lowercase().contains("usually after 6"))
+        assertFalse(response.lowercase().contains("6:00 pm"))
+        assertTrue(response.contains("RESTRICTED"))
+    }
+
+    // Issue #5 Test E: With ALLOWED scan context, fallback uses scan context rather than inventing a broader rule
+    @Test
+    fun testIssue5_AllowedScanContext_FallbackUsesScanContext() {
+        val allowedScan = ScanResult(
+            verdict = ScanVerdict.ALLOWED,
+            allowedUntilTime = "4:00 PM",
+            timeRemaining = "2h 30m remaining",
+            locationName = "Main St Meter",
+            parkingRules = listOf("2 Hour Parking 8 AM - 4 PM")
+        )
+        val response = GeminiService.answerParkingLocally("Can I park?", scanContext = allowedScan)
+        assertTrue(response.contains("4:00 PM"))
+        assertTrue(response.contains("ALLOWED") || response.contains("allowed"))
+    }
+
+    // Issue #5 Test F: Existing scan-context responses still work
+    @Test
+    fun testIssue5_ExistingScanContextResponsesWork() {
+        val restrictedScan = ScanResult(
+            verdict = ScanVerdict.RESTRICTED,
+            locationName = "Market Street Zone",
+            explanation = "Active street cleaning in effect."
+        )
+        val response = GeminiService.answerParkingLocally("Why can't I park here?", scanContext = restrictedScan)
+        assertTrue(response.contains("restricted") || response.contains("RESTRICTED"))
+        assertTrue(response.contains("Market Street Zone"))
+    }
 }
