@@ -36,7 +36,8 @@ data class LocalSignCrop(
     val normalizedBox: SignBoundingBox,
     val ocrText: String,
     val fileUri: String,
-    val bitmap: Bitmap
+    val bitmap: Bitmap,
+    val isDemo: Boolean = false
 )
 
 data class LocalDetectionResult(

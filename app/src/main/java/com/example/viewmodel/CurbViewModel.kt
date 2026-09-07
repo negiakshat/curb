@@ -486,18 +486,18 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             delay(1000)
 
             val enrichedSigns = preset.detectedSigns.map { sign ->
-                if (!sign.croppedImageUri.isNullOrBlank() && java.io.File(sign.croppedImageUri).exists()) {
-                    sign
+                val cropPath = if (!sign.croppedImageUri.isNullOrBlank() && java.io.File(sign.croppedImageUri).exists()) {
+                    sign.croppedImageUri
                 } else {
-                    val cropPath = com.example.data.detection.SignDetectionService.getOrCreateSampleSignCrop(
+                    com.example.data.detection.SignDetectionService.getOrCreateSampleSignCrop(
                         getApplication(),
                         sign.id,
                         sign.title,
                         sign.subtitle,
                         sign.isRestrictingNow
                     )
-                    sign.copy(croppedImageUri = cropPath)
                 }
+                sign.copy(croppedImageUri = cropPath, isDemo = true)
             }
 
             val scanResult = ScanResult(
@@ -511,7 +511,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                 explanation = preset.explanation,
                 detectedSigns = enrichedSigns,
                 zoneType = "Parking zone",
-                paymentInfo = ""
+                paymentInfo = "",
+                isDemo = true
             )
             val id = repository.saveScan(scanResult)
             val finalResult = scanResult.copy(id = id)

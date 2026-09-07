@@ -393,7 +393,7 @@ fun CurbApp(
 
                 // 07. SCAN OUTPUT
                 composable(Routes.SCAN_OUTPUT) {
-                    val currentScan = currentScanResult ?: recentScans.firstOrNull() ?: com.example.data.model.ScanResult(
+                    val currentScan = currentScanResult ?: recentScans.firstOrNull { !it.isDemo } ?: com.example.data.model.ScanResult(
                         locationName = "Location unavailable",
                         verdict = com.example.data.model.ScanVerdict.AMBIGUOUS,
                         statusChipText = "Signage unclear",
@@ -456,7 +456,7 @@ fun CurbApp(
 
                 // 08. PARKING DETAILS
                 composable(Routes.PARKING_DETAILS) {
-                    val currentScan = currentScanResult ?: recentScans.firstOrNull() ?: com.example.data.model.ScanResult(
+                    val currentScan = currentScanResult ?: recentScans.firstOrNull { !it.isDemo } ?: com.example.data.model.ScanResult(
                         locationName = "Location unavailable",
                         verdict = com.example.data.model.ScanVerdict.AMBIGUOUS,
                         statusChipText = "Signage unclear",

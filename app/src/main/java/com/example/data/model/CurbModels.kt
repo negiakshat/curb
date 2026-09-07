@@ -46,7 +46,8 @@ data class DetectedSign(
     val statusBadge: String = "",
     val rawText: String = "",
     val croppedImageUri: String? = null,
-    val confidence: Float = 0.95f
+    val confidence: Float = 0.95f,
+    val isDemo: Boolean = false
 )
 
 data class ScanResult(
@@ -66,7 +67,8 @@ data class ScanResult(
     val zoneType: String = "Parking zone",
     val paymentInfo: String = "",
     val vehicleApplicability: String = "",
-    val imageUri: String? = null
+    val imageUri: String? = null,
+    val isDemo: Boolean = false
 )
 
 data class ActiveParkingSession(
@@ -81,7 +83,8 @@ data class ActiveParkingSession(
     val timerBasis: String = "",
     val parkingRuleSummary: String = "",
     val isActive: Boolean = true,
-    val maxAllowedEndTimeMillis: Long? = null
+    val maxAllowedEndTimeMillis: Long? = null,
+    val isDemo: Boolean = false
 ) {
     val remainingMillis: Long
         get() = (endTime - System.currentTimeMillis()).coerceAtLeast(0)

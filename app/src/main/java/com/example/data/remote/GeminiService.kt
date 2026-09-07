@@ -68,6 +68,7 @@ object GeminiService {
         }
 
         val validDetections = localDetections.filter { crop ->
+            !SignCandidateValidator.isDemoOrSampleCrop(crop.fileUri, crop.isDemo, crop.id) &&
             SignCandidateValidator.validateOcr(crop.ocrText).isValid &&
             ((crop.bitmap != null && !crop.bitmap.isRecycled) || (crop.fileUri.isNotBlank() && java.io.File(crop.fileUri).let { it.exists() && it.length() > 0 }))
         }
@@ -307,6 +308,7 @@ object GeminiService {
 
     fun hasVerifiedPhysicalSignEvidence(validDetections: List<LocalSignCrop>): Boolean {
         return validDetections.isNotEmpty() && validDetections.any { crop ->
+            !SignCandidateValidator.isDemoOrSampleCrop(crop.fileUri, crop.isDemo, crop.id) &&
             SignCandidateValidator.validateOcr(crop.ocrText).isValid &&
             ((crop.bitmap != null && !crop.bitmap.isRecycled) || (crop.fileUri.isNotBlank() && java.io.File(crop.fileUri).let { it.exists() && it.length() > 0 }))
         }
@@ -554,6 +556,7 @@ object GeminiService {
         localDetections: List<LocalSignCrop> = emptyList()
     ): ScanResult {
         val validDetections = localDetections.filter { crop ->
+            !SignCandidateValidator.isDemoOrSampleCrop(crop.fileUri, crop.isDemo, crop.id) &&
             SignCandidateValidator.validateOcr(crop.ocrText).isValid &&
             ((crop.bitmap != null && !crop.bitmap.isRecycled) || (crop.fileUri.isNotBlank() && java.io.File(crop.fileUri).let { it.exists() && it.length() > 0 }))
         }
@@ -689,9 +692,9 @@ object GeminiService {
                 ),
                 explanation = "Parking is permitted for up to 2 hours until 6:00 PM today. Street sweeping is not active at this time.",
                 detectedSigns = listOf(
-                    DetectedSign("1", "2 HOUR PARKING", "8 AM TO 6 PM • MON–FRI", ruleText = "2-hour limit during daytime hours.", isRestrictingNow = false, croppedImageUri = crop2hr),
-                    DetectedSign("2", "NO PARKING", "8 AM TO 10 AM • TUE & THU", ruleText = "Street cleaning schedule (inactive today).", isRestrictingNow = false, croppedImageUri = cropClean),
-                    DetectedSign("3", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", ruleText = "Peak commute route restriction.", isRestrictingNow = false, croppedImageUri = cropTow)
+                    DetectedSign("1", "2 HOUR PARKING", "8 AM TO 6 PM • MON–FRI", ruleText = "2-hour limit during daytime hours.", isRestrictingNow = false, croppedImageUri = crop2hr, isDemo = true),
+                    DetectedSign("2", "NO PARKING", "8 AM TO 10 AM • TUE & THU", ruleText = "Street cleaning schedule (inactive today).", isRestrictingNow = false, croppedImageUri = cropClean, isDemo = true),
+                    DetectedSign("3", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", ruleText = "Peak commute route restriction.", isRestrictingNow = false, croppedImageUri = cropTow, isDemo = true)
                 )
             ),
             SampleSignPreset(
@@ -708,8 +711,8 @@ object GeminiService {
                 ),
                 explanation = "Parking is currently prohibited. This location is inside an active peak-hour tow-away commute corridor.",
                 detectedSigns = listOf(
-                    DetectedSign("1", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", ruleText = "Active commute tow restriction.", isRestrictingNow = true, croppedImageUri = cropTow),
-                    DetectedSign("2", "COMMERCIAL LOADING", "9 AM TO 4 PM • MON–SAT", ruleText = "Restricted to commercial vehicles only.", isRestrictingNow = true, croppedImageUri = cropLoading)
+                    DetectedSign("1", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", ruleText = "Active commute tow restriction.", isRestrictingNow = true, croppedImageUri = cropTow, isDemo = true),
+                    DetectedSign("2", "COMMERCIAL LOADING", "9 AM TO 4 PM • MON–SAT", ruleText = "Restricted to commercial vehicles only.", isRestrictingNow = true, croppedImageUri = cropLoading, isDemo = true)
                 )
             ),
             SampleSignPreset(
@@ -726,8 +729,8 @@ object GeminiService {
                 ),
                 explanation = "The visible signs have conflicting directional arrows and temporary construction overlay placards. Please verify physical signage on the post before parking.",
                 detectedSigns = listOf(
-                    DetectedSign("1", "TEMPORARY RESTRICTION", "CONSTRUCTION NOTICE", ruleText = "Temporary placard posted over post.", isRestrictingNow = true, isUncertain = true, croppedImageUri = cropTemp),
-                    DetectedSign("2", "PERMIT PARKING ONLY", "AREA G • 8 AM TO 6 PM", ruleText = "Permit exemption zone.", isRestrictingNow = false, croppedImageUri = cropPermit)
+                    DetectedSign("1", "TEMPORARY RESTRICTION", "CONSTRUCTION NOTICE", ruleText = "Temporary placard posted over post.", isRestrictingNow = true, isUncertain = true, croppedImageUri = cropTemp, isDemo = true),
+                    DetectedSign("2", "PERMIT PARKING ONLY", "AREA G • 8 AM TO 6 PM", ruleText = "Permit exemption zone.", isRestrictingNow = false, croppedImageUri = cropPermit, isDemo = true)
                 )
             )
         )
@@ -748,9 +751,9 @@ object GeminiService {
             ),
             explanation = "Parking is permitted for up to 2 hours until 6:00 PM today. Street sweeping is not active at this time.",
             detectedSigns = listOf(
-                DetectedSign("1", "2 HOUR PARKING", "8 AM TO 6 PM • MON–FRI", "2-hour limit during daytime hours."),
-                DetectedSign("2", "NO PARKING", "8 AM TO 10 AM • TUE & THU", "Street cleaning schedule (inactive today)."),
-                DetectedSign("3", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", "Peak commute route restriction.")
+                DetectedSign("1", "2 HOUR PARKING", "8 AM TO 6 PM • MON–FRI", "2-hour limit during daytime hours.", isDemo = true),
+                DetectedSign("2", "NO PARKING", "8 AM TO 10 AM • TUE & THU", "Street cleaning schedule (inactive today).", isDemo = true),
+                DetectedSign("3", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", "Peak commute route restriction.", isDemo = true)
             )
         ),
         SampleSignPreset(
@@ -767,8 +770,8 @@ object GeminiService {
             ),
             explanation = "Parking is currently prohibited. This location is inside an active peak-hour tow-away commute corridor.",
             detectedSigns = listOf(
-                DetectedSign("1", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", "Active commute tow restriction.", isRestrictingNow = true),
-                DetectedSign("2", "COMMERCIAL LOADING", "9 AM TO 4 PM • MON–SAT", "Restricted to commercial vehicles only.", isRestrictingNow = true)
+                DetectedSign("1", "TOW-AWAY ZONE", "4 PM TO 6 PM • MON–FRI", "Active commute tow restriction.", isRestrictingNow = true, isDemo = true),
+                DetectedSign("2", "COMMERCIAL LOADING", "9 AM TO 4 PM • MON–SAT", "Restricted to commercial vehicles only.", isRestrictingNow = true, isDemo = true)
             )
         ),
         SampleSignPreset(
@@ -785,8 +788,8 @@ object GeminiService {
             ),
             explanation = "The visible signs have conflicting directional arrows and temporary construction overlay placards. Please verify physical signage on the post before parking.",
             detectedSigns = listOf(
-                DetectedSign("1", "TEMPORARY RESTRICTION", "CONSTRUCTION NOTICE", "Temporary placard posted over post."),
-                DetectedSign("2", "PERMIT PARKING ONLY", "AREA G • 8 AM TO 6 PM", "Permit exemption zone.")
+                DetectedSign("1", "TEMPORARY RESTRICTION", "CONSTRUCTION NOTICE", "Temporary placard posted over post.", isDemo = true),
+                DetectedSign("2", "PERMIT PARKING ONLY", "AREA G • 8 AM TO 6 PM", "Permit exemption zone.", isDemo = true)
             )
         )
     )

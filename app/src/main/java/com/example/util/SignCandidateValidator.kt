@@ -106,6 +106,13 @@ object SignCandidateValidator {
         return CandidateValidation.Invalid("No recognizable parking sign vocabulary or schedule detected")
     }
 
+    fun isDemoOrSampleCrop(fileUri: String? = null, isDemo: Boolean = false, candidateId: String = ""): Boolean {
+        if (isDemo) return true
+        if (candidateId.startsWith("preset_") || candidateId.startsWith("sample_")) return true
+        if (fileUri != null && (fileUri.contains("sample_sign_plates") || fileUri.contains("preset_") || fileUri.contains("sample_"))) return true
+        return false
+    }
+
     /**
      * Validates physical sign candidate geometry, relative canvas area, aspect ratio,
      * and OCR text content before confirming a candidate for sign cropping.
@@ -119,8 +126,15 @@ object SignCandidateValidator {
         rectBottom: Int,
         imageWidth: Int,
         imageHeight: Int,
-        ocrText: String
+        ocrText: String,
+        isDemo: Boolean = false,
+        fileUri: String? = null,
+        candidateId: String = ""
     ): CandidateValidation {
+        if (isDemoOrSampleCrop(fileUri, isDemo, candidateId)) {
+            return CandidateValidation.Invalid("Sample or demo preset crop cannot be accepted as real physical candidate")
+        }
+
         if (imageWidth <= 0 || imageHeight <= 0) {
             return CandidateValidation.Invalid("Invalid image dimensions ($imageWidth x $imageHeight)")
         }

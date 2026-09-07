@@ -180,7 +180,20 @@ class CurbRepository(context: Context) {
             finalAllowedUntil = sdf.format(java.util.Date(effectiveEndTime))
         }
 
-        parkingSessionDao.endAllSessions()
+        val isDemoSession = (targetScan?.isDemo == true) || (scanResult?.isDemo == true)
+
+        if (isDemoSession) {
+            parkingSessionDao.endAllDemoSessions()
+        } else {
+            parkingSessionDao.endAllRealSessions()
+        }
+
+        val markedTimerBasis = if (isDemoSession) {
+            if (finalTimerBasis.startsWith("[Demo]")) finalTimerBasis else if (finalTimerBasis.isBlank()) "[Demo] Simulation Timer" else "[Demo] $finalTimerBasis"
+        } else {
+            finalTimerBasis
+        }
+
         val entity = ParkingSessionEntity(
             scanResultId = scanResultId,
             locationName = if (locationName != "Parked Spot" || targetScan == null) locationName else targetScan.locationName,
@@ -189,10 +202,11 @@ class CurbRepository(context: Context) {
             allowedUntilTime = finalAllowedUntil,
             reminderMinutesBefore = 15,
             notes = notes,
-            timerBasis = finalTimerBasis,
+            timerBasis = markedTimerBasis,
             parkingRuleSummary = finalRuleSummary,
             isActive = true,
-            maxAllowedEndTimeMillis = canonicalMaxEndTime
+            maxAllowedEndTimeMillis = canonicalMaxEndTime,
+            isDemo = isDemoSession
         )
         return parkingSessionDao.insertSession(entity)
     }
@@ -334,7 +348,8 @@ class CurbRepository(context: Context) {
             zoneType = entity.zoneType.ifBlank { "Parking zone" },
             paymentInfo = entity.paymentInfo,
             vehicleApplicability = entity.vehicleApplicability,
-            imageUri = entity.imageUri
+            imageUri = entity.imageUri,
+            isDemo = entity.isDemo
         )
     }
 
@@ -354,7 +369,8 @@ class CurbRepository(context: Context) {
             zoneType = scan.zoneType,
             paymentInfo = scan.paymentInfo,
             vehicleApplicability = scan.vehicleApplicability,
-            imageUri = scan.imageUri
+            imageUri = scan.imageUri,
+            isDemo = scan.isDemo
         )
     }
 
@@ -371,7 +387,8 @@ class CurbRepository(context: Context) {
             timerBasis = entity.timerBasis,
             parkingRuleSummary = entity.parkingRuleSummary,
             isActive = entity.isActive,
-            maxAllowedEndTimeMillis = entity.maxAllowedEndTimeMillis
+            maxAllowedEndTimeMillis = entity.maxAllowedEndTimeMillis,
+            isDemo = entity.isDemo
         )
     }
 

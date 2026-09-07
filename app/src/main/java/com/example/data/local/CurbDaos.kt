@@ -9,8 +9,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ScanDao {
-    @Query("SELECT * FROM scan_results ORDER BY timestamp DESC")
+    @Query("SELECT * FROM scan_results WHERE isDemo = 0 ORDER BY timestamp DESC")
     fun getAllScans(): Flow<List<ScanResultEntity>>
+
+    @Query("SELECT * FROM scan_results WHERE isDemo = 1 ORDER BY timestamp DESC")
+    fun getDemoScans(): Flow<List<ScanResultEntity>>
 
     @Query("SELECT * FROM scan_results WHERE id = :id LIMIT 1")
     suspend fun getScanById(id: Long): ScanResultEntity?
@@ -27,13 +30,16 @@ interface ScanDao {
 
 @Dao
 interface ParkingSessionDao {
-    @Query("SELECT * FROM parking_sessions WHERE isActive = 1 ORDER BY endTime ASC LIMIT 1")
+    @Query("SELECT * FROM parking_sessions WHERE isActive = 1 AND isDemo = 0 ORDER BY endTime ASC LIMIT 1")
     fun getActiveSession(): Flow<ParkingSessionEntity?>
+
+    @Query("SELECT * FROM parking_sessions WHERE isActive = 1 AND isDemo = 1 ORDER BY endTime ASC LIMIT 1")
+    fun getDemoActiveSession(): Flow<ParkingSessionEntity?>
 
     @Query("SELECT * FROM parking_sessions WHERE id = :id LIMIT 1")
     suspend fun getSessionById(id: Long): ParkingSessionEntity?
 
-    @Query("SELECT * FROM parking_sessions ORDER BY startTime DESC")
+    @Query("SELECT * FROM parking_sessions WHERE isDemo = 0 ORDER BY startTime DESC")
     fun getAllSessions(): Flow<List<ParkingSessionEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -50,6 +56,12 @@ interface ParkingSessionDao {
 
     @Query("UPDATE parking_sessions SET isActive = 0 WHERE id = :id")
     suspend fun endSession(id: Long)
+
+    @Query("UPDATE parking_sessions SET isActive = 0 WHERE isDemo = 0")
+    suspend fun endAllRealSessions()
+
+    @Query("UPDATE parking_sessions SET isActive = 0 WHERE isDemo = 1")
+    suspend fun endAllDemoSessions()
 
     @Query("UPDATE parking_sessions SET isActive = 0")
     suspend fun endAllSessions()

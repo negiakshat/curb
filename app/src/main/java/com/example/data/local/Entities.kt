@@ -24,7 +24,8 @@ data class ScanResultEntity(
     val zoneType: String,
     val paymentInfo: String,
     val vehicleApplicability: String,
-    val imageUri: String? = null
+    val imageUri: String? = null,
+    val isDemo: Boolean = false
 )
 
 @Entity(tableName = "parking_sessions")
@@ -40,7 +41,8 @@ data class ParkingSessionEntity(
     val timerBasis: String = "",
     val parkingRuleSummary: String = "",
     val isActive: Boolean = true,
-    val maxAllowedEndTimeMillis: Long? = null
+    val maxAllowedEndTimeMillis: Long? = null,
+    val isDemo: Boolean = false
 )
 
 @Entity(tableName = "saved_places")
