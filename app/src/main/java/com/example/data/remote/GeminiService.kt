@@ -37,11 +37,22 @@ object GeminiService {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private fun Bitmap.toBase64(): String? {
+    private fun Bitmap.toOptimizedBase64(maxDimension: Int = 1280, quality: Int = 85): String? {
         if (isRecycled || width <= 0 || height <= 0) return null
         return try {
+            val targetBmp = if (width > maxDimension || height > maxDimension) {
+                val scale = maxDimension.toFloat() / maxOf(width, height)
+                val newW = (width * scale).toInt().coerceAtLeast(1)
+                val newH = (height * scale).toInt().coerceAtLeast(1)
+                Bitmap.createScaledBitmap(this, newW, newH, true)
+            } else {
+                this
+            }
             val outputStream = ByteArrayOutputStream()
-            compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+            targetBmp.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+            if (targetBmp != this) {
+                targetBmp.recycle()
+            }
             Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
         } catch (e: Exception) {
             null
@@ -56,6 +67,9 @@ object GeminiService {
         localDetections: List<LocalSignCrop> = emptyList(),
         context: Context? = null
     ): ScanResult = withContext(Dispatchers.IO) {
+        val totalScanStartTime = System.currentTimeMillis()
+        android.util.Log.d("CurbTiming", "Scan pipeline analysis initiated. Location: '$locationName', City/State: '$cityState'")
+
         val apiKey = try {
             BuildConfig.GEMINI_API_KEY
         } catch (e: Exception) {
@@ -71,8 +85,39 @@ object GeminiService {
             ((crop.bitmap != null && !crop.bitmap.isRecycled) || (crop.fileUri.isNotBlank() && java.io.File(crop.fileUri).let { it.exists() && it.length() > 0 }))
         }
 
-        val signContextText = if (validDetections.isNotEmpty()) {
-            """
+        // PREFLIGHT GATE BEFORE GEMINI:
+        // Critical Invariant: NO VERIFIED PHYSICAL SIGN EVIDENCE -> NO GEMINI CALL
+        if (validDetections.isEmpty()) {
+            val totalTime = System.currentTimeMillis() - totalScanStartTime
+            android.util.Log.d("CurbTiming", "PREFLIGHT GATE: Gemini SKIPPED! Zero valid sign candidates detected. Total scan time: ${totalTime} ms")
+
+            val neutralExplanation = if (isLocationKnown && locationName.isNotBlank() && locationName != "Location unavailable" && locationName != "Location access needed") {
+                "No distinct parking signs were resolved in the image at $locationName. Parking rules could not be determined from verified sign evidence."
+            } else {
+                "No distinct parking signs were resolved in the captured image. Parking rules could not be determined from verified sign evidence."
+            }
+
+            val unanchoredResult = ScanResult(
+                locationName = locationName,
+                cityState = cityState,
+                verdict = ScanVerdict.AMBIGUOUS,
+                statusChipText = "Signage unclear",
+                allowedUntilTime = "Verify physical signage",
+                timeRemaining = "--",
+                parkingRules = listOf("No verified parking rule has been established."),
+                explanation = neutralExplanation,
+                detectedSigns = emptyList(),
+                zoneType = "Parking zone",
+                paymentInfo = "",
+                vehicleApplicability = ""
+            )
+
+            return@withContext EvidenceAnchoringValidator.sanitizeAndAnchorResult(unanchoredResult, emptyList())
+        }
+
+        android.util.Log.d("CurbTiming", "PREFLIGHT GATE: Passed. Proceeding to Gemini request with ${validDetections.size} validated sign crop(s).")
+
+        val signContextText = """
             SCANNED PARKING SIGNS:
             ${validDetections.size} distinct sign plate(s) were captured at this parking spot:
             ${validDetections.mapIndexed { idx, crop ->
@@ -80,17 +125,11 @@ object GeminiService {
             }.joinToString("\n")}
             
             Note: All cropped signs belong to the same post and location. Evaluate how they interact and apply together.
-            """.trimIndent()
-        } else {
-            "Inspect the captured image to detect all parking signs and posted regulations at this location."
-        }
+        """.trimIndent()
 
-        val hasValidImages = (bitmap != null && !bitmap.isRecycled) || validDetections.any { 
-            (!it.bitmap.isRecycled && it.bitmap.width > 0) || (it.fileUri.isNotBlank() && java.io.File(it.fileUri).exists()) 
-        }
-
-        if (!apiKey.isNullOrBlank() && apiKey != "MY_GEMINI_API_KEY" && hasValidImages) {
+        if (!apiKey.isNullOrBlank() && apiKey != "MY_GEMINI_API_KEY") {
             try {
+                val encodeStartTime = System.currentTimeMillis()
                 val prompt = """
                     You are CURB, an expert parking regulation assistant.
                     Current evaluation time: $currentTimeStr
@@ -149,33 +188,31 @@ object GeminiService {
                 val partsArray = JSONArray()
                 partsArray.put(JSONObject().apply { put("text", prompt) })
 
-                // 1. Add real cropped sign images
-                if (validDetections.isNotEmpty()) {
-                    for (crop in validDetections) {
-                        val cropBmp = if (!crop.bitmap.isRecycled && crop.bitmap.width > 0) {
-                            crop.bitmap
-                        } else if (crop.fileUri.isNotBlank()) {
-                            val f = java.io.File(crop.fileUri)
-                            if (f.exists() && f.length() > 0) {
-                                android.graphics.BitmapFactory.decodeFile(f.absolutePath)
-                            } else null
+                // 1. Add real cropped sign images (authoritative visual evidence)
+                for (crop in validDetections) {
+                    val cropBmp = if (crop.bitmap != null && !crop.bitmap.isRecycled && crop.bitmap.width > 0) {
+                        crop.bitmap
+                    } else if (crop.fileUri.isNotBlank()) {
+                        val f = java.io.File(crop.fileUri)
+                        if (f.exists() && f.length() > 0) {
+                            android.graphics.BitmapFactory.decodeFile(f.absolutePath)
                         } else null
+                    } else null
 
-                        val b64 = cropBmp?.toBase64()
-                        if (!b64.isNullOrBlank()) {
-                            partsArray.put(JSONObject().apply {
-                                put("inlineData", JSONObject().apply {
-                                    put("mimeType", "image/jpeg")
-                                    put("data", b64)
-                                })
+                    val b64 = cropBmp?.toOptimizedBase64(maxDimension = 1024, quality = 85)
+                    if (!b64.isNullOrBlank()) {
+                        partsArray.put(JSONObject().apply {
+                            put("inlineData", JSONObject().apply {
+                                put("mimeType", "image/jpeg")
+                                put("data", b64)
                             })
-                        }
+                        })
                     }
                 }
 
-                // 2. Add full captured photo context if available and local crops weren't already complete
+                // 2. Add full captured photo context (scaled safely to 1280px max to optimize payload size)
                 if (bitmap != null && !bitmap.isRecycled) {
-                    val fullB64 = bitmap.toBase64()
+                    val fullB64 = bitmap.toOptimizedBase64(maxDimension = 1280, quality = 80)
                     if (!fullB64.isNullOrBlank()) {
                         partsArray.put(JSONObject().apply {
                             put("inlineData", JSONObject().apply {
@@ -185,6 +222,11 @@ object GeminiService {
                         })
                     }
                 }
+
+                android.util.Log.d("CurbTiming", "Image payload encoding completed in ${System.currentTimeMillis() - encodeStartTime} ms")
+
+                val geminiRequestStart = System.currentTimeMillis()
+                android.util.Log.d("CurbTiming", "Gemini API request started")
 
                 val jsonBody = JSONObject().apply {
                     val contentsArray = JSONArray().apply {
@@ -202,6 +244,8 @@ object GeminiService {
                     .build()
 
                 val response = client.newCall(request).execute()
+                val geminiDuration = System.currentTimeMillis() - geminiRequestStart
+                android.util.Log.d("CurbTiming", "Gemini API request completed in ${geminiDuration} ms with HTTP ${response.code}")
                 val responseString = response.body?.string() ?: ""
                 if (response.isSuccessful && responseString.isNotEmpty()) {
                     val rootJson = JSONObject(responseString)
@@ -290,6 +334,9 @@ object GeminiService {
                         vehicleApplicability = parsed.optString("vehicleApplicability", "")
                     )
 
+                    val totalTime = System.currentTimeMillis() - totalScanStartTime
+                    android.util.Log.d("CurbTiming", "Total scan analysis completed via Gemini in $totalTime ms")
+
                     return@withContext EvidenceAnchoringValidator.sanitizeAndAnchorResult(parsedResult, validDetections)
                 }
             } catch (e: Exception) {
@@ -298,6 +345,9 @@ object GeminiService {
         }
 
         // Intelligent local parking analysis generator for robust experience:
+        val totalTime = System.currentTimeMillis() - totalScanStartTime
+        android.util.Log.d("CurbTiming", "Total scan analysis completed via local fallback in $totalTime ms")
+
         EvidenceAnchoringValidator.sanitizeAndAnchorResult(
             generateIntelligentScanResult(locationName, cityState, isLocationKnown, localDetections),
             validDetections

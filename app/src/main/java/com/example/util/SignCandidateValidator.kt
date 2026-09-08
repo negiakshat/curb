@@ -88,6 +88,14 @@ object SignCandidateValidator {
             return CandidateValidation.Valid
         }
 
+        // If string is a short sign symbol, hour designation, or permit/zone pattern, accept
+        val isShortSignSymbol = text.uppercase(Locale.ROOT).trim().matches(
+            Regex("""(?i)^(P|\d{1,2}\s*(H|HR|HRS|M|MIN|MINS)|[P]\s*\d{1,2}\s*(H|HR|HRS|M|MIN|MINS)?|\d{1,2}\s*-\s*\d{1,2}|ZONE\s*[A-Z0-9]+|PERMIT\s*[A-Z0-9]+|NO\s*PARKING|NO\s*STOPPING|TOW\s*AWAY)$""")
+        )
+        if (isShortSignSymbol) {
+            return CandidateValidation.Valid
+        }
+
         // If string has words, check if any word is a parking keyword
         val uppercaseWords = text.uppercase(Locale.ROOT)
             .split(Regex("""[^A-Z0-9]+"""))
@@ -99,7 +107,7 @@ object SignCandidateValidator {
         }
 
         // If string is short (e.g. "PARK", "STOP") or has valid parking words, accept
-        if (uppercaseWords.size <= 2 && uppercaseWords.any { it.length >= 3 && ("PARK".contains(it) || "STOP".contains(it) || "TOW".contains(it) || "METER".contains(it)) }) {
+        if (uppercaseWords.size <= 2 && uppercaseWords.any { it.length >= 2 && ("PARK".contains(it) || "STOP".contains(it) || "TOW".contains(it) || "METER".contains(it) || it == "NO" || it == "HR" || it == "P") }) {
             return CandidateValidation.Valid
         }
 
@@ -152,18 +160,18 @@ object SignCandidateValidator {
             return ocrValidation
         }
 
-        // 2. Minimum absolute candidate size (reject tiny text fragments / isolated UI labels)
-        if (width < 35 || height < 25) {
+        // 2. Minimum absolute candidate size (preserve small distant signs down to 28x20px if OCR is valid)
+        if (width < 28 || height < 20) {
             return CandidateValidation.Invalid("Candidate dimensions too small (${width}x${height}px)")
         }
 
-        // 3. Minimum candidate area relative to image (reject tiny text fragments / isolated labels)
+        // 3. Minimum candidate area relative to image (preserve small distant signs down to 0.0008f)
         val imageArea = imageWidth.toFloat() * imageHeight.toFloat()
         val candidateArea = width.toFloat() * height.toFloat()
         val areaFraction = candidateArea / imageArea
 
-        if (areaFraction < 0.0012f) {
-            return CandidateValidation.Invalid("Candidate relative area too small (${String.format(Locale.US, "%.4f", areaFraction)} < 0.0012)")
+        if (areaFraction < 0.0008f) {
+            return CandidateValidation.Invalid("Candidate relative area too small (${String.format(Locale.US, "%.4f", areaFraction)} < 0.0008)")
         }
 
         // 4. Maximum area check (Do not use entire input bitmap as a sign crop)
@@ -173,7 +181,7 @@ object SignCandidateValidator {
 
         // 5. Plausible rectangular aspect ratio check
         val aspect = width.toFloat() / height.toFloat()
-        if (aspect < 0.15f || aspect > 4.2f) {
+        if (aspect < 0.12f || aspect > 4.5f) {
             return CandidateValidation.Invalid("Implausible sign aspect ratio (${String.format(Locale.US, "%.2f", aspect)})")
         }
 

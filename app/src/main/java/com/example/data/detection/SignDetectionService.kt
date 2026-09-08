@@ -138,10 +138,15 @@ object SignDetectionService {
         context: Context,
         bitmap: Bitmap
     ): LocalDetectionResult = withContext(Dispatchers.Default) {
+        val startTime = System.currentTimeMillis()
+        android.util.Log.d("CurbTiming", "Local detection started on input bitmap ${bitmap.width}x${bitmap.height}")
+
         if (bitmap.isRecycled || bitmap.width < 50 || bitmap.height < 50) {
+            android.util.Log.d("CurbTiming", "Local detection skipped: bitmap is recycled or too small")
             return@withContext LocalDetectionResult(emptyList(), 0, "No parking sign detected.")
         }
 
+        val ocrStartTime = System.currentTimeMillis()
         val visionText = try {
             val inputImage = InputImage.fromBitmap(bitmap, 0)
             processImageAsync(inputImage)
@@ -150,6 +155,7 @@ object SignDetectionService {
         }
 
         val blocks = visionText?.textBlocks ?: emptyList()
+        android.util.Log.d("CurbTiming", "OCR extraction completed in ${System.currentTimeMillis() - ocrStartTime} ms. Raw blocks: ${blocks.size}")
 
         // Phase 1 Candidate Generation: Raw OCR text block regions
         val ocrCandidates: List<OcrCandidateBox> = if (blocks.isNotEmpty()) {
@@ -157,9 +163,11 @@ object SignDetectionService {
         } else emptyList()
 
         if (ocrCandidates.isEmpty()) {
+            android.util.Log.d("CurbTiming", "Local detection completed in ${System.currentTimeMillis() - startTime} ms. Zero OCR candidate clusters.")
             return@withContext LocalDetectionResult(emptyList(), 0, "No parking sign detected.")
         }
 
+        val valStartTime = System.currentTimeMillis()
         val cropsDir = File(context.cacheDir, "sign_crops").apply {
             if (!exists()) mkdirs()
         }
@@ -210,7 +218,10 @@ object SignDetectionService {
             )
         }
 
+        android.util.Log.d("CurbTiming", "OCR candidate validation completed in ${System.currentTimeMillis() - valStartTime} ms. Validated candidates: ${validatedCandidates.size}/${ocrCandidates.size}")
+
         if (validatedCandidates.isEmpty()) {
+            android.util.Log.d("CurbTiming", "Local detection completed in ${System.currentTimeMillis() - startTime} ms. All OCR candidates failed physical validation.")
             return@withContext LocalDetectionResult(emptyList(), 0, "No parking sign detected.")
         }
 
@@ -258,6 +269,9 @@ object SignDetectionService {
                 // Ignore individual crop failure
             }
         }
+
+        val totalTime = System.currentTimeMillis() - startTime
+        android.util.Log.d("CurbTiming", "Local detection completed in $totalTime ms. Generated ${signCrops.size} validated crops.")
 
         val summary = if (signCrops.isNotEmpty()) {
             "Validated ${signCrops.size} physical sign candidate(s): " + signCrops.joinToString("; ") { "[${it.normalizedBox.label}]: \"${it.ocrText.replace("\n", " ").take(40)}\"" }
