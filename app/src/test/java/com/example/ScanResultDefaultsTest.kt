@@ -39,6 +39,23 @@ class ScanResultDefaultsTest {
         )
     }
 
+    private fun createRestrictedLocalCrop(): LocalSignCrop {
+        val dummyBitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+        return LocalSignCrop(
+            id = "crop_restrict_1",
+            bitmap = dummyBitmap,
+            normalizedBox = SignBoundingBox(
+                id = "box_2",
+                left = 0.1f, top = 0.1f, right = 0.9f, bottom = 0.9f,
+                label = "NO PARKING SIGN",
+                ocrText = "TOW AWAY STREET SWEEPING THURS 8AM-10AM",
+                confidence = 0.95f
+            ),
+            ocrText = "TOW AWAY STREET SWEEPING THURS 8AM-10AM",
+            fileUri = ""
+        )
+    }
+
     // Test A: Gemini returns ALLOWED + validDetections empty -> final ScanResult.verdict == AMBIGUOUS
     @Test
     fun testA_GeminiAllowedWithEmptyDetectionsReturnsAmbiguous() {
@@ -91,7 +108,7 @@ class ScanResultDefaultsTest {
             timeRemaining = "0m",
             parkingRules = listOf("Tow Away Street Sweeping")
         )
-        val validCrops = listOf(createValidLocalCrop())
+        val validCrops = listOf(createRestrictedLocalCrop())
 
         val gatedResult = GeminiService.enforceEvidenceGatedVerdict(rawResult, validCrops)
         assertEquals(ScanVerdict.RESTRICTED, gatedResult.verdict)

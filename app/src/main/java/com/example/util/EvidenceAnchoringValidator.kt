@@ -98,8 +98,11 @@ object EvidenceAnchoringValidator {
             vehicleApplicability = filterVehicleApplicability(rawScanResult.vehicleApplicability, combinedOcrText)
         )
 
+        // Pass anchored result through SemanticConsistencyValidator
+        val semanticallyConsistentResult = SemanticConsistencyValidator.enforceSemanticConsistency(anchoredResult, validDetections)
+
         // Run through ParkingAuthority for final location vs sign authority check
-        return ParkingAuthority.sanitizeAndEnforceAuthority(anchoredResult, validDetections, isLiveScanPipeline = true)
+        return ParkingAuthority.sanitizeAndEnforceAuthority(semanticallyConsistentResult, validDetections, isLiveScanPipeline = true)
     }
 
     private fun anchorSignToCrop(candidateSign: DetectedSign?, crop: LocalSignCrop): DetectedSign {

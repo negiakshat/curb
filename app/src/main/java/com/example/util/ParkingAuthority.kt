@@ -113,7 +113,7 @@ object ParkingAuthority {
             }
         }
 
-        return scanResult
+        return SemanticConsistencyValidator.enforceSemanticConsistency(scanResult, localDetections)
     }
 
     private fun enforceAmbiguousFallback(scanResult: ScanResult): ScanResult {
@@ -145,6 +145,10 @@ object ParkingAuthority {
         if (scanResult == null) return false
         if (scanResult.verdict != ScanVerdict.ALLOWED) return false
         if (scanResult.isDemo) return true
+
+        if (!SemanticConsistencyValidator.canAuthorizeTimer(scanResult)) {
+            return false
+        }
 
         if (scanResult.detectedSigns.isNotEmpty()) {
             return scanResult.detectedSigns.any { sign ->
