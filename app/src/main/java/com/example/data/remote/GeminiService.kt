@@ -10,6 +10,7 @@ import com.example.data.model.DetectedSign
 import com.example.data.model.SampleSignPreset
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
+import com.example.util.EvidenceAnchoringValidator
 import com.example.util.ParkingAuthority
 import com.example.util.SignCandidateValidator
 import kotlinx.coroutines.Dispatchers
@@ -289,7 +290,7 @@ object GeminiService {
                         vehicleApplicability = parsed.optString("vehicleApplicability", "")
                     )
 
-                    return@withContext enforceEvidenceGatedVerdict(parsedResult, validDetections)
+                    return@withContext EvidenceAnchoringValidator.sanitizeAndAnchorResult(parsedResult, validDetections)
                 }
             } catch (e: Exception) {
                 // Fallback to intelligent local parking analyzer
@@ -297,7 +298,7 @@ object GeminiService {
         }
 
         // Intelligent local parking analysis generator for robust experience:
-        enforceEvidenceGatedVerdict(
+        EvidenceAnchoringValidator.sanitizeAndAnchorResult(
             generateIntelligentScanResult(locationName, cityState, isLocationKnown, localDetections),
             validDetections
         )
@@ -311,7 +312,7 @@ object GeminiService {
         rawScanResult: ScanResult,
         validDetections: List<LocalSignCrop>
     ): ScanResult {
-        return ParkingAuthority.sanitizeAndEnforceAuthority(rawScanResult, validDetections, isLiveScanPipeline = true)
+        return EvidenceAnchoringValidator.sanitizeAndAnchorResult(rawScanResult, validDetections)
     }
 
     suspend fun askParkingAssistant(
