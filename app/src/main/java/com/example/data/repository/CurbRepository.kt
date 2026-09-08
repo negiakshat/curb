@@ -125,6 +125,11 @@ class CurbRepository(context: Context) {
         var finalAllowedUntil = allowedUntilTime
 
         if (targetScan != null) {
+            // Must have timer authority based on verified physical sign evidence or demo preset
+            if (!com.example.util.ParkingAuthority.canAuthorizeTimer(targetScan)) {
+                return -1L // Reject scans without verified physical sign evidence!
+            }
+
             // Must be ALLOWED verdict
             if (targetScan.verdict != ScanVerdict.ALLOWED) {
                 return -1L // Reject AMBIGUOUS or RESTRICTED scans

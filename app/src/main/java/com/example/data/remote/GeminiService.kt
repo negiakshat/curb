@@ -10,6 +10,7 @@ import com.example.data.model.DetectedSign
 import com.example.data.model.SampleSignPreset
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
+import com.example.util.ParkingAuthority
 import com.example.util.SignCandidateValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -61,11 +62,7 @@ object GeminiService {
         }
 
         val currentTimeStr = SimpleDateFormat("EEEE, h:mm a", Locale.getDefault()).format(Date())
-        val locationContextText = if (isLocationKnown && locationName.isNotBlank() && locationName != "Location unavailable" && locationName != "Location access needed") {
-            "Location Context: $locationName${if (cityState.isNotBlank()) ", $cityState" else ""}. Base primary determination strictly on the signs shown in the images. Do not invent municipal laws if uncertain."
-        } else {
-            "Location Context: Device location is unavailable. Analyze regulations strictly from the visible signs in the photo."
-        }
+        val locationContextText = ParkingAuthority.buildLocationContextPrompt(locationName, cityState, isLocationKnown)
 
         val validDetections = localDetections.filter { crop ->
             !SignCandidateValidator.isDemoOrSampleCrop(crop.fileUri, crop.isDemo, crop.id) &&
@@ -307,57 +304,14 @@ object GeminiService {
     }
 
     fun hasVerifiedPhysicalSignEvidence(validDetections: List<LocalSignCrop>): Boolean {
-        return validDetections.isNotEmpty() && validDetections.any { crop ->
-            !SignCandidateValidator.isDemoOrSampleCrop(crop.fileUri, crop.isDemo, crop.id) &&
-            SignCandidateValidator.validateOcr(crop.ocrText).isValid &&
-            ((crop.bitmap != null && !crop.bitmap.isRecycled) || (crop.fileUri.isNotBlank() && java.io.File(crop.fileUri).let { it.exists() && it.length() > 0 }))
-        }
+        return ParkingAuthority.hasVerifiedSignEvidence(validDetections)
     }
 
     fun enforceEvidenceGatedVerdict(
         rawScanResult: ScanResult,
         validDetections: List<LocalSignCrop>
     ): ScanResult {
-        if (!hasVerifiedPhysicalSignEvidence(validDetections)) {
-            val explanationText = if (rawScanResult.locationName.isNotBlank() &&
-                rawScanResult.locationName != "Current Location" &&
-                rawScanResult.locationName != "Location unavailable" &&
-                rawScanResult.locationName != "Location access needed"
-            ) {
-                "No distinct parking signs were resolved in the image at ${rawScanResult.locationName}. No verified physical parking sign evidence was established."
-            } else {
-                "No distinct parking signs were resolved in the captured image. No verified physical parking sign evidence was established."
-            }
-
-            return rawScanResult.copy(
-                verdict = ScanVerdict.AMBIGUOUS,
-                statusChipText = "Signage unclear",
-                allowedUntilTime = "Verify physical signage",
-                timeRemaining = "--",
-                parkingRules = listOf("No verified parking rule has been established."),
-                explanation = explanationText,
-                detectedSigns = emptyList(),
-                paymentInfo = "",
-                vehicleApplicability = ""
-            )
-        }
-
-        if (rawScanResult.verdict == ScanVerdict.ALLOWED) {
-            val hasValidRules = rawScanResult.parkingRules.isNotEmpty() &&
-                    rawScanResult.parkingRules.none { it.contains("No verified parking rule") }
-
-            if (!hasValidRules) {
-                return rawScanResult.copy(
-                    verdict = ScanVerdict.AMBIGUOUS,
-                    statusChipText = "Signage unclear",
-                    allowedUntilTime = "Verify physical signage",
-                    timeRemaining = "--",
-                    parkingRules = listOf("No verified parking rule has been established."),
-                    explanation = "Signage was detected, but no specific parking permissions or time limits were established from the sign evidence."
-                )
-            }
-        }
-        return rawScanResult
+        return ParkingAuthority.sanitizeAndEnforceAuthority(rawScanResult, validDetections, isLiveScanPipeline = true)
     }
 
     suspend fun askParkingAssistant(
