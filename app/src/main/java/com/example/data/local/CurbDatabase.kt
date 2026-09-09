@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -13,7 +15,7 @@ import androidx.room.RoomDatabase
         CurbNoteEntity::class,
         ParkingSpotEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class CurbDatabase : RoomDatabase() {
@@ -27,6 +29,12 @@ abstract class CurbDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: CurbDatabase? = null
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE parking_spots ADD COLUMN isDemo INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context): CurbDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -34,6 +42,7 @@ abstract class CurbDatabase : RoomDatabase() {
                     CurbDatabase::class.java,
                     "curb_parking_database"
                 )
+                    .addMigrations(MIGRATION_6_7)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

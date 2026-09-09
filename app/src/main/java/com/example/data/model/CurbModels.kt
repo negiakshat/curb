@@ -149,7 +149,8 @@ data class ParkingSpot(
     val accuracy: Float? = null,
     val locationName: String = "",
     val sessionId: Long? = null,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val isDemo: Boolean = false
 )
 
 data class SavedPlace(

@@ -144,6 +144,7 @@ fun CurbApp(
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     val activeSession by viewModel.activeSession.collectAsStateWithLifecycle()
     val savedParkingSpot by viewModel.savedParkingSpot.collectAsStateWithLifecycle()
+    val demoSavedParkingSpot by viewModel.demoSavedParkingSpot.collectAsStateWithLifecycle()
     val isSavingParkingSpot by viewModel.isSavingParkingSpot.collectAsStateWithLifecycle()
     val parkingSpotSaveError by viewModel.parkingSpotSaveError.collectAsStateWithLifecycle()
     val userLocationState by viewModel.userLocationState.collectAsStateWithLifecycle()
@@ -726,9 +727,10 @@ fun CurbApp(
 
                 // 21. PARKING TIMER
                 composable(Routes.PARKING_TIMER) {
+                    val effectiveSpotForTimer = if (activeSession?.isDemo == true) demoSavedParkingSpot else savedParkingSpot
                     ParkingTimerScreen(
                         activeSession = activeSession,
-                        savedParkingSpot = savedParkingSpot,
+                        savedParkingSpot = effectiveSpotForTimer,
                         isSavingParkingSpot = isSavingParkingSpot,
                         parkingSpotSaveError = parkingSpotSaveError,
                         onSaveParkingSpot = {

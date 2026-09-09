@@ -136,4 +136,152 @@ class ParkingSpotPersistenceTest {
             assertEquals(5f, current.accuracy ?: 0f, 0.01f)
         }
     }
+
+    @Test
+    fun testDemoAndRealSpotIsolation() {
+        runBlocking {
+            // Save real parking spot
+            repository.saveParkingSpot(
+                latitude = 37.77,
+                longitude = -122.41,
+                locationName = "Real Spot",
+                isDemo = false
+            )
+
+            // Save demo parking spot
+            repository.saveParkingSpot(
+                latitude = 37.78,
+                longitude = -122.40,
+                locationName = "Demo Spot",
+                isDemo = true
+            )
+
+            // Real flow returns ONLY real spot
+            val realSpot = repository.savedParkingSpot.first()
+            assertNotNull(realSpot)
+            assertEquals("Real Spot", realSpot?.locationName)
+            assertEquals(false, realSpot?.isDemo)
+
+            // Demo flow returns ONLY demo spot
+            val demoSpot = repository.demoSavedParkingSpot.first()
+            assertNotNull(demoSpot)
+            assertEquals("Demo Spot", demoSpot?.locationName)
+            assertEquals(true, demoSpot?.isDemo)
+        }
+    }
+
+    @Test
+    fun testDemoSpotDoesNotOverwriteRealSpot() {
+        runBlocking {
+            repository.saveParkingSpot(
+                latitude = 37.77,
+                longitude = -122.41,
+                locationName = "Real Spot",
+                isDemo = false
+            )
+
+            val realBefore = repository.savedParkingSpot.first()
+            assertEquals("Real Spot", realBefore?.locationName)
+
+            // Saving demo spot does NOT clear or overwrite real spot
+            repository.saveParkingSpot(
+                latitude = 37.99,
+                longitude = -122.99,
+                locationName = "Demo Simulation Spot",
+                isDemo = true
+            )
+
+            val realAfter = repository.savedParkingSpot.first()
+            assertNotNull(realAfter)
+            assertEquals("Real Spot", realAfter?.locationName)
+            assertEquals(37.77, realAfter!!.latitude, 0.0001)
+
+            val demoAfter = repository.demoSavedParkingSpot.first()
+            assertNotNull(demoAfter)
+            assertEquals("Demo Simulation Spot", demoAfter?.locationName)
+        }
+    }
+
+    @Test
+    fun testRealSpotNotDeletedByDemoCleanup() {
+        runBlocking {
+            repository.saveParkingSpot(
+                latitude = 37.77,
+                longitude = -122.41,
+                locationName = "Real Spot",
+                isDemo = false
+            )
+            repository.saveParkingSpot(
+                latitude = 37.78,
+                longitude = -122.40,
+                locationName = "Demo Spot",
+                isDemo = true
+            )
+
+            // Clear demo spots only
+            repository.clearActiveParkingSpots(isDemo = true)
+
+            // Real spot must remain active
+            val realSpot = repository.savedParkingSpot.first()
+            assertNotNull(realSpot)
+            assertEquals("Real Spot", realSpot?.locationName)
+
+            // Demo spot must be cleared
+            val demoSpot = repository.demoSavedParkingSpot.first()
+            assertNull(demoSpot)
+        }
+    }
+
+    @Test
+    fun testEmptyRealSpotWithExistingDemoSpotBehavesAsNoSavedSpot() {
+        runBlocking {
+            // Save ONLY a demo spot
+            repository.saveParkingSpot(
+                latitude = 37.78,
+                longitude = -122.40,
+                locationName = "Demo Spot Only",
+                isDemo = true
+            )
+
+            // Normal user flow sees no real saved spot
+            val realSpot = repository.savedParkingSpot.first()
+            assertNull(realSpot)
+
+            // Demo flow sees demo spot
+            val demoSpot = repository.demoSavedParkingSpot.first()
+            assertNotNull(demoSpot)
+            assertEquals("Demo Spot Only", demoSpot?.locationName)
+        }
+    }
+
+    @Test
+    fun testReloadPreservesRealSpotAndIsolation() {
+        runBlocking {
+            repository.saveParkingSpot(
+                latitude = 37.77,
+                longitude = -122.41,
+                locationName = "Persistent Real Spot",
+                isDemo = false
+            )
+            repository.saveParkingSpot(
+                latitude = 37.78,
+                longitude = -122.40,
+                locationName = "Persistent Demo Spot",
+                isDemo = true
+            )
+
+            // Simulate app reload by creating new repository instance over same app database
+            val reloadedRepository = CurbRepository(app)
+
+            val reloadedReal = reloadedRepository.savedParkingSpot.first()
+            assertNotNull(reloadedReal)
+            assertEquals("Persistent Real Spot", reloadedReal?.locationName)
+            assertEquals(false, reloadedReal?.isDemo)
+
+            val reloadedDemo = reloadedRepository.demoSavedParkingSpot.first()
+            assertNotNull(reloadedDemo)
+            assertEquals("Persistent Demo Spot", reloadedDemo?.locationName)
+            assertEquals(true, reloadedDemo?.isDemo)
+        }
+    }
 }

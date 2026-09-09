@@ -47,6 +47,10 @@ class CurbRepository(context: Context) {
         entity?.let { entityToParkingSpot(it) }
     }
 
+    val demoSavedParkingSpot: Flow<ParkingSpot?> = parkingSpotDao.getDemoActiveParkingSpot().map { entity ->
+        entity?.let { entityToParkingSpot(it) }
+    }
+
     val savedPlaces: Flow<List<SavedPlace>> = savedPlaceDao.getAllSavedPlaces().map { entities ->
         entities.map { entityToSavedPlace(it) }
     }
@@ -263,15 +267,25 @@ class CurbRepository(context: Context) {
         noteDao.deleteNoteForSavedPlace(id)
     }
 
+    suspend fun getSessionById(id: Long): ActiveParkingSession? {
+        val entity = parkingSessionDao.getSessionById(id)
+        return entity?.let { entityToParkingSession(it) }
+    }
+
     suspend fun saveParkingSpot(
         latitude: Double,
         longitude: Double,
         accuracy: Float? = null,
         timestamp: Long = System.currentTimeMillis(),
         locationName: String = "",
-        sessionId: Long? = null
+        sessionId: Long? = null,
+        isDemo: Boolean = false
     ): Long {
-        parkingSpotDao.clearActiveSpots()
+        if (isDemo) {
+            parkingSpotDao.clearActiveDemoSpots()
+        } else {
+            parkingSpotDao.clearActiveRealSpots()
+        }
         val entity = ParkingSpotEntity(
             latitude = latitude,
             longitude = longitude,
@@ -279,17 +293,27 @@ class CurbRepository(context: Context) {
             timestamp = timestamp,
             locationName = locationName,
             sessionId = sessionId,
-            isActive = true
+            isActive = true,
+            isDemo = isDemo
         )
         return parkingSpotDao.insertParkingSpot(entity)
     }
 
-    suspend fun clearActiveParkingSpots() {
-        parkingSpotDao.clearActiveSpots()
+    suspend fun clearActiveParkingSpots(isDemo: Boolean = false) {
+        if (isDemo) {
+            parkingSpotDao.clearActiveDemoSpots()
+        } else {
+            parkingSpotDao.clearActiveRealSpots()
+        }
     }
 
-    suspend fun getActiveParkingSpotDirect(): ParkingSpot? {
-        return parkingSpotDao.getActiveParkingSpotDirect()?.let { entityToParkingSpot(it) }
+    suspend fun getActiveParkingSpotDirect(isDemo: Boolean = false): ParkingSpot? {
+        val entity = if (isDemo) {
+            parkingSpotDao.getDemoActiveParkingSpotDirect()
+        } else {
+            parkingSpotDao.getActiveParkingSpotDirect()
+        }
+        return entity?.let { entityToParkingSpot(it) }
     }
 
     suspend fun clearAllData() {
@@ -418,7 +442,8 @@ class CurbRepository(context: Context) {
             accuracy = entity.accuracy,
             locationName = entity.locationName,
             sessionId = entity.sessionId,
-            isActive = entity.isActive
+            isActive = entity.isActive,
+            isDemo = entity.isDemo
         )
     }
 }

@@ -66,6 +66,9 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     val savedParkingSpot: StateFlow<ParkingSpot?> = repository.savedParkingSpot
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val demoSavedParkingSpot: StateFlow<ParkingSpot?> = repository.demoSavedParkingSpot
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     private val _isSavingParkingSpot = MutableStateFlow(false)
     val isSavingParkingSpot: StateFlow<Boolean> = _isSavingParkingSpot.asStateFlow()
 
@@ -618,11 +621,15 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveCurrentParkingSpot(
         sessionId: Long? = null,
+        isDemo: Boolean? = null,
         onResult: (Boolean, String?) -> Unit = { _, _ -> }
     ) {
         viewModelScope.launch {
             _isSavingParkingSpot.value = true
             _parkingSpotSaveError.value = null
+
+            val targetSession = if (sessionId != null && sessionId > 0) repository.getSessionById(sessionId) else null
+            val effectiveIsDemo = isDemo ?: (targetSession?.isDemo == true)
 
             if (!locationService.hasLocationPermission()) {
                 val errorMsg = "Location permission is required to save your parking spot."
@@ -641,7 +648,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                         accuracy = result.accuracy,
                         timestamp = result.timestamp,
                         locationName = result.locationName,
-                        sessionId = sessionId
+                        sessionId = sessionId,
+                        isDemo = effectiveIsDemo
                     )
                     _isSavingParkingSpot.value = false
                     _parkingSpotSaveError.value = null
@@ -665,9 +673,9 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         _parkingSpotSaveError.value = null
     }
 
-    fun clearSavedParkingSpot() {
+    fun clearSavedParkingSpot(isDemo: Boolean = false) {
         viewModelScope.launch {
-            repository.clearActiveParkingSpots()
+            repository.clearActiveParkingSpots(isDemo = isDemo)
         }
     }
 
