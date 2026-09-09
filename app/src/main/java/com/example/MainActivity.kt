@@ -86,12 +86,18 @@ import com.example.viewmodel.CurbViewModel
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.notification.ParkingNotificationScheduler.createNotificationChannel(applicationContext)
         enableEdgeToEdge()
         setContent {
             CurbTheme {
-                CurbApp()
+                CurbApp(intent = intent)
             }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
 }
 
@@ -134,12 +140,20 @@ sealed class BottomNavItem(
 
 @Composable
 fun CurbApp(
+    intent: android.content.Intent? = null,
     viewModel: CurbViewModel = viewModel()
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val context = LocalContext.current
+
+    androidx.compose.runtime.LaunchedEffect(intent) {
+        val targetRoute = intent?.getStringExtra(com.example.notification.ParkingNotificationScheduler.EXTRA_NAVIGATE_ROUTE)
+        if (targetRoute == Routes.PARKING_TIMER) {
+            navController.navigate(Routes.PARKING_TIMER)
+        }
+    }
 
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     val activeSession by viewModel.activeSession.collectAsStateWithLifecycle()

@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 class CurbRepository(context: Context) {
+    private val appContext = context.applicationContext
     private val database = CurbDatabase.getDatabase(context)
     private val scanDao = database.scanDao()
     private val parkingSessionDao = database.parkingSessionDao()
@@ -207,11 +208,17 @@ class CurbRepository(context: Context) {
             timerMode = finalTimerMode,
             isDemo = isDemoSession
         )
-        return parkingSessionDao.insertSession(entity)
+        val id = parkingSessionDao.insertSession(entity)
+        if (!isDemoSession) {
+            val insertedSession = entity.copy(id = id)
+            com.example.notification.ParkingNotificationScheduler.scheduleSessionNotifications(appContext, insertedSession)
+        }
+        return id
     }
 
     suspend fun endActiveSession(id: Long) {
         parkingSessionDao.endSession(id)
+        com.example.notification.ParkingNotificationScheduler.cancelSessionNotifications(appContext, id)
     }
 
     suspend fun extendActiveSession(
@@ -244,11 +251,18 @@ class CurbRepository(context: Context) {
             allowedUntilTime = newAllowedUntil
         )
         parkingSessionDao.updateSession(updatedSession)
+        if (!updatedSession.isDemo) {
+            com.example.notification.ParkingNotificationScheduler.scheduleSessionNotifications(appContext, updatedSession)
+        }
         return true
     }
 
     suspend fun updateSessionReminder(id: Long, reminderMinutes: Int) {
         parkingSessionDao.updateReminder(id, reminderMinutes)
+        val session = parkingSessionDao.getSessionById(id)
+        if (session != null && !session.isDemo && session.isActive) {
+            com.example.notification.ParkingNotificationScheduler.scheduleSessionNotifications(appContext, session)
+        }
     }
 
     suspend fun addSavedPlace(place: SavedPlace): Long {
@@ -317,6 +331,10 @@ class CurbRepository(context: Context) {
     }
 
     suspend fun clearAllData() {
+        val activeSession = parkingSessionDao.getActiveSessionDirect()
+        if (activeSession != null) {
+            com.example.notification.ParkingNotificationScheduler.cancelSessionNotifications(appContext, activeSession.id)
+        }
         scanDao.clearAllScans()
         parkingSessionDao.clearAllSessions()
         savedPlaceDao.clearAllSavedPlaces()
