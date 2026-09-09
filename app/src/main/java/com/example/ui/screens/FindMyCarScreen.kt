@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CompassCalibration
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.DirectionsWalk
@@ -69,6 +70,7 @@ import com.example.R
 import com.example.data.location.UserLocationResult
 import com.example.data.model.ParkingSpot
 import com.example.data.remote.WalkingRoute
+import com.example.ui.components.CurbPrimaryButton
 import com.example.ui.theme.BentoBorder
 import com.example.ui.theme.BentoPrimaryDark
 import com.example.ui.theme.BentoSand
@@ -264,29 +266,13 @@ fun FindMyCarScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        Button(
+                        CurbPrimaryButton(
+                            text = "GO TO PARKING TIMER",
                             onClick = onNavigateToParkingTimer,
-                            shape = RoundedCornerShape(RadiusCard),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = BentoPrimaryDark,
-                                contentColor = Color.White
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Place,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "GO TO PARKING TIMER",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
+                            leadingIcon = Icons.Default.Place,
+                            backgroundColor = BentoPrimaryDark,
+                            testTag = "go_to_timer_button"
+                        )
                     }
                 }
             }
@@ -326,20 +312,25 @@ fun FindMyCarScreen(
                     val feet = (meters * 3.28084).toInt()
                     val miles = meters / 1609.34
 
-                    val distanceText = if (feet < 528) {
-                        "$feet ft away (${meters.toInt()} m)"
+                    if (meters < 6.0 || feet < 20) {
+                        // User is effectively at their car
+                        Triple("You're at your car", null, false)
                     } else {
-                        String.format(Locale.US, "%.1f mi away (%.1f km)", miles, meters / 1000.0)
+                        val isReal = walkingRoute?.isRealFootRoute ?: false
+                        val distanceText = if (feet < 528) {
+                            "$feet ft away (${meters.toInt()} m)"
+                        } else {
+                            String.format(Locale.US, "%.1f mi away (%.1f km)", miles, meters / 1000.0)
+                        }
+
+                        val walkSeconds = walkingRoute?.durationSeconds ?: (meters / 1.33)
+                        val walkMinutes = Math.max(1, Math.round(walkSeconds / 60.0).toInt())
+                        val walkText = if (isReal) "$walkMinutes min walk" else "~$walkMinutes min walk"
+
+                        Triple(distanceText, walkText, !isReal)
                     }
-
-                    val walkSeconds = walkingRoute?.durationSeconds ?: (meters / 1.33)
-                    val walkMinutes = Math.max(1, Math.round(walkSeconds / 60.0).toInt())
-                    val isReal = walkingRoute?.isRealFootRoute ?: false
-                    val walkText = if (isReal) "$walkMinutes min walk" else "~$walkMinutes min walk (approx.)"
-
-                    Pair(distanceText, walkText)
                 } else {
-                    Pair(null, null)
+                    Triple(null, null, false)
                 }
             }
 
@@ -572,52 +563,86 @@ fun FindMyCarScreen(
                         // Distance badge row
                         if (distanceAndWalk.first != null) {
                             Spacer(modifier = Modifier.height(14.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFFE8F0FE))
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (distanceAndWalk.second == null) Color(0xFFE6F4EA) else Color(0xFFE8F0FE),
+                                border = BorderStroke(1.dp, if (distanceAndWalk.second == null) Color(0xFFCEEAD6) else Color(0xFFD2E3FC))
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CompassCalibration,
-                                        contentDescription = null,
-                                        tint = Color(0xFF1A73E8),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Text(
-                                        text = distanceAndWalk.first ?: "",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF174EA6)
-                                    )
-                                }
-
-                                distanceAndWalk.second?.let { walkStr ->
                                     Row(
+                                        modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.DirectionsWalk,
-                                            contentDescription = null,
-                                            tint = Color(0xFF1A73E8),
-                                            modifier = Modifier.size(16.dp)
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (distanceAndWalk.second == null) Icons.Default.CheckCircle else Icons.Default.CompassCalibration,
+                                                contentDescription = null,
+                                                tint = if (distanceAndWalk.second == null) Color(0xFF137333) else Color(0xFF1A73E8),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Text(
+                                                text = distanceAndWalk.first ?: "",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (distanceAndWalk.second == null) Color(0xFF137333) else Color(0xFF174EA6)
+                                            )
+                                        }
+
+                                        distanceAndWalk.second?.let { walkStr ->
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.DirectionsWalk,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF1A73E8),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    text = walkStr,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = Color(0xFF174EA6)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (distanceAndWalk.third) {
+                                        Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            text = walkStr,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF174EA6)
+                                            text = "Straight-line distance (approximate route)",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF174EA6).copy(alpha = 0.85f)
                                         )
                                     }
                                 }
+                            }
+                        } else if (savedParkingSpot != null && userLocationState == null) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = BentoPrimaryDark
+                                )
+                                Text(
+                                    text = "Locating your position...",
+                                    fontSize = 12.sp,
+                                    color = MapTextMuted
+                                )
                             }
                         } else if (userLocationState is UserLocationResult.PermissionRequired) {
                             Spacer(modifier = Modifier.height(12.dp))
@@ -640,26 +665,13 @@ fun FindMyCarScreen(
                         Spacer(modifier = Modifier.height(14.dp))
 
                         // Primary Action: View Active Parking Timer
-                        Button(
+                        CurbPrimaryButton(
+                            text = "View Parking Timer",
                             onClick = onNavigateToParkingTimer,
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = BentoPrimaryDark,
-                                contentColor = Color.White
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(46.dp)
-                                .testTag("find_my_car_timer_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.DirectionsCar,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("View Parking Timer", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
+                            leadingIcon = Icons.Default.DirectionsCar,
+                            backgroundColor = BentoPrimaryDark,
+                            testTag = "find_my_car_timer_button"
+                        )
                     }
                 }
             }
