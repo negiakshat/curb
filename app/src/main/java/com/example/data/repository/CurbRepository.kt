@@ -123,6 +123,7 @@ class CurbRepository(context: Context) {
         var finalTimerBasis = timerBasis
         var finalRuleSummary = parkingRuleSummary
         var finalAllowedUntil = allowedUntilTime
+        var finalTimerMode = "TIMED_LIMIT"
 
         if (targetScan != null) {
             // Must have timer authority based on verified physical sign evidence or demo preset
@@ -136,37 +137,25 @@ class CurbRepository(context: Context) {
             }
 
             val timerConfig = ParkingTimerCalculator.calculateConfig(targetScan, now)
-            if (!timerConfig.isValidAllowed) {
-                return -1L // Reject if duration/rule is unparseable or unknown
+            if (!timerConfig.canStart) {
+                return -1L // Reject if timer creation is unauthorized or lacks explicit verified limit
             }
 
-            val computedMax = if (timerConfig.isUnrestricted) {
-                Long.MAX_VALUE
-            } else {
-                now + (timerConfig.calculatedMinutes * 60 * 1000L)
-            }
-
-            canonicalMaxEndTime = computedMax
+            canonicalMaxEndTime = timerConfig.maxAllowedEndTimeMillis
+            finalTimerMode = timerConfig.mode.name
             if (finalTimerBasis.isBlank()) finalTimerBasis = timerConfig.timerBasis
             if (finalRuleSummary.isBlank()) finalRuleSummary = timerConfig.ruleSummary
             if (finalAllowedUntil.isBlank()) finalAllowedUntil = timerConfig.allowedUntilTimeFormatted
         } else {
-            // No scan result provided
-            if (canonicalMaxEndTime == null) {
-                if (durationMinutes > 0) {
-                    // Quick timer preset or explicit duration
-                    canonicalMaxEndTime = now + (durationMinutes * 60 * 1000L)
-                } else {
-                    return -1L // No valid scan, no max authority, no duration -> Reject!
-                }
-            }
+            // No scan result provided -> Real timer session cannot be started without verified sign evidence!
+            return -1L
         }
 
         // Determine requested end time
         val requestedEndTime = if (durationMinutes > 0) {
             now + (durationMinutes * 60 * 1000L)
         } else {
-            canonicalMaxEndTime ?: (now + 60 * 1000L)
+            canonicalMaxEndTime ?: return -1L
         }
 
         // Clamp effective end time to canonical max authority
@@ -211,6 +200,7 @@ class CurbRepository(context: Context) {
             parkingRuleSummary = finalRuleSummary,
             isActive = true,
             maxAllowedEndTimeMillis = canonicalMaxEndTime,
+            timerMode = finalTimerMode,
             isDemo = isDemoSession
         )
         return parkingSessionDao.insertSession(entity)
@@ -393,6 +383,7 @@ class CurbRepository(context: Context) {
             parkingRuleSummary = entity.parkingRuleSummary,
             isActive = entity.isActive,
             maxAllowedEndTimeMillis = entity.maxAllowedEndTimeMillis,
+            timerMode = entity.timerMode,
             isDemo = entity.isDemo
         )
     }

@@ -8,17 +8,31 @@ import java.util.Date
 import java.util.Locale
 import java.util.regex.Pattern
 
+enum class TimerSemanticMode {
+    TIMED_LIMIT,
+    CLOCK_CUTOFF,
+    METERED_WITHOUT_VERIFIED_TIME_LIMIT,
+    UNRESTRICTED_OR_NO_VERIFIED_LIMIT,
+    AMBIGUOUS_OR_RESTRICTED
+}
+
 data class ParkingTimerConfig(
-    val isValidAllowed: Boolean,
-    val isUnrestricted: Boolean,
-    val isRestrictedOrAmbiguous: Boolean,
-    val calculatedMinutes: Int,
-    val formattedDuration: String,
-    val timerBasis: String,
-    val allowedUntilTimeFormatted: String,
-    val confirmationHeadline: String,
-    val confirmationSubtext: String,
-    val ruleSummary: String
+    val canStart: Boolean,
+    val mode: TimerSemanticMode,
+    val reason: String,
+    val startTime: Long = System.currentTimeMillis(),
+    val endTime: Long = System.currentTimeMillis(),
+    val maxAllowedEndTimeMillis: Long? = null,
+    val isValidAllowed: Boolean = canStart,
+    val isUnrestricted: Boolean = (mode == TimerSemanticMode.UNRESTRICTED_OR_NO_VERIFIED_LIMIT),
+    val isRestrictedOrAmbiguous: Boolean = (mode == TimerSemanticMode.AMBIGUOUS_OR_RESTRICTED),
+    val calculatedMinutes: Int = 0,
+    val formattedDuration: String = "",
+    val timerBasis: String = "",
+    val allowedUntilTimeFormatted: String = "",
+    val confirmationHeadline: String = "",
+    val confirmationSubtext: String = "",
+    val ruleSummary: String = ""
 )
 
 object ParkingTimerCalculator {
@@ -29,9 +43,12 @@ object ParkingTimerCalculator {
     ): ParkingTimerConfig {
         if (scanResult == null) {
             return ParkingTimerConfig(
-                isValidAllowed = false,
-                isUnrestricted = false,
-                isRestrictedOrAmbiguous = true,
+                canStart = false,
+                mode = TimerSemanticMode.AMBIGUOUS_OR_RESTRICTED,
+                reason = "No active scan result provided.",
+                startTime = currentTimeMillis,
+                endTime = currentTimeMillis,
+                maxAllowedEndTimeMillis = null,
                 calculatedMinutes = 0,
                 formattedDuration = "No scan",
                 timerBasis = "No scan result",
@@ -45,9 +62,12 @@ object ParkingTimerCalculator {
         // 1. If RESTRICTED -> No timer allowed
         if (scanResult.verdict == ScanVerdict.RESTRICTED) {
             return ParkingTimerConfig(
-                isValidAllowed = false,
-                isUnrestricted = false,
-                isRestrictedOrAmbiguous = true,
+                canStart = false,
+                mode = TimerSemanticMode.AMBIGUOUS_OR_RESTRICTED,
+                reason = "Parking is prohibited at this location.",
+                startTime = currentTimeMillis,
+                endTime = currentTimeMillis,
+                maxAllowedEndTimeMillis = null,
                 calculatedMinutes = 0,
                 formattedDuration = "Parking restricted",
                 timerBasis = "Active restriction",
@@ -60,13 +80,16 @@ object ParkingTimerCalculator {
 
         // 2. If AMBIGUOUS or any detected sign is uncertain -> No timer allowed
         val hasUncertainty = scanResult.verdict == ScanVerdict.AMBIGUOUS ||
-                scanResult.detectedSigns.any { it.isUncertain }
+                scanResult.detectedSigns.any { it.isUncertain || it.isRestrictingNow }
 
         if (hasUncertainty) {
             return ParkingTimerConfig(
-                isValidAllowed = false,
-                isUnrestricted = false,
-                isRestrictedOrAmbiguous = true,
+                canStart = false,
+                mode = TimerSemanticMode.AMBIGUOUS_OR_RESTRICTED,
+                reason = "Parking sign rules are ambiguous or uncertain.",
+                startTime = currentTimeMillis,
+                endTime = currentTimeMillis,
+                maxAllowedEndTimeMillis = null,
                 calculatedMinutes = 0,
                 formattedDuration = "Rule unclear",
                 timerBasis = "Uncertain signage",
@@ -75,6 +98,38 @@ object ParkingTimerCalculator {
                 confirmationSubtext = "Curb could not establish the active rule with certainty. Verify physical signs on-site before parking.",
                 ruleSummary = "Uncertain signage"
             )
+        }
+
+        // Authority gate validation for non-demo scans
+        if (!scanResult.isDemo) {
+            if (!ParkingAuthority.canAuthorizeTimer(scanResult) || !SemanticConsistencyValidator.canAuthorizeTimer(scanResult)) {
+                val combined = buildString {
+                    append(scanResult.allowedUntilTime).append(" ")
+                    append(scanResult.paymentInfo).append(" ")
+                    scanResult.parkingRules.forEach { append(it).append(" ") }
+                }.lowercase(Locale.US)
+                val isPayment = (scanResult.paymentInfo.isNotBlank() &&
+                        !scanResult.paymentInfo.contains("free", ignoreCase = true) &&
+                        !scanResult.paymentInfo.contains("no fee", ignoreCase = true)) ||
+                        combined.contains("meter") || combined.contains("pay")
+                val mode = if (isPayment) TimerSemanticMode.METERED_WITHOUT_VERIFIED_TIME_LIMIT else TimerSemanticMode.UNRESTRICTED_OR_NO_VERIFIED_LIMIT
+
+                return ParkingTimerConfig(
+                    canStart = false,
+                    mode = mode,
+                    reason = "Scan lacks verified time-limit signage evidence.",
+                    startTime = currentTimeMillis,
+                    endTime = currentTimeMillis,
+                    maxAllowedEndTimeMillis = null,
+                    calculatedMinutes = 0,
+                    formattedDuration = if (isPayment) "Pay to park" else "No time limit",
+                    timerBasis = if (isPayment) "Metered parking" else "Unrestricted parking",
+                    allowedUntilTimeFormatted = scanResult.allowedUntilTime,
+                    confirmationHeadline = if (isPayment) "Pay to park" else "No time limit",
+                    confirmationSubtext = if (isPayment) "Metered parking detected, but no verified time limit was established by signage." else "You can park here without time restrictions. No legal-limit countdown can be set.",
+                    ruleSummary = scanResult.parkingRules.firstOrNull() ?: "No verified time limit"
+                )
+            }
         }
 
         // 3. ALLOWED -> Check if Unrestricted (No time limit)
@@ -102,9 +157,12 @@ object ParkingTimerCalculator {
 
         if (isUnrestricted) {
             return ParkingTimerConfig(
-                isValidAllowed = true,
-                isUnrestricted = true,
-                isRestrictedOrAmbiguous = false,
+                canStart = false,
+                mode = TimerSemanticMode.UNRESTRICTED_OR_NO_VERIFIED_LIMIT,
+                reason = "Unrestricted parking detected.",
+                startTime = currentTimeMillis,
+                endTime = currentTimeMillis,
+                maxAllowedEndTimeMillis = null,
                 calculatedMinutes = 0,
                 formattedDuration = "No time limit",
                 timerBasis = "Unrestricted parking",
@@ -118,8 +176,14 @@ object ParkingTimerCalculator {
         // 4. ALLOWED WITH TIME LIMIT OR CUTOFF
         val nowCal = Calendar.getInstance().apply { timeInMillis = currentTimeMillis }
 
+        val signText = buildString {
+            append(scanResult.allowedUntilTime).append(" ")
+            scanResult.parkingRules.forEach { append(it).append(" ") }
+            scanResult.detectedSigns.forEach { append(it.title).append(" ").append(it.restrictions).append(" ").append(it.subtitle).append(" ") }
+        }.lowercase(Locale.US)
+
         // Step A: Parse posted duration limit (e.g., "2 Hour Parking" -> 120 mins, "1 Hour" -> 60 mins)
-        val postedLimitMinutes = parsePostedDurationLimitMinutes(combinedText)
+        val postedLimitMinutes = parsePostedDurationLimitMinutes(signText)
 
         // Step B: Parse clock cutoff time (e.g., "6:00 PM", "4:00 PM", "18:00")
         val clockCutoffMillis = parseClockEndTime(scanResult.allowedUntilTime, combinedText, nowCal, currentTimeMillis)
@@ -140,71 +204,87 @@ object ParkingTimerCalculator {
         // Step C: Parse remaining time fallback from scanResult.timeRemaining
         val timeRemainingMinutes = parseRemainingMinutesFallback(scanResult.timeRemaining)
 
-        // Step D: Candidate minutes list (take the minimum of all valid positive constraints)
-        val candidateMinutesList = listOfNotNull(
-            postedLimitMinutes,
-            minutesUntilClockCutoff,
-            timeRemainingMinutes
-        ).filter { it > 0 }
+        val hasPayment = (scanResult.paymentInfo.isNotBlank() &&
+                !scanResult.paymentInfo.contains("free", ignoreCase = true) &&
+                !scanResult.paymentInfo.contains("no fee", ignoreCase = true)) ||
+                combinedText.contains("meter") || combinedText.contains("pay")
 
-        if (candidateMinutesList.isEmpty()) {
-            // Cannot confidently determine a specific duration or clock cutoff -> do not start a misleading timer!
+        if (postedLimitMinutes == null && minutesUntilClockCutoff == null && timeRemainingMinutes == null) {
+            val mode = if (hasPayment) TimerSemanticMode.METERED_WITHOUT_VERIFIED_TIME_LIMIT else TimerSemanticMode.UNRESTRICTED_OR_NO_VERIFIED_LIMIT
             return ParkingTimerConfig(
-                isValidAllowed = false,
-                isUnrestricted = false,
-                isRestrictedOrAmbiguous = true,
+                canStart = false,
+                mode = mode,
+                reason = if (hasPayment) "Metered parking detected, but no verified time limit was established." else "No verified time limit established by signage.",
+                startTime = currentTimeMillis,
+                endTime = currentTimeMillis,
+                maxAllowedEndTimeMillis = null,
                 calculatedMinutes = 0,
-                formattedDuration = "Duration unspecified",
-                timerBasis = "Unspecified limit",
-                allowedUntilTimeFormatted = "Verify signs",
-                confirmationHeadline = "Parking duration unspecified",
-                confirmationSubtext = "Curb detected that parking is allowed, but could not determine a specific time limit. Check physical signs on-site before parking.",
+                formattedDuration = if (hasPayment) "Pay to park" else "Duration unspecified",
+                timerBasis = if (hasPayment) "Metered parking" else "Unspecified limit",
+                allowedUntilTimeFormatted = scanResult.allowedUntilTime,
+                confirmationHeadline = if (hasPayment) "Pay to park" else "Parking duration unspecified",
+                confirmationSubtext = if (hasPayment) "Metered parking detected, but no maximum time limit was established by signage." else "Curb detected that parking is allowed, but could not determine a specific time limit. Check physical signs on-site before parking.",
                 ruleSummary = scanResult.parkingRules.firstOrNull() ?: "No verified parking rule has been established."
             )
         }
 
-        // Final usable minutes is strictly capped by the strictest candidate restriction
-        val finalMinutes = candidateMinutesList.minOrNull()!!
+        // Determine effective mode and minutes
+        val mode: TimerSemanticMode
+        val finalMinutes: Int
+        val maxAllowedMillis: Long
 
-        // Calculate exact end time formatted
+        if (postedLimitMinutes != null && minutesUntilClockCutoff != null) {
+            val postedEndTime = currentTimeMillis + (postedLimitMinutes * 60000L)
+            if (clockCutoffMillis!! <= postedEndTime) {
+                mode = TimerSemanticMode.CLOCK_CUTOFF
+                finalMinutes = minutesUntilClockCutoff
+                maxAllowedMillis = clockCutoffMillis
+            } else {
+                mode = TimerSemanticMode.TIMED_LIMIT
+                finalMinutes = postedLimitMinutes
+                maxAllowedMillis = postedEndTime
+            }
+        } else if (postedLimitMinutes != null) {
+            mode = TimerSemanticMode.TIMED_LIMIT
+            finalMinutes = postedLimitMinutes
+            maxAllowedMillis = currentTimeMillis + (postedLimitMinutes * 60000L)
+        } else if (minutesUntilClockCutoff != null) {
+            mode = TimerSemanticMode.CLOCK_CUTOFF
+            finalMinutes = minutesUntilClockCutoff
+            maxAllowedMillis = clockCutoffMillis!!
+        } else {
+            mode = TimerSemanticMode.TIMED_LIMIT
+            finalMinutes = timeRemainingMinutes!!
+            maxAllowedMillis = currentTimeMillis + (timeRemainingMinutes * 60000L)
+        }
+
         val calculatedEndTimeMillis = currentTimeMillis + (finalMinutes * 60000L)
         val sdfEnd = SimpleDateFormat("h:mm a", Locale.US)
         val formattedEndTimeStr = sdfEnd.format(Date(calculatedEndTimeMillis))
-
         val formattedDuration = formatMinutesToDisplay(finalMinutes)
 
-        val basisText = when {
-            postedLimitMinutes != null && finalMinutes == postedLimitMinutes -> {
-                "$formattedDuration limit"
-            }
-            formattedClockCutoffStr != null && finalMinutes == minutesUntilClockCutoff -> {
-                "Allowed until $formattedClockCutoffStr"
-            }
-            else -> {
-                "$formattedDuration limit"
-            }
+        val basisText = when (mode) {
+            TimerSemanticMode.TIMED_LIMIT -> "$formattedDuration limit"
+            TimerSemanticMode.CLOCK_CUTOFF -> "Allowed until $formattedEndTimeStr"
+            else -> "$formattedDuration limit"
         }
 
         val headline = "Parking allowed until $formattedEndTimeStr."
-
-        val subtext = when {
-            postedLimitMinutes != null && finalMinutes == postedLimitMinutes -> {
-                "Timer set for $formattedDuration based on the $formattedDuration limit."
-            }
-            minutesUntilClockCutoff != null && finalMinutes == minutesUntilClockCutoff -> {
-                "Timer set for $formattedDuration ($finalMinutes mins remaining before the $formattedClockCutoffStr restriction cutoff)."
-            }
-            else -> {
-                "Timer set for $formattedDuration based on validated parking rules."
-            }
+        val subtext = when (mode) {
+            TimerSemanticMode.TIMED_LIMIT -> "Timer set for $formattedDuration based on verified $formattedDuration limit."
+            TimerSemanticMode.CLOCK_CUTOFF -> "Timer set for $formattedDuration ($finalMinutes mins remaining before restriction cutoff at $formattedEndTimeStr)."
+            else -> "Timer set for $formattedDuration based on verified parking rules."
         }
 
         val ruleSummary = scanResult.parkingRules.firstOrNull() ?: "No verified parking rule has been established."
 
         return ParkingTimerConfig(
-            isValidAllowed = true,
-            isUnrestricted = false,
-            isRestrictedOrAmbiguous = false,
+            canStart = true,
+            mode = mode,
+            reason = "Verified parking time limit established.",
+            startTime = currentTimeMillis,
+            endTime = maxAllowedMillis,
+            maxAllowedEndTimeMillis = maxAllowedMillis,
             calculatedMinutes = finalMinutes,
             formattedDuration = formattedDuration,
             timerBasis = basisText,

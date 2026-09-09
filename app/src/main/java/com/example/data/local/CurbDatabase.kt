@@ -13,7 +13,7 @@ import androidx.room.RoomDatabase
         CurbNoteEntity::class,
         ParkingSpotEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class CurbDatabase : RoomDatabase() {

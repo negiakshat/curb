@@ -84,6 +84,7 @@ data class ActiveParkingSession(
     val parkingRuleSummary: String = "",
     val isActive: Boolean = true,
     val maxAllowedEndTimeMillis: Long? = null,
+    val timerMode: String = "TIMED_LIMIT",
     val isDemo: Boolean = false
 ) {
     val remainingMillis: Long

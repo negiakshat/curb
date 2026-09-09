@@ -589,7 +589,7 @@ fun ParkingTimerScreen(
                             subtitle = limitDisplay,
                             trailingContent = {
                                 Text(
-                                    text = "Metered parking",
+                                    text = if (activeSession.timerMode == "CLOCK_CUTOFF") "Clock restriction cutoff" else if (activeSession.timerBasis.contains("Meter", ignoreCase = true)) "Metered parking" else if (activeSession.timerBasis.isNotBlank()) activeSession.timerBasis else "Verified sign rule",
                                     fontSize = 13.sp,
                                     color = TimerTextMuted
                                 )
