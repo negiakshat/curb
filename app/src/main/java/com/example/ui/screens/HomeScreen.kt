@@ -89,6 +89,7 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     userProfile: UserProfile,
+    isPro: Boolean = userProfile.isPro,
     activeSession: ActiveParkingSession?,
     savedParkingSpot: com.example.data.model.ParkingSpot? = null,
     recentScans: List<ScanResult>,
@@ -289,7 +290,7 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.End
                         ) {
-                            if (userProfile.isPro) {
+                            if (isPro) {
                                 BentoPillBadge(
                                     text = "PRO • UNLIMITED",
                                     backgroundColor = BentoPrimaryDark,

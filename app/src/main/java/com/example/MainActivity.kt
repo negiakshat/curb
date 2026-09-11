@@ -184,7 +184,7 @@ fun CurbApp(
     val chatUsageInfo by viewModel.chatUsageInfo.collectAsStateWithLifecycle()
     val walkingRoute by viewModel.walkingRouteState.collectAsStateWithLifecycle()
 
-    val isUserPro = userProfile.isPro || subscriptionState.isPro || isJudgeProActive
+    val isUserPro by viewModel.isUserPro.collectAsStateWithLifecycle()
 
     val bottomNavItems = listOf(
         BottomNavItem.Home,
@@ -329,6 +329,7 @@ fun CurbApp(
                 composable(Routes.HOME) {
                     HomeScreen(
                         userProfile = userProfile,
+                        isPro = isUserPro,
                         activeSession = activeSession,
                         savedParkingSpot = savedParkingSpot,
                         recentScans = recentScans,

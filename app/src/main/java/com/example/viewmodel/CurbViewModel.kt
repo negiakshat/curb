@@ -228,16 +228,38 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     val subscriptionState: StateFlow<SubscriptionUiState> = subscriptionService.subscriptionState
 
+    val isUserPro: StateFlow<Boolean> = combine(
+        subscriptionState,
+        _isJudgeProActive,
+        _userProfile
+    ) { subState, judgeActive, profile ->
+        if (subState.isConfigured) {
+            subState.isPro || judgeActive
+        } else {
+            subState.isPro || judgeActive || profile.isPro
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = subscriptionService.subscriptionState.value.isPro ||
+                sessionPreferences.isJudgeProActive ||
+                sessionPreferences.getUserProfile().isPro
+    )
+
     private val _scanUsageInfo = MutableStateFlow(
         scanUsageManager.getUsageInfo(
-            sessionPreferences.getUserProfile().isPro || sessionPreferences.isJudgeProActive
+            subscriptionService.subscriptionState.value.isPro ||
+                    sessionPreferences.isJudgeProActive ||
+                    sessionPreferences.getUserProfile().isPro
         )
     )
     val scanUsageInfo: StateFlow<ScanUsageInfo> = _scanUsageInfo.asStateFlow()
 
     private val _chatUsageInfo = MutableStateFlow(
         chatUsageManager.getUsageInfo(
-            sessionPreferences.getUserProfile().isPro || sessionPreferences.isJudgeProActive
+            subscriptionService.subscriptionState.value.isPro ||
+                    sessionPreferences.isJudgeProActive ||
+                    sessionPreferences.getUserProfile().isPro
         )
     )
     val chatUsageInfo: StateFlow<ChatUsageInfo> = _chatUsageInfo.asStateFlow()
@@ -271,13 +293,20 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     val showNotificationDialog: StateFlow<Boolean> = _showNotificationDialog.asStateFlow()
 
     init {
+        // Automatically sync usage managers when effective Pro status changes
+        viewModelScope.launch {
+            isUserPro.collect { pro ->
+                _scanUsageInfo.value = scanUsageManager.getUsageInfo(pro)
+                _chatUsageInfo.value = chatUsageManager.getUsageInfo(pro)
+            }
+        }
+
         // Initialize RevenueCat with anonymous app user ID
         subscriptionService.initialize { isProActive ->
             val updated = _userProfile.value.copy(isPro = isProActive)
             _userProfile.value = updated
             sessionPreferences.saveUserProfile(updated)
-            _scanUsageInfo.value = scanUsageManager.getUsageInfo(isUserPro())
-            _chatUsageInfo.value = chatUsageManager.getUsageInfo(isUserPro())
+            refreshUsageInfo()
         }
 
         // Fetch location if permission is already granted
@@ -350,7 +379,14 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun isUserPro(): Boolean {
-        return _userProfile.value.isPro || subscriptionState.value.isPro || _isJudgeProActive.value
+        val subState = subscriptionState.value
+        val judgeActive = _isJudgeProActive.value
+        val profile = _userProfile.value
+        return if (subState.isConfigured) {
+            subState.isPro || judgeActive
+        } else {
+            subState.isPro || judgeActive || profile.isPro
+        }
     }
 
     fun applyPromoCode(code: String): PromoCodeResult {
@@ -358,8 +394,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         return if (trimmed == "CURB26X") {
             _isJudgeProActive.value = true
             sessionPreferences.isJudgeProActive = true
-            _scanUsageInfo.value = scanUsageManager.getUsageInfo(true)
-            _chatUsageInfo.value = chatUsageManager.getUsageInfo(true)
+            refreshUsageInfo()
             PromoCodeResult.Success
         } else {
             PromoCodeResult.Error("Invalid promo code.")
@@ -670,11 +705,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             activity = activity,
             packageInfo = packageInfo,
             onSuccess = {
-                val updated = _userProfile.value.copy(isPro = true)
-                _userProfile.value = updated
-                sessionPreferences.saveUserProfile(updated)
-                _scanUsageInfo.value = scanUsageManager.getUsageInfo(true)
-                _chatUsageInfo.value = chatUsageManager.getUsageInfo(true)
+                refreshUsageInfo()
                 onSuccess()
             },
             onError = onError
@@ -686,12 +717,11 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         subscriptionService.restorePurchases(
             onSuccess = { isProRestored ->
+                val updated = _userProfile.value.copy(isPro = isProRestored)
+                _userProfile.value = updated
+                sessionPreferences.saveUserProfile(updated)
+                refreshUsageInfo()
                 if (isProRestored) {
-                    val updated = _userProfile.value.copy(isPro = true)
-                    _userProfile.value = updated
-                    sessionPreferences.saveUserProfile(updated)
-                    _scanUsageInfo.value = scanUsageManager.getUsageInfo(true)
-                    _chatUsageInfo.value = chatUsageManager.getUsageInfo(true)
                     onResult(true, "Your Curb Pro subscription has been restored.")
                 } else {
                     onResult(false, "No active Curb Pro purchase was found.")
