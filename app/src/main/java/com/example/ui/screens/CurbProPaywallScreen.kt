@@ -58,6 +58,7 @@ import com.example.data.remote.SubscriptionPackageInfo
 import com.example.data.remote.SubscriptionUiState
 import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.components.CurbSecondaryButton
 import com.example.ui.components.CurbProSuccessDialog
 import com.example.ui.theme.BentoBorder
 import com.example.ui.theme.BentoBorderStrong
@@ -426,7 +427,7 @@ fun CurbProPaywallScreen(
 
                     if (!isPro) {
                         CurbPrimaryButton(
-                            text = if (subscriptionState.isLoading) "Processing…" else "Get Curb Pro",
+                            text = "Get Curb Pro",
                             onClick = {
                                 if (activity != null && selectedPackage != null && !subscriptionState.isLoading) {
                                     onPurchase(
@@ -441,23 +442,18 @@ fun CurbProPaywallScreen(
                                     )
                                 }
                             },
-                            enabled = !subscriptionState.isLoading && selectedPackage != null,
+                            enabled = selectedPackage != null,
+                            isLoading = subscriptionState.isLoading,
                             testTag = "paywall_get_pro_button"
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        TextButton(
+                        CurbSecondaryButton(
+                            text = "Maybe later",
                             onClick = onDismiss,
-                            modifier = Modifier.testTag("paywall_maybe_later_button")
-                        ) {
-                            Text(
-                                text = "Maybe later",
-                                color = CurbOnSurfaceVariant,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                            testTag = "paywall_maybe_later_button"
+                        )
                     } else {
                         CurbPrimaryButton(
                             text = "Continue with Curb Pro",

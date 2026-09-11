@@ -24,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -80,6 +81,7 @@ fun CurbPrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    isLoading: Boolean = false,
     backgroundColor: Color = BentoPrimary,
     contentColor: Color = BentoWhite,
     leadingIcon: ImageVector? = null,
@@ -91,36 +93,44 @@ fun CurbPrimaryButton(
             .fillMaxWidth()
             .defaultMinSize(minHeight = 54.dp)
             .testTag(testTag),
-        enabled = enabled,
+        enabled = enabled && !isLoading,
         shape = RoundedCornerShape(RadiusHero),
         colors = ButtonDefaults.buttonColors(
             containerColor = backgroundColor,
             contentColor = contentColor,
-            disabledContainerColor = BentoOutlineDisabled(),
-            disabledContentColor = BentoWhite.copy(alpha = 0.6f)
+            disabledContainerColor = if (isLoading) backgroundColor else BentoOutlineDisabled(),
+            disabledContentColor = if (isLoading) contentColor else BentoWhite.copy(alpha = 0.6f)
         ),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            if (leadingIcon != null) {
-                Icon(
-                    imageVector = leadingIcon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = contentColor
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            Text(
-                text = text,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp,
-                color = contentColor
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = contentColor,
+                strokeWidth = 2.5.dp
             )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if (leadingIcon != null) {
+                    Icon(
+                        imageVector = leadingIcon,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = contentColor
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(
+                    text = text,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp,
+                    color = contentColor
+                )
+            }
         }
     }
 }
@@ -134,6 +144,7 @@ fun CurbSecondaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    isLoading: Boolean = false,
     borderColor: Color = BentoBorder,
     backgroundColor: Color = BentoSand,
     contentColor: Color = BentoTextPrimary,
@@ -146,34 +157,44 @@ fun CurbSecondaryButton(
             .fillMaxWidth()
             .defaultMinSize(minHeight = 54.dp)
             .testTag(testTag),
-        enabled = enabled,
+        enabled = enabled && !isLoading,
         shape = RoundedCornerShape(RadiusHero),
-        border = BorderStroke(1.dp, borderColor),
+        border = BorderStroke(1.dp, if (enabled && !isLoading) borderColor else BentoBorder.copy(alpha = 0.5f)),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = backgroundColor,
-            contentColor = contentColor
+            contentColor = contentColor,
+            disabledContainerColor = if (isLoading) backgroundColor else backgroundColor.copy(alpha = 0.5f),
+            disabledContentColor = if (isLoading) contentColor else contentColor.copy(alpha = 0.5f)
         )
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            if (leadingIcon != null) {
-                Icon(
-                    imageVector = leadingIcon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = contentColor
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            Text(
-                text = text,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.3.sp,
-                color = contentColor
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = contentColor,
+                strokeWidth = 2.5.dp
             )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if (leadingIcon != null) {
+                    Icon(
+                        imageVector = leadingIcon,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = contentColor
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(
+                    text = text,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.3.sp,
+                    color = contentColor
+                )
+            }
         }
     }
 }

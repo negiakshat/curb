@@ -56,6 +56,7 @@ import com.example.data.model.UserProfile
 import com.example.ui.components.BentoPillBadge
 import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbLogo
+import com.example.ui.components.CurbPrimaryButton
 import com.example.ui.components.CurbSegmentedStatusBar
 import com.example.ui.components.CurbVerdictBadge
 import com.example.ui.theme.BentoBeige
@@ -327,35 +328,14 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(14.dp))
 
                         // PROMINENT SINGLE FULL-WIDTH CTA BUTTON
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = BentoPrimaryDark,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CameraAlt,
-                                    contentDescription = null,
-                                    tint = BentoWhite,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "START INSTANT SCAN",
-                                    color = BentoWhite,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
-                                )
-                            }
-                        }
+                        CurbPrimaryButton(
+                            text = "START INSTANT SCAN",
+                            onClick = onScanClicked,
+                            leadingIcon = Icons.Default.CameraAlt,
+                            backgroundColor = BentoPrimaryDark,
+                            contentColor = BentoWhite,
+                            testTag = "home_scan_primary_button"
+                        )
                     }
                 }
             }

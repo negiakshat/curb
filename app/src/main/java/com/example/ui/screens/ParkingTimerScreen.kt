@@ -1120,16 +1120,13 @@ fun ParkingTimerScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                Button(
+                CurbPrimaryButton(
+                    text = "Got it",
                     onClick = { showRulesSheet = false },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(25.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = TimerTextDark)
-                ) {
-                    Text("Got it", fontWeight = FontWeight.Bold, color = BentoWhite)
-                }
+                    backgroundColor = TimerTextDark,
+                    contentColor = BentoWhite,
+                    testTag = "rules_sheet_got_it_button"
+                )
 
                 Spacer(modifier = Modifier.height(12.dp))
             }
@@ -1221,35 +1218,28 @@ fun ParkingTimerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedButton(
+                    CurbSecondaryButton(
+                        text = "Copy Address",
                         onClick = {
                             Toast.makeText(context, "Location copied to clipboard", Toast.LENGTH_SHORT).show()
                             showMapSheet = false
                         },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(25.dp),
-                        border = BorderStroke(1.dp, BentoBorder)
-                    ) {
-                        Text("Copy Address", fontWeight = FontWeight.Bold, color = TimerTextDark)
-                    }
+                        modifier = Modifier.weight(1f),
+                        testTag = "copy_address_button"
+                    )
 
-                    Button(
+                    CurbPrimaryButton(
+                        text = "Navigate",
                         onClick = {
                             Toast.makeText(context, "Opening walking directions...", Toast.LENGTH_SHORT).show()
                             showMapSheet = false
                         },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(25.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = TimerTextDark)
-                    ) {
-                        Icon(Icons.Default.Directions, null, tint = BentoWhite, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Navigate", fontWeight = FontWeight.Bold, color = BentoWhite)
-                    }
+                        leadingIcon = Icons.Default.Directions,
+                        backgroundColor = TimerTextDark,
+                        contentColor = BentoWhite,
+                        modifier = Modifier.weight(1f),
+                        testTag = "navigate_walking_button"
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

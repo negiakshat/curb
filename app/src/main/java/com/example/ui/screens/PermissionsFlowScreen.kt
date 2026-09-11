@@ -43,6 +43,7 @@ import androidx.core.content.ContextCompat
 import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbLogo
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.components.CurbSecondaryButton
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbBlack
 import com.example.ui.theme.CurbOnSurface
@@ -220,7 +221,8 @@ fun PermissionsFlowScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            TextButton(
+            CurbSecondaryButton(
+                text = "Not now",
                 onClick = {
                     if (currentStep < 3) {
                         currentStep++
@@ -228,15 +230,8 @@ fun PermissionsFlowScreen(
                         onPermissionsFinished()
                     }
                 },
-                modifier = Modifier.testTag("skip_permission_button")
-            ) {
-                Text(
-                    text = "Not now",
-                    color = CurbOnSurfaceVariant,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+                testTag = "skip_permission_button"
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
         }

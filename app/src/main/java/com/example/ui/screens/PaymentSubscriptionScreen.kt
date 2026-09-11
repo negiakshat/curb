@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,6 +55,7 @@ import com.example.data.remote.SubscriptionUiState
 import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbLogo
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.components.CurbSecondaryButton
 import com.example.ui.components.CurbProSuccessDialog
 import com.example.ui.theme.BentoBeige
 import com.example.ui.theme.BentoBorder
@@ -407,7 +409,8 @@ fun PaymentSubscriptionScreen(
                                     )
                                 )
 
-                                Button(
+                                CurbPrimaryButton(
+                                    text = "Apply",
                                     onClick = {
                                         val result = onApplyPromoCode(promoCodeInput)
                                         if (result is PromoCodeResult.Success) {
@@ -418,15 +421,11 @@ fun PaymentSubscriptionScreen(
                                         }
                                     },
                                     enabled = promoCodeInput.isNotBlank(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = BentoPrimaryDark,
-                                        contentColor = CurbWhite
-                                    ),
-                                    modifier = Modifier.testTag("payment_promo_apply_button")
-                                ) {
-                                    Text("Apply", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
+                                    backgroundColor = BentoPrimaryDark,
+                                    contentColor = CurbWhite,
+                                    modifier = Modifier.width(100.dp),
+                                    testTag = "payment_promo_apply_button"
+                                )
                             }
 
                             if (promoCodeError != null) {
@@ -479,7 +478,8 @@ fun PaymentSubscriptionScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    TextButton(
+                    CurbSecondaryButton(
+                        text = "Restore Purchases",
                         onClick = {
                             onRestorePurchases { success, msg ->
                                 if (success) {
@@ -491,17 +491,8 @@ fun PaymentSubscriptionScreen(
                                 }
                             }
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("restore_purchases_button")
-                    ) {
-                        Text(
-                            text = "Restore Purchases",
-                            color = BentoPrimaryDark,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                        testTag = "restore_purchases_button"
+                    )
                 }
             }
         }

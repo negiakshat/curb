@@ -63,6 +63,7 @@ import com.example.data.model.ChatMessage
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
 import com.example.ui.components.CurbLogo
+import com.example.ui.components.CurbPrimaryButton
 import com.example.ui.theme.BentoBorder
 import com.example.ui.theme.BentoPrimary
 import com.example.ui.theme.BentoPrimaryDark
@@ -600,21 +601,11 @@ fun AskCurbScreen(
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(2.dp))
-                    Button(
+                    CurbPrimaryButton(
+                        text = "Get Curb Pro",
                         onClick = onUpgradeToPro,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = CurbBlack,
-                            contentColor = CurbWhite
-                        ),
-                        shape = RoundedCornerShape(RadiusHero),
-                        modifier = Modifier.testTag("chat_upgrade_pro_button")
-                    ) {
-                        Text(
-                            text = "Get Curb Pro",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                        testTag = "chat_upgrade_pro_button"
+                    )
                 }
             }
         } else {

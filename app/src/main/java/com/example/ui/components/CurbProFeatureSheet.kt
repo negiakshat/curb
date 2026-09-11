@@ -156,20 +156,11 @@ fun CurbProFeatureBottomSheet(
             Spacer(modifier = Modifier.height(8.dp))
 
             // SECONDARY ACTION: "Maybe later"
-            TextButton(
+            CurbSecondaryButton(
+                text = "Maybe later",
                 onClick = onDismiss,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .testTag("bottom_sheet_maybe_later_button")
-            ) {
-                Text(
-                    text = "Maybe later",
-                    color = BentoTextSecondary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+                testTag = "bottom_sheet_maybe_later_button"
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
         }

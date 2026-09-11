@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.CurbLogo
+import com.example.ui.components.CurbPrimaryButton
 import com.example.ui.theme.CurbWhite
 
 /**
@@ -110,27 +111,12 @@ fun WelcomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Primary Action Button: "Get started" with explicit white text
-                    Button(
+                    // Primary Action Button: "Get started"
+                    CurbPrimaryButton(
+                        text = "Get Started",
                         onClick = onGetStarted,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                            .testTag("get_started_button"),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = CurbWhite
-                        ),
-                        contentPadding = PaddingValues(horizontal = 24.dp)
-                    ) {
-                        Text(
-                            text = "Get Started",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = CurbWhite
-                        )
-                    }
+                        testTag = "get_started_button"
+                    )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
