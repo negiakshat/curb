@@ -156,7 +156,10 @@ fun CurbApp(
             if (sessionId > 0) {
                 viewModel.loadSessionById(sessionId)
             }
-            navController.navigate(Routes.PARKING_TIMER)
+            navController.navigate(Routes.PARKING_TIMER) {
+                popUpTo(Routes.HOME) { inclusive = false }
+                launchSingleTop = true
+            }
         }
     }
 
@@ -348,10 +351,22 @@ fun CurbApp(
                             navController.navigate(Routes.SAVED_PLACES)
                         },
                         onActivityClicked = {
-                            navController.navigate(Routes.ACTIVITY)
+                            navController.navigate(Routes.ACTIVITY) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         },
                         onAskCurbClicked = {
-                            navController.navigate(Routes.ASK_CURB)
+                            navController.navigate(Routes.ASK_CURB) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         },
                         onScanResultClicked = { scan ->
                             viewModel.setCurrentScan(scan)
@@ -362,7 +377,13 @@ fun CurbApp(
                         },
                         hasUnreadNotifications = hasUnreadNotifications,
                         onProfileClicked = {
-                            navController.navigate(Routes.YOU)
+                            navController.navigate(Routes.YOU) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         },
                         onUpgradeToProClicked = {
                             navController.navigate(Routes.CURB_PRO_PAYWALL)
@@ -552,7 +573,11 @@ fun CurbApp(
                             navController.navigate(Routes.CURB_PRO_PAYWALL)
                         },
                         onBack = {
-                            navController.popBackStack()
+                            if (!navController.popBackStack()) {
+                                navController.navigate(Routes.HOME) {
+                                    popUpTo(Routes.HOME) { inclusive = true }
+                                }
+                            }
                         }
                     )
                 }
@@ -619,7 +644,10 @@ fun CurbApp(
                         notifications = inAppNotifications,
                         onNotificationClicked = { sessionId ->
                             viewModel.loadSessionById(sessionId)
-                            navController.navigate(Routes.PARKING_TIMER)
+                            navController.navigate(Routes.PARKING_TIMER) {
+                                popUpTo(Routes.HOME) { inclusive = false }
+                                launchSingleTop = true
+                            }
                         },
                         onOpenSettings = {
                             navController.navigate(Routes.NOTIFICATION_SETTINGS)
@@ -814,7 +842,11 @@ fun CurbApp(
                         },
                         onBack = {
                             viewModel.clearTargetSession()
-                            navController.popBackStack()
+                            if (!navController.popBackStack()) {
+                                navController.navigate(Routes.HOME) {
+                                    popUpTo(Routes.HOME) { inclusive = true }
+                                }
+                            }
                         }
                     )
                 }
@@ -826,7 +858,11 @@ fun CurbApp(
                         userLocationState = userLocationState,
                         walkingRoute = walkingRoute,
                         onNavigateBack = {
-                            navController.popBackStack()
+                            if (!navController.popBackStack()) {
+                                navController.navigate(Routes.HOME) {
+                                    popUpTo(Routes.HOME) { inclusive = true }
+                                }
+                            }
                         },
                         onRefreshLocation = {
                             viewModel.refreshLocation()
@@ -841,7 +877,10 @@ fun CurbApp(
                             viewModel.updateWalkingRouteIfNeeded(uLat, uLng, cLat, cLng)
                         },
                         onNavigateToParkingTimer = {
-                            navController.navigate(Routes.PARKING_TIMER)
+                            navController.navigate(Routes.PARKING_TIMER) {
+                                popUpTo(Routes.HOME) { inclusive = false }
+                                launchSingleTop = true
+                            }
                         }
                     )
                 }
