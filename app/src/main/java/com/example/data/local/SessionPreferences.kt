@@ -19,7 +19,12 @@ class SessionPreferences(context: Context) {
         private const val KEY_IS_PRO = "key_is_pro"
         private const val KEY_PUSH_NOTIFICATIONS = "key_push_notifications"
         private const val KEY_JUDGE_PRO_ACCESS = "key_judge_pro_access"
+        private const val KEY_LAST_NOTIFICATION_READ_TIME = "key_last_notification_read_time"
     }
+
+    var lastNotificationReadTime: Long
+        get() = prefs.getLong(KEY_LAST_NOTIFICATION_READ_TIME, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_NOTIFICATION_READ_TIME, value).apply()
 
     var isJudgeProActive: Boolean
         get() = prefs.getBoolean(KEY_JUDGE_PRO_ACCESS, false)

@@ -11,6 +11,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.MainActivity
+import com.example.R
 import com.example.data.local.CurbDatabase
 import com.example.data.local.SessionPreferences
 import com.example.ui.navigation.Routes
@@ -102,12 +103,6 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
                     endTimeMillis = session.endTime
                 )
             }
-            NotificationType.ENDED -> {
-                NotificationVariants.getEndedVariant(
-                    sessionId = session.id,
-                    locationName = session.locationName
-                )
-            }
         }
 
         // 6. BUILD CONTENT INTENT FOR NAVIGATION & CONTEXT RESTORATION
@@ -128,7 +123,7 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
         ParkingNotificationScheduler.createNotificationChannel(context)
 
         val notification = NotificationCompat.Builder(context, ParkingNotificationScheduler.CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(notificationText.title)
             .setContentText(notificationText.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(notificationText.body))

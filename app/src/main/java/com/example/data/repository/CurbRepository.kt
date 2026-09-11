@@ -44,6 +44,10 @@ class CurbRepository(context: Context) {
         entity?.let { entityToParkingSession(it) }
     }
 
+    val allSessions: Flow<List<ActiveParkingSession>> = parkingSessionDao.getAllSessions().map { entities ->
+        entities.map { entityToParkingSession(it) }
+    }
+
     val savedParkingSpot: Flow<ParkingSpot?> = parkingSpotDao.getActiveParkingSpot().map { entity ->
         entity?.let { entityToParkingSpot(it) }
     }

@@ -102,6 +102,7 @@ fun HomeScreen(
     onAskCurbClicked: () -> Unit,
     onScanResultClicked: (ScanResult) -> Unit,
     onNotificationsClicked: () -> Unit,
+    hasUnreadNotifications: Boolean = false,
     onProfileClicked: () -> Unit,
     onUpgradeToProClicked: () -> Unit = {}
 ) {
@@ -149,11 +150,21 @@ fun HomeScreen(
                         onClick = onNotificationsClicked,
                         modifier = Modifier.testTag("notification_bell_button")
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.NotificationsNone,
-                            contentDescription = "Notifications",
-                            tint = BentoTextPrimary
-                        )
+                        androidx.compose.foundation.layout.Box {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsNone,
+                                contentDescription = "Notifications",
+                                tint = BentoTextPrimary
+                            )
+                            if (hasUnreadNotifications) {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(CurbError, shape = androidx.compose.foundation.shape.CircleShape)
+                                        .align(Alignment.TopEnd)
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -120,6 +120,7 @@ private val TimerDividerColor = Color(0xFFF1F1F1)
 @Composable
 fun ParkingTimerScreen(
     activeSession: ActiveParkingSession?,
+    targetSession: ActiveParkingSession? = null,
     savedParkingSpot: ParkingSpot? = null,
     isSavingParkingSpot: Boolean = false,
     parkingSpotSaveError: String? = null,
@@ -131,6 +132,7 @@ fun ParkingTimerScreen(
     onUpdateReminder: (Long, Int) -> Unit,
     onBack: () -> Unit
 ) {
+    val effectiveSession = targetSession ?: activeSession
     val context = LocalContext.current
     var currentTimeMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
@@ -163,8 +165,8 @@ fun ParkingTimerScreen(
     var isNotificationBannerVisible by remember { mutableStateOf(true) }
 
     // State for reminder duration selection
-    var selectedReminderMinutes by remember(activeSession?.reminderMinutesBefore) {
-        mutableIntStateOf(activeSession?.reminderMinutesBefore ?: 15)
+    var selectedReminderMinutes by remember(effectiveSession?.reminderMinutesBefore) {
+        mutableIntStateOf(effectiveSession?.reminderMinutesBefore ?: 15)
     }
 
     val scrollState = rememberScrollState()
@@ -261,12 +263,12 @@ fun ParkingTimerScreen(
                             ).show()
                         }
                     )
-                    if (activeSession != null && activeSession.isActive) {
+                    if (effectiveSession != null && effectiveSession.isActive) {
                         DropdownMenuItem(
                             text = { Text("End Session", color = CurbError) },
                             onClick = {
                                 showMoreMenu = false
-                                onEndSession(activeSession.id)
+                                onEndSession(effectiveSession.id)
                             }
                         )
                     }
@@ -283,10 +285,10 @@ fun ParkingTimerScreen(
                 .padding(horizontal = 20.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (activeSession != null && activeSession.isActive) {
+            if (effectiveSession != null && effectiveSession.isActive) {
                 // Pre-calculated timer state
-                val totalDuration = (activeSession.endTime - activeSession.startTime).coerceAtLeast(1000L)
-                val remaining = (activeSession.endTime - currentTimeMillis)
+                val totalDuration = (effectiveSession.endTime - effectiveSession.startTime).coerceAtLeast(1000L)
+                val remaining = (effectiveSession.endTime - currentTimeMillis)
                 val isExpired = remaining <= 0
 
                 val totalSeconds = (remaining / 1000).coerceAtLeast(0L)
@@ -312,23 +314,23 @@ fun ParkingTimerScreen(
                     "${totalMins}m"
                 }
 
-                val expiryTimeStr = if (activeSession.allowedUntilTime.isNotBlank()) {
-                    activeSession.allowedUntilTime
+                val expiryTimeStr = if (effectiveSession.allowedUntilTime.isNotBlank()) {
+                    effectiveSession.allowedUntilTime
                 } else {
-                    SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(activeSession.endTime))
+                    SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(effectiveSession.endTime))
                 }
 
-                val semanticModeLabel = when (activeSession.timerMode) {
+                val semanticModeLabel = when (effectiveSession.timerMode) {
                     "TIMED_LIMIT" -> "VERIFIED TIME LIMIT"
                     "CLOCK_CUTOFF" -> "VERIFIED CUTOFF TIME"
                     "METERED_WITHOUT_VERIFIED_TIME_LIMIT" -> "VERIFIED METER REQUIREMENT"
-                    else -> if (activeSession.timerBasis.isNotBlank()) activeSession.timerBasis.uppercase() else "VERIFIED PARKING RULE"
+                    else -> if (effectiveSession.timerBasis.isNotBlank()) effectiveSession.timerBasis.uppercase() else "VERIFIED PARKING RULE"
                 }
 
                 val ruleText = when {
-                    activeSession.parkingRuleSummary.isNotBlank() -> activeSession.parkingRuleSummary
-                    activeSession.notes.isNotBlank() -> activeSession.notes
-                    activeSession.timerBasis.isNotBlank() -> activeSession.timerBasis
+                    effectiveSession.parkingRuleSummary.isNotBlank() -> effectiveSession.parkingRuleSummary
+                    effectiveSession.notes.isNotBlank() -> effectiveSession.notes
+                    effectiveSession.timerBasis.isNotBlank() -> effectiveSession.timerBasis
                     else -> "$limitDisplay limit"
                 }
 
@@ -516,7 +518,7 @@ fun ParkingTimerScreen(
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = activeSession.locationName,
+                                    text = effectiveSession.locationName,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TimerTextDark,
@@ -606,7 +608,7 @@ fun ParkingTimerScreen(
                     ) {
                         // Row 1: Started at
                         val startedSdf = SimpleDateFormat("h:mm a", Locale.getDefault())
-                        val startedTimeStr = startedSdf.format(Date(activeSession.startTime))
+                        val startedTimeStr = startedSdf.format(Date(effectiveSession.startTime))
 
                         TimerDetailRow(
                             icon = Icons.Default.AccessTime,
@@ -850,7 +852,7 @@ fun ParkingTimerScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (activeSession != null && activeSession.isActive) {
+            if (effectiveSession != null && effectiveSession.isActive) {
                 // LEFT BUTTON: "Add time"
                 CurbSecondaryButton(
                     text = "Add time",
@@ -862,7 +864,7 @@ fun ParkingTimerScreen(
                 // RIGHT BUTTON: "End parking session"
                 CurbPrimaryButton(
                     text = "End session",
-                    onClick = { onEndSession(activeSession.id) },
+                    onClick = { onEndSession(effectiveSession.id) },
                     modifier = Modifier.weight(1.25f),
                     backgroundColor = CurbError,
                     testTag = "end_parking_session_button"
@@ -882,11 +884,11 @@ fun ParkingTimerScreen(
     // ==========================================
     // BOTTOM SHEET 1: ADD TIME (EXTEND SESSION)
     // ==========================================
-    if (showAddTimeSheet && activeSession != null) {
+    if (showAddTimeSheet && effectiveSession != null) {
         val sheetState = rememberModalBottomSheetState()
-        val maxAllowed = activeSession.maxAllowedEndTimeMillis
+        val maxAllowed = effectiveSession.maxAllowedEndTimeMillis
         val maxExtensionMillis = if (maxAllowed != null) {
-            if (maxAllowed == Long.MAX_VALUE) Long.MAX_VALUE else (maxAllowed - activeSession.endTime).coerceAtLeast(0L)
+            if (maxAllowed == Long.MAX_VALUE) Long.MAX_VALUE else (maxAllowed - effectiveSession.endTime).coerceAtLeast(0L)
         } else 0L
 
         ModalBottomSheet(
@@ -933,13 +935,13 @@ fun ParkingTimerScreen(
                 ) {
                     val canAdd15 = maxExtensionMillis >= 15 * 60 * 1000L
                     AddTimeOptionButton("+15 min", 15, enabled = canAdd15, modifier = Modifier.weight(1f)) {
-                        onExtendSession(activeSession.id, 15, activeSession.endTime)
+                        onExtendSession(effectiveSession.id, 15, effectiveSession.endTime)
                         showAddTimeSheet = false
                         Toast.makeText(context, "Added 15 minutes to session", Toast.LENGTH_SHORT).show()
                     }
                     val canAdd30 = maxExtensionMillis >= 30 * 60 * 1000L
                     AddTimeOptionButton("+30 min", 30, enabled = canAdd30, modifier = Modifier.weight(1f)) {
-                        onExtendSession(activeSession.id, 30, activeSession.endTime)
+                        onExtendSession(effectiveSession.id, 30, effectiveSession.endTime)
                         showAddTimeSheet = false
                         Toast.makeText(context, "Added 30 minutes to session", Toast.LENGTH_SHORT).show()
                     }
@@ -953,13 +955,13 @@ fun ParkingTimerScreen(
                 ) {
                     val canAdd60 = maxExtensionMillis >= 60 * 60 * 1000L
                     AddTimeOptionButton("+1 hour", 60, enabled = canAdd60, modifier = Modifier.weight(1f)) {
-                        onExtendSession(activeSession.id, 60, activeSession.endTime)
+                        onExtendSession(effectiveSession.id, 60, effectiveSession.endTime)
                         showAddTimeSheet = false
                         Toast.makeText(context, "Added 1 hour to session", Toast.LENGTH_SHORT).show()
                     }
                     val canAdd120 = maxExtensionMillis >= 120 * 60 * 1000L
                     AddTimeOptionButton("+2 hours", 120, enabled = canAdd120, modifier = Modifier.weight(1f)) {
-                        onExtendSession(activeSession.id, 120, activeSession.endTime)
+                        onExtendSession(effectiveSession.id, 120, effectiveSession.endTime)
                         showAddTimeSheet = false
                         Toast.makeText(context, "Added 2 hours to session", Toast.LENGTH_SHORT).show()
                     }
@@ -973,7 +975,7 @@ fun ParkingTimerScreen(
     // ==========================================
     // BOTTOM SHEET 2: REMINDER SETTINGS
     // ==========================================
-    if (showReminderSheet && activeSession != null) {
+    if (showReminderSheet && effectiveSession != null) {
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(
             onDismissRequest = { showReminderSheet = false },
@@ -1017,7 +1019,7 @@ fun ParkingTimerScreen(
                             .clip(RoundedCornerShape(12.dp))
                             .clickable {
                                 selectedReminderMinutes = mins
-                                onUpdateReminder(activeSession.id, mins)
+                                onUpdateReminder(effectiveSession.id, mins)
                                 showReminderSheet = false
                                 Toast.makeText(
                                     context,
@@ -1039,7 +1041,7 @@ fun ParkingTimerScreen(
                             selected = selectedReminderMinutes == mins,
                             onClick = {
                                 selectedReminderMinutes = mins
-                                onUpdateReminder(activeSession.id, mins)
+                                onUpdateReminder(effectiveSession.id, mins)
                                 showReminderSheet = false
                             },
                             colors = RadioButtonDefaults.colors(selectedColor = TimerProgressGreen)
@@ -1105,8 +1107,8 @@ fun ParkingTimerScreen(
                     border = BorderStroke(1.dp, BentoBorder)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        val activeRuleStr = activeSession?.parkingRuleSummary?.ifBlank { null }
-                            ?: activeSession?.notes?.ifBlank { null }
+                        val activeRuleStr = effectiveSession?.parkingRuleSummary?.ifBlank { null }
+                            ?: effectiveSession?.notes?.ifBlank { null }
                             ?: "2 HR PARKING"
                         RuleItem("ACTIVE REGULATION", activeRuleStr)
                         Spacer(modifier = Modifier.height(10.dp))
@@ -1137,7 +1139,7 @@ fun ParkingTimerScreen(
     // ==========================================
     // BOTTOM SHEET 4: INTERACTIVE MAP & PIN
     // ==========================================
-    if (showMapSheet && activeSession != null) {
+    if (showMapSheet && effectiveSession != null) {
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(
             onDismissRequest = { showMapSheet = false },
@@ -1160,7 +1162,7 @@ fun ParkingTimerScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = if (activeSession.notes.isNotBlank()) "${activeSession.locationName} • ${activeSession.notes}" else activeSession.locationName,
+                    text = if (effectiveSession.notes.isNotBlank()) "${effectiveSession.locationName} • ${effectiveSession.notes}" else effectiveSession.locationName,
                     fontSize = 13.sp,
                     color = TimerTextMuted,
                     textAlign = TextAlign.Center

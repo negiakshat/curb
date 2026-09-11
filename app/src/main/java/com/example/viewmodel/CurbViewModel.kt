@@ -21,6 +21,8 @@ import com.example.data.model.SavedPlace
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
 import com.example.data.model.UserProfile
+import com.example.data.model.InAppNotification
+import com.example.notification.NotificationType
 import com.example.data.remote.GeminiService
 import com.example.data.remote.SubscriptionPackageInfo
 import com.example.data.remote.SubscriptionService
@@ -35,6 +37,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -62,6 +65,110 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     val activeSession: StateFlow<ActiveParkingSession?> = repository.activeSession
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val allSessions: StateFlow<List<ActiveParkingSession>> = repository.allSessions
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _targetSession = MutableStateFlow<ActiveParkingSession?>(null)
+    val targetSession: StateFlow<ActiveParkingSession?> = _targetSession.asStateFlow()
+
+    fun loadSessionById(sessionId: Long) {
+        viewModelScope.launch {
+            val session = repository.getSessionById(sessionId)
+            if (session != null) {
+                _targetSession.value = session
+            }
+        }
+    }
+
+    fun clearTargetSession() {
+        _targetSession.value = null
+    }
+
+    private val _lastNotificationReadTime = MutableStateFlow(sessionPreferences.lastNotificationReadTime)
+
+    val inAppNotifications: StateFlow<List<InAppNotification>> = combine(
+        activeSession,
+        allSessions,
+        _lastNotificationReadTime
+    ) { active, sessions, lastRead ->
+        val list = mutableListOf<InAppNotification>()
+        val now = System.currentTimeMillis()
+
+        if (active != null && !active.isDemo) {
+            val remainingMs = active.endTime - now
+            val remainingMins = (remainingMs / 60000L).toInt().coerceAtLeast(0)
+            val isExpired = remainingMs <= 0
+
+            if (!isExpired) {
+                list.add(
+                    InAppNotification(
+                        id = "active_reminder_${active.id}",
+                        sessionId = active.id,
+                        title = "Parking time running low",
+                        body = "${active.locationName} · $remainingMins min remaining",
+                        locationName = active.locationName,
+                        timestamp = active.startTime,
+                        type = NotificationType.REMINDER,
+                        isRead = active.startTime <= lastRead,
+                        isActiveSession = true,
+                        endTimeMillis = active.endTime,
+                        remainingMinutes = remainingMins
+                    )
+                )
+            } else {
+                list.add(
+                    InAppNotification(
+                        id = "active_expired_${active.id}",
+                        sessionId = active.id,
+                        title = "Parking session expired",
+                        body = "${active.locationName} · Expired",
+                        locationName = active.locationName,
+                        timestamp = active.endTime,
+                        type = NotificationType.EXPIRATION,
+                        isRead = active.endTime <= lastRead,
+                        isActiveSession = false,
+                        endTimeMillis = active.endTime,
+                        remainingMinutes = 0
+                    )
+                )
+            }
+        }
+
+        val realPastSessions = sessions.filter { !it.isDemo && it.id != active?.id }
+        for (session in realPastSessions) {
+            val isExpired = session.endTime <= now
+            list.add(
+                InAppNotification(
+                    id = "past_session_${session.id}",
+                    sessionId = session.id,
+                    title = if (isExpired) "Parking session expired" else "Parking session active",
+                    body = "${session.locationName} · ${session.allowedUntilTime}",
+                    locationName = session.locationName,
+                    timestamp = session.startTime,
+                    type = if (isExpired) NotificationType.EXPIRATION else NotificationType.REMINDER,
+                    isRead = session.startTime <= lastRead,
+                    isActiveSession = false,
+                    endTimeMillis = session.endTime
+                )
+            )
+        }
+
+        list.sortedByDescending { it.timestamp }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val hasUnreadNotifications: StateFlow<Boolean> = combine(
+        inAppNotifications,
+        _lastNotificationReadTime
+    ) { notifications, lastRead ->
+        notifications.any { !it.isRead && it.timestamp > lastRead }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun markNotificationsAsRead() {
+        val now = System.currentTimeMillis()
+        sessionPreferences.lastNotificationReadTime = now
+        _lastNotificationReadTime.value = now
+    }
 
     val savedParkingSpot: StateFlow<ParkingSpot?> = repository.savedParkingSpot
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)

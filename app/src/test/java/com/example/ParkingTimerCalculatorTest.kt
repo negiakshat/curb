@@ -138,7 +138,7 @@ class ParkingTimerCalculatorTest {
             parkingRules = listOf("Parking allowed until 6:00 PM")
         )
         val cal = Calendar.getInstance().apply {
-            set(2026, Calendar.SEPTEMBER, 6, 16, 30, 0) // 4:30 PM
+            set(2026, Calendar.SEPTEMBER, 7, 16, 30, 0) // Monday 4:30 PM
             set(Calendar.MILLISECOND, 0)
         }
         val config = ParkingTimerCalculator.calculateConfig(result, cal.timeInMillis)

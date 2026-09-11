@@ -7,8 +7,7 @@ import kotlin.math.abs
 
 enum class NotificationType {
     REMINDER,
-    EXPIRATION,
-    ENDED
+    EXPIRATION
 }
 
 data class NotificationText(
@@ -49,17 +48,6 @@ object NotificationVariants {
         NotificationText(
             title = "Parking time completed",
             body = "The allowed parking duration at %s has ended."
-        )
-    )
-
-    private val ENDED_VARIANTS = listOf(
-        NotificationText(
-            title = "Parking session ended",
-            body = "Your timer for %s has been stopped."
-        ),
-        NotificationText(
-            title = "Session completed",
-            body = "Your parking session at %s is now closed."
         )
     )
 
@@ -114,27 +102,6 @@ object NotificationVariants {
             }
         } catch (_: Exception) {
             "Your parking session at $safeLocation has expired."
-        }
-
-        return NotificationText(title = template.title, body = formattedBody)
-    }
-
-    fun getEndedVariant(
-        sessionId: Long,
-        locationName: String
-    ): NotificationText {
-        val safeLocation = locationName.ifBlank { "your spot" }
-        val index = abs(sessionId.toInt()) % ENDED_VARIANTS.size
-        val template = ENDED_VARIANTS[index]
-
-        val formattedBody = try {
-            if (template.body.contains("%s")) {
-                String.format(Locale.getDefault(), template.body, safeLocation)
-            } else {
-                template.body
-            }
-        } catch (_: Exception) {
-            "Your parking session at $safeLocation has ended."
         }
 
         return NotificationText(title = template.title, body = formattedBody)

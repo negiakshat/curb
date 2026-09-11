@@ -60,6 +60,7 @@ import com.example.ui.screens.FindMyCarScreen
 import com.example.ui.screens.HelpSupportScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.NameSetupScreen
+import com.example.ui.screens.NotificationSettingsScreen
 import com.example.ui.screens.NotificationsScreen
 import com.example.ui.screens.ParkingDetailsScreen
 import com.example.ui.screens.ParkingTimerScreen
@@ -150,13 +151,20 @@ fun CurbApp(
 
     androidx.compose.runtime.LaunchedEffect(intent) {
         val targetRoute = intent?.getStringExtra(com.example.notification.ParkingNotificationScheduler.EXTRA_NAVIGATE_ROUTE)
+        val sessionId = intent?.getLongExtra(com.example.notification.ParkingNotificationScheduler.EXTRA_SESSION_ID, -1L) ?: -1L
         if (targetRoute == Routes.PARKING_TIMER) {
+            if (sessionId > 0) {
+                viewModel.loadSessionById(sessionId)
+            }
             navController.navigate(Routes.PARKING_TIMER)
         }
     }
 
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     val activeSession by viewModel.activeSession.collectAsStateWithLifecycle()
+    val targetSession by viewModel.targetSession.collectAsStateWithLifecycle()
+    val inAppNotifications by viewModel.inAppNotifications.collectAsStateWithLifecycle()
+    val hasUnreadNotifications by viewModel.hasUnreadNotifications.collectAsStateWithLifecycle()
     val savedParkingSpot by viewModel.savedParkingSpot.collectAsStateWithLifecycle()
     val demoSavedParkingSpot by viewModel.demoSavedParkingSpot.collectAsStateWithLifecycle()
     val isSavingParkingSpot by viewModel.isSavingParkingSpot.collectAsStateWithLifecycle()
@@ -351,6 +359,7 @@ fun CurbApp(
                         onNotificationsClicked = {
                             navController.navigate(Routes.NOTIFICATIONS)
                         },
+                        hasUnreadNotifications = hasUnreadNotifications,
                         onProfileClicked = {
                             navController.navigate(Routes.YOU)
                         },
@@ -568,7 +577,7 @@ fun CurbApp(
                         userProfile = userProfile,
                         isPro = isUserPro,
                         onAccountInfoClicked = { navController.navigate(Routes.ACCOUNT_INFO) },
-                        onNotificationsClicked = { navController.navigate(Routes.NOTIFICATIONS) },
+                        onNotificationsClicked = { navController.navigate(Routes.NOTIFICATION_SETTINGS) },
                         onPaymentSubscriptionClicked = { navController.navigate(Routes.PAYMENT_SUBSCRIPTION) },
                         onHelpSupportClicked = { navController.navigate(Routes.HELP_SUPPORT) },
                         onAboutCurbClicked = { navController.navigate(Routes.ABOUT_CURB) },
@@ -603,9 +612,27 @@ fun CurbApp(
                     )
                 }
 
-                // 13. NOTIFICATIONS
+                // 13. NOTIFICATIONS (In-App Notification Center)
                 composable(Routes.NOTIFICATIONS) {
                     NotificationsScreen(
+                        notifications = inAppNotifications,
+                        onNotificationClicked = { sessionId ->
+                            viewModel.loadSessionById(sessionId)
+                            navController.navigate(Routes.PARKING_TIMER)
+                        },
+                        onOpenSettings = {
+                            navController.navigate(Routes.NOTIFICATION_SETTINGS)
+                        },
+                        onMarkRead = {
+                            viewModel.markNotificationsAsRead()
+                        },
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                // 13B. NOTIFICATION SETTINGS
+                composable(Routes.NOTIFICATION_SETTINGS) {
+                    NotificationSettingsScreen(
                         pushEnabled = userProfile.pushNotificationsEnabled,
                         onTogglePush = { enabled ->
                             viewModel.togglePushNotifications(enabled)
@@ -744,6 +771,7 @@ fun CurbApp(
                     val effectiveSpotForTimer = if (activeSession?.isDemo == true) demoSavedParkingSpot else savedParkingSpot
                     ParkingTimerScreen(
                         activeSession = activeSession,
+                        targetSession = targetSession,
                         savedParkingSpot = effectiveSpotForTimer,
                         isSavingParkingSpot = isSavingParkingSpot,
                         parkingSpotSaveError = parkingSpotSaveError,
@@ -780,7 +808,10 @@ fun CurbApp(
                         onUpdateReminder = { id, reminderMins ->
                             viewModel.updateSessionReminder(id, reminderMins)
                         },
-                        onBack = { navController.popBackStack() }
+                        onBack = {
+                            viewModel.clearTargetSession()
+                            navController.popBackStack()
+                        }
                     )
                 }
 
