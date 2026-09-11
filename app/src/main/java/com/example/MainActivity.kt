@@ -604,8 +604,11 @@ fun CurbApp(
                         isPro = isUserPro,
                         onAccountInfoClicked = { navController.navigate(Routes.ACCOUNT_INFO) },
                         onNotificationsClicked = { navController.navigate(Routes.NOTIFICATION_SETTINGS) },
+                        onSavedPlacesClicked = { navController.navigate(Routes.SAVED_PLACES) },
                         onPaymentSubscriptionClicked = { navController.navigate(Routes.PAYMENT_SUBSCRIPTION) },
                         onHelpSupportClicked = { navController.navigate(Routes.HELP_SUPPORT) },
+                        onPrivacyPolicyClicked = { navController.navigate(Routes.PRIVACY_POLICY) },
+                        onTermsOfServiceClicked = { navController.navigate(Routes.TERMS_OF_SERVICE) },
                         onAboutCurbClicked = { navController.navigate(Routes.ABOUT_CURB) },
                         onLogoutClicked = {
                             viewModel.logout {
