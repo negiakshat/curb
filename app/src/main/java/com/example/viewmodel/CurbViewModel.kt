@@ -440,17 +440,12 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startGuestSession(onComplete: () -> Unit = {}) {
         viewModelScope.launch {
-            // Logout semantics: end the current session ONLY. Local Curb data
-            // (Saved Places, Scan History, Notes, Parking Sessions, User Profile)
-            // is intentionally preserved across logout/login so the user keeps
-            // their Curb content. We only flip the auth flags and reset
-            // ephemeral in-memory UI state.
+            // Logout / Guest semantics: end the current session ONLY. Local Curb data
+            // (Saved Places, Scan History, Notes, Parking Sessions, User Profile, Free Quota)
+            // is intentionally preserved so the user keeps their Curb content and quota.
+            // We only flip the auth flags and reset ephemeral in-memory UI state.
 
-            // 1. Reset monthly usage counters (not destructive to user data)
-            scanUsageManager.resetUsage()
-            chatUsageManager.resetUsage()
-
-            // 2. Set session/auth flags for guest mode
+            // 1. Set session/auth flags for guest mode
             sessionPreferences.isOnboardingCompleted = true
             sessionPreferences.isPermissionsCompleted = true
             sessionPreferences.isLoggedIn = true
@@ -551,6 +546,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         onPaywallRequired: () -> Unit,
         onComplete: () -> Unit
     ) {
+        if (_isProcessingScan.value) return
+
         val userIsPro = isUserPro()
         if (!scanUsageManager.canPerformScan(userIsPro)) {
             onPaywallRequired()
@@ -561,81 +558,86 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             _isProcessingScan.value = true
             _processingStatusText.value = "Reading your parking sign…"
 
-            // Build real sign crops from captured bitmap or pre-supplied local detections
-            val detectedCrops = if (localDetections.isNotEmpty()) {
-                android.util.Log.d("CurbPipeline", "Using pre-supplied local detections: ${localDetections.size}")
-                localDetections
-            } else if (bitmap != null) {
-                android.util.Log.d("CurbPipeline", "Running on-device sign detection on captured bitmap ${bitmap.width}x${bitmap.height}")
-                val detectionResult = com.example.data.detection.SignDetectionService.detectAndCropSigns(
-                    getApplication(),
-                    bitmap
-                )
-                if (detectionResult.signs.isNotEmpty()) {
-                    detectionResult.signs
-                } else if (detectionBoxes.isNotEmpty()) {
-                    // Fallback to cropping from live camera preview bounding boxes
-                    com.example.data.detection.SignDetectionService.cropSignsFromBoxes(
+            try {
+                // Build real sign crops from captured bitmap or pre-supplied local detections
+                val detectedCrops = if (localDetections.isNotEmpty()) {
+                    android.util.Log.d("CurbPipeline", "Using pre-supplied local detections: ${localDetections.size}")
+                    localDetections
+                } else if (bitmap != null) {
+                    android.util.Log.d("CurbPipeline", "Running on-device sign detection on captured bitmap ${bitmap.width}x${bitmap.height}")
+                    val detectionResult = com.example.data.detection.SignDetectionService.detectAndCropSigns(
                         getApplication(),
-                        bitmap,
-                        detectionBoxes
+                        bitmap
                     )
+                    if (detectionResult.signs.isNotEmpty()) {
+                        detectionResult.signs
+                    } else if (detectionBoxes.isNotEmpty()) {
+                        // Fallback to cropping from live camera preview bounding boxes
+                        com.example.data.detection.SignDetectionService.cropSignsFromBoxes(
+                            getApplication(),
+                            bitmap,
+                            detectionBoxes
+                        )
+                    } else {
+                        emptyList()
+                    }
                 } else {
                     emptyList()
                 }
-            } else {
-                emptyList()
-            }
 
-            android.util.Log.d(
-                "CurbPipeline",
-                "Final detected crops count: ${detectedCrops.size} (files: ${detectedCrops.map { it.fileUri }})"
-            )
+                android.util.Log.d(
+                    "CurbPipeline",
+                    "Final detected crops count: ${detectedCrops.size} (files: ${detectedCrops.map { it.fileUri }})"
+                )
 
-            _processingStatusText.value = "Reading your parking sign…"
+                _processingStatusText.value = "Reading your parking sign…"
 
-            // Resolve location context
-            val (resolvedLocName, resolvedCityState, isKnown) = if (!explicitLocationName.isNullOrBlank()) {
-                // User explicitly selected a saved place or custom spot
-                Triple(explicitLocationName, explicitCityState ?: "", true)
-            } else {
-                // Use actual device location if available, otherwise attempt fresh fetch
-                val currentLoc = if (_userLocationState.value !is UserLocationResult.Success && locationService.hasLocationPermission()) {
-                    locationService.fetchCurrentLocation().also { _userLocationState.value = it }
+                // Resolve location context
+                val (resolvedLocName, resolvedCityState, isKnown) = if (!explicitLocationName.isNullOrBlank()) {
+                    // User explicitly selected a saved place or custom spot
+                    Triple(explicitLocationName, explicitCityState ?: "", true)
                 } else {
-                    _userLocationState.value
+                    // Use actual device location if available, otherwise attempt fresh fetch
+                    val currentLoc = if (_userLocationState.value !is UserLocationResult.Success && locationService.hasLocationPermission()) {
+                        locationService.fetchCurrentLocation().also { _userLocationState.value = it }
+                    } else {
+                        _userLocationState.value
+                    }
+
+                    when (currentLoc) {
+                        is UserLocationResult.Success -> {
+                            Triple(currentLoc.locationName, currentLoc.cityState, true)
+                        }
+                        is UserLocationResult.PermissionRequired -> {
+                            Triple("Location access needed", "", false)
+                        }
+                        is UserLocationResult.Unavailable -> {
+                            Triple("Location unavailable", "", false)
+                        }
+                    }
                 }
 
-                when (currentLoc) {
-                    is UserLocationResult.Success -> {
-                        Triple(currentLoc.locationName, currentLoc.cityState, true)
-                    }
-                    is UserLocationResult.PermissionRequired -> {
-                        Triple("Location access needed", "", false)
-                    }
-                    is UserLocationResult.Unavailable -> {
-                        Triple("Location unavailable", "", false)
-                    }
-                }
+                val result = GeminiService.analyzeParkingSigns(
+                    bitmap = bitmap,
+                    locationName = resolvedLocName,
+                    cityState = resolvedCityState,
+                    isLocationKnown = isKnown,
+                    localDetections = detectedCrops,
+                    context = getApplication()
+                )
+                val scanId = repository.saveScan(result)
+                val savedResult = result.copy(id = scanId)
+                _currentScanResult.value = savedResult
+
+                // Consume scan count only after successful analysis
+                _scanUsageInfo.value = scanUsageManager.consumeScan(userIsPro)
+            } catch (e: Exception) {
+                android.util.Log.e("CurbPipeline", "Error analyzing parking sign", e)
+                // Failed scan does not consume quota
+            } finally {
+                _isProcessingScan.value = false
+                onComplete()
             }
-
-            val result = GeminiService.analyzeParkingSigns(
-                bitmap = bitmap,
-                locationName = resolvedLocName,
-                cityState = resolvedCityState,
-                isLocationKnown = isKnown,
-                localDetections = detectedCrops,
-                context = getApplication()
-            )
-            val scanId = repository.saveScan(result)
-            val savedResult = result.copy(id = scanId)
-            _currentScanResult.value = savedResult
-
-            // Consume scan count only after successful analysis
-            _scanUsageInfo.value = scanUsageManager.consumeScan(userIsPro)
-
-            _isProcessingScan.value = false
-            onComplete()
         }
     }
 
@@ -644,6 +646,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         onPaywallRequired: () -> Unit = {},
         onComplete: () -> Unit
     ) {
+        if (_isProcessingScan.value) return
+
         val userIsPro = isUserPro()
         if (!scanUsageManager.canPerformScan(userIsPro)) {
             onPaywallRequired()
@@ -653,45 +657,49 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isProcessingScan.value = true
             _processingStatusText.value = "Reading your parking sign…"
-            delay(1000)
+            try {
+                delay(1000)
 
-            val enrichedSigns = preset.detectedSigns.map { sign ->
-                val cropPath = if (!sign.croppedImageUri.isNullOrBlank() && java.io.File(sign.croppedImageUri).exists()) {
-                    sign.croppedImageUri
-                } else {
-                    com.example.data.detection.SignDetectionService.getOrCreateSampleSignCrop(
-                        getApplication(),
-                        sign.id,
-                        sign.title,
-                        sign.subtitle,
-                        sign.isRestrictingNow
-                    )
+                val enrichedSigns = preset.detectedSigns.map { sign ->
+                    val cropPath = if (!sign.croppedImageUri.isNullOrBlank() && java.io.File(sign.croppedImageUri).exists()) {
+                        sign.croppedImageUri
+                    } else {
+                        com.example.data.detection.SignDetectionService.getOrCreateSampleSignCrop(
+                            getApplication(),
+                            sign.id,
+                            sign.title,
+                            sign.subtitle,
+                            sign.isRestrictingNow
+                        )
+                    }
+                    sign.copy(croppedImageUri = cropPath, isDemo = true)
                 }
-                sign.copy(croppedImageUri = cropPath, isDemo = true)
+
+                val scanResult = ScanResult(
+                    locationName = preset.locationName,
+                    cityState = "",
+                    verdict = preset.simulatedVerdict,
+                    statusChipText = if (preset.simulatedVerdict == ScanVerdict.ALLOWED) "Updated just now" else if (preset.simulatedVerdict == ScanVerdict.RESTRICTED) "Enforced now" else "Rule unclear",
+                    allowedUntilTime = preset.allowedUntil,
+                    timeRemaining = if (preset.simulatedVerdict == ScanVerdict.ALLOWED) "2h 00m remaining" else "0m",
+                    parkingRules = preset.rules,
+                    explanation = preset.explanation,
+                    detectedSigns = enrichedSigns,
+                    zoneType = "Parking zone",
+                    paymentInfo = "",
+                    isDemo = true
+                )
+                val id = repository.saveScan(scanResult)
+                val finalResult = scanResult.copy(id = id)
+                _currentScanResult.value = finalResult
+
+                _scanUsageInfo.value = scanUsageManager.consumeScan(userIsPro)
+            } catch (e: Exception) {
+                android.util.Log.e("CurbPipeline", "Error processing preset sign", e)
+            } finally {
+                _isProcessingScan.value = false
+                onComplete()
             }
-
-            val scanResult = ScanResult(
-                locationName = preset.locationName,
-                cityState = "",
-                verdict = preset.simulatedVerdict,
-                statusChipText = if (preset.simulatedVerdict == ScanVerdict.ALLOWED) "Updated just now" else if (preset.simulatedVerdict == ScanVerdict.RESTRICTED) "Enforced now" else "Rule unclear",
-                allowedUntilTime = preset.allowedUntil,
-                timeRemaining = if (preset.simulatedVerdict == ScanVerdict.ALLOWED) "2h 00m remaining" else "0m",
-                parkingRules = preset.rules,
-                explanation = preset.explanation,
-                detectedSigns = enrichedSigns,
-                zoneType = "Parking zone",
-                paymentInfo = "",
-                isDemo = true
-            )
-            val id = repository.saveScan(scanResult)
-            val finalResult = scanResult.copy(id = id)
-            _currentScanResult.value = finalResult
-
-            _scanUsageInfo.value = scanUsageManager.consumeScan(userIsPro)
-
-            _isProcessingScan.value = false
-            onComplete()
         }
     }
 

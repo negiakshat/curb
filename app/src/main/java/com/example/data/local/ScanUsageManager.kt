@@ -88,7 +88,7 @@ class ScanUsageManager(context: Context) {
         if (isPro) return getUsageInfo(true)
         ensureCurrentMonth()
         val current = prefs.getInt(KEY_SCANS_USED, 0)
-        val updated = current + 1
+        val updated = (current + 1).coerceAtMost(MONTHLY_FREE_LIMIT)
         prefs.edit().putInt(KEY_SCANS_USED, updated).apply()
         return getUsageInfo(false)
     }

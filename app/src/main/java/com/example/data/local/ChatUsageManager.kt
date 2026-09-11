@@ -79,7 +79,7 @@ class ChatUsageManager(context: Context) {
         if (isPro) return getUsageInfo(true)
         ensureCurrentDay()
         val current = prefs.getInt(KEY_MESSAGES_USED_TODAY, 0)
-        val updated = current + 1
+        val updated = (current + 1).coerceAtMost(CURB_AI_FREE_DAILY_LIMIT)
         prefs.edit().putInt(KEY_MESSAGES_USED_TODAY, updated).apply()
         return getUsageInfo(false)
     }
