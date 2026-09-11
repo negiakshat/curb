@@ -33,6 +33,7 @@ import com.example.data.repository.CurbRepository
 import android.location.Location
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -86,14 +87,38 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private val _lastNotificationReadTime = MutableStateFlow(sessionPreferences.lastNotificationReadTime)
+    private val _notificationTicker = MutableStateFlow(System.currentTimeMillis())
+    private var notificationTickerJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            activeSession.collect { active ->
+                notificationTickerJob?.cancel()
+                notificationTickerJob = null
+                if (active != null && !active.isDemo && active.isActive) {
+                    notificationTickerJob = viewModelScope.launch {
+                        while (coroutineContext[Job]?.isActive != false) {
+                            val now = System.currentTimeMillis()
+                            _notificationTicker.value = now
+                            if (active.endTime <= now) {
+                                break
+                            }
+                            delay(5000L)
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     val inAppNotifications: StateFlow<List<InAppNotification>> = combine(
         activeSession,
         allSessions,
-        _lastNotificationReadTime
-    ) { active, sessions, lastRead ->
+        _lastNotificationReadTime,
+        _notificationTicker
+    ) { active, sessions, lastRead, currentTime ->
         val list = mutableListOf<InAppNotification>()
-        val now = System.currentTimeMillis()
+        val now = currentTime
 
         if (active != null && !active.isDemo) {
             val remainingMs = active.endTime - now

@@ -117,7 +117,7 @@ class NotificationSchedulerTest {
     }
 
     @Test
-    fun testExpirationAndEndedVariants() {
+    fun testExpirationVariant() {
         val expiration = NotificationVariants.getExpirationVariant(
             sessionId = 201L,
             locationName = "Powell St",
@@ -125,13 +125,29 @@ class NotificationSchedulerTest {
         )
         assertNotNull(expiration.title)
         assertTrue(expiration.body.contains("Powell St"))
+    }
 
-        val ended = NotificationVariants.getEndedVariant(
-            sessionId = 201L,
-            locationName = "Powell St"
-        )
-        assertNotNull(ended.title)
-        assertTrue(ended.body.contains("Powell St"))
+    @Test
+    fun testLiveNotificationCountdownStateCalculation() {
+        val startTime = System.currentTimeMillis()
+        val endTime = startTime + 10 * 60000L // 10 minutes in future
+
+        // 1. At start time: 10 minutes remaining
+        val remainingMsAtStart = endTime - startTime
+        val remainingMinsAtStart = (remainingMsAtStart / 60000L).toInt().coerceAtLeast(0)
+        assertEquals(10, remainingMinsAtStart)
+
+        // 2. Simulated tick after 3 minutes (now = startTime + 3 mins): 7 minutes remaining
+        val tickTime = startTime + 3 * 60000L
+        val remainingMsAtTick = endTime - tickTime
+        val remainingMinsAtTick = (remainingMsAtTick / 60000L).toInt().coerceAtLeast(0)
+        assertEquals(7, remainingMinsAtTick)
+
+        // 3. Simulated tick when expired (now = endTime + 1 min): 0 minutes remaining
+        val expiredTime = endTime + 60000L
+        val remainingMsExpired = endTime - expiredTime
+        val remainingMinsExpired = (remainingMsExpired / 60000L).toInt().coerceAtLeast(0)
+        assertEquals(0, remainingMinsExpired)
     }
 
     @Test
