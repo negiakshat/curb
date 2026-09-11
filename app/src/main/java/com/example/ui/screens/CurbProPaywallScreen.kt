@@ -84,6 +84,8 @@ private enum class PaywallSuccessType {
 
 @Composable
 fun CurbProPaywallScreen(
+    isPro: Boolean = false,
+    isJudgeProActive: Boolean = false,
     subscriptionState: SubscriptionUiState,
     onPurchase: (Activity, SubscriptionPackageInfo, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit,
     onRestorePurchases: (onResult: (Boolean, String) -> Unit) -> Unit,
@@ -238,40 +240,95 @@ fun CurbProPaywallScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // PACKAGE SELECTION TITLE
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Choose your plan",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = CurbOnSurface
-                    )
+            // PACKAGE SELECTION OR ALREADY PRO BANNER
+            if (isPro) {
+                item {
+                    CurbCard(
+                        cornerRadius = RadiusCard,
+                        backgroundColor = BentoSand
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = BentoPrimaryDark
+                            ) {
+                                Text(
+                                    text = if (isJudgeProActive && !subscriptionState.isPro) "DEMO ACCESS ACTIVE" else "CURB PRO ACTIVE",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CurbWhite,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text(
+                                text = if (isJudgeProActive && !subscriptionState.isPro)
+                                    "Judge Demo Access Enabled"
+                                else
+                                    "Your Curb Pro Subscription is Active",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CurbOnSurface,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = if (isJudgeProActive && !subscriptionState.isPro)
+                                    "Demo access enabled via promo code CURB26X. You have full access to all Curb Pro features for evaluation."
+                                else
+                                    "You have full access to unlimited AI scans, scan history, saved places, and advanced AI parking assistance.",
+                                fontSize = 13.sp,
+                                color = CurbOnSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            // SUBSCRIPTION PACKAGES
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    packages.forEach { pkg ->
-                        val isSelected = pkg.id == selectedPackageId
-                        PackageOptionCard(
-                            packageInfo = pkg,
-                            isSelected = isSelected,
-                            onSelect = { selectedPackageId = pkg.id }
+            } else {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Choose your plan",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CurbOnSurface
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                item {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        packages.forEach { pkg ->
+                            val isSelected = pkg.id == selectedPackageId
+                            PackageOptionCard(
+                                packageInfo = pkg,
+                                isSelected = isSelected,
+                                onSelect = { selectedPackageId = pkg.id }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
             }
 
             // PROMO CODE SECTION
@@ -367,37 +424,45 @@ fun CurbProPaywallScreen(
                 ) {
                     val selectedPackage = packages.find { it.id == selectedPackageId } ?: packages.firstOrNull()
 
-                    CurbPrimaryButton(
-                        text = if (subscriptionState.isLoading) "Processing…" else "Get Curb Pro",
-                        onClick = {
-                            if (activity != null && selectedPackage != null && !subscriptionState.isLoading) {
-                                onPurchase(
-                                    activity,
-                                    selectedPackage,
-                                    {
-                                        successDialogType = PaywallSuccessType.REAL_PURCHASE
-                                    },
-                                    { error ->
-                                        // Error handled via snackbar
-                                    }
-                                )
-                            }
-                        },
-                        enabled = !subscriptionState.isLoading && selectedPackage != null,
-                        testTag = "paywall_get_pro_button"
-                    )
+                    if (!isPro) {
+                        CurbPrimaryButton(
+                            text = if (subscriptionState.isLoading) "Processing…" else "Get Curb Pro",
+                            onClick = {
+                                if (activity != null && selectedPackage != null && !subscriptionState.isLoading) {
+                                    onPurchase(
+                                        activity,
+                                        selectedPackage,
+                                        {
+                                            successDialogType = PaywallSuccessType.REAL_PURCHASE
+                                        },
+                                        { error ->
+                                            // Error handled via snackbar
+                                        }
+                                    )
+                                }
+                            },
+                            enabled = !subscriptionState.isLoading && selectedPackage != null,
+                            testTag = "paywall_get_pro_button"
+                        )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.testTag("paywall_maybe_later_button")
-                    ) {
-                        Text(
-                            text = "Maybe later",
-                            color = CurbOnSurfaceVariant,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.testTag("paywall_maybe_later_button")
+                        ) {
+                            Text(
+                                text = "Maybe later",
+                                color = CurbOnSurfaceVariant,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else {
+                        CurbPrimaryButton(
+                            text = "Continue with Curb Pro",
+                            onClick = onDismiss,
+                            testTag = "paywall_done_button"
                         )
                     }
 

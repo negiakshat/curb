@@ -206,8 +206,14 @@ fun CurbProSuccessDialog(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
+                    val titleText = when {
+                        isJudgeCode -> "Judge Demo Unlocked!"
+                        isRestore -> "Purchases Restored!"
+                        else -> "Curb Pro Unlocked!"
+                    }
+
                     Text(
-                        text = "Curb Pro Unlocked!",
+                        text = titleText,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Black,
                         color = CurbOnSurface,
@@ -217,9 +223,9 @@ fun CurbProSuccessDialog(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     val subtitleText = when {
-                        isJudgeCode -> "You're all set.\nEnjoy the full Curb Pro experience.\nJudge access enabled."
+                        isJudgeCode -> "Demo access enabled via code CURB26X.\nEnjoy full Curb Pro features for evaluation."
                         isRestore -> "Welcome back!\nYour Curb Pro subscription has been restored."
-                        else -> "You're all set.\nEnjoy your Curb Pro subscription."
+                        else -> "Thank you for subscribing!\nEnjoy your Curb Pro subscription."
                     }
 
                     Text(

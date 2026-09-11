@@ -646,6 +646,7 @@ fun CurbApp(
                 composable(Routes.PAYMENT_SUBSCRIPTION) {
                     PaymentSubscriptionScreen(
                         isPro = isUserPro,
+                        isJudgeProActive = isJudgeProActive,
                         usageInfo = scanUsageInfo,
                         subscriptionState = subscriptionState,
                         onUpgradeToPro = {
@@ -666,6 +667,8 @@ fun CurbApp(
                 // 15. CURB PRO PAYWALL
                 composable(Routes.CURB_PRO_PAYWALL) {
                     CurbProPaywallScreen(
+                        isPro = isUserPro,
+                        isJudgeProActive = isJudgeProActive,
                         subscriptionState = subscriptionState,
                         onPurchase = { activity, pkg, onSuccess, onError ->
                             viewModel.purchaseSubscription(

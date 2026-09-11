@@ -83,6 +83,7 @@ private enum class PaymentSuccessType {
 @Composable
 fun PaymentSubscriptionScreen(
     isPro: Boolean,
+    isJudgeProActive: Boolean = false,
     usageInfo: ScanUsageInfo,
     subscriptionState: SubscriptionUiState,
     onUpgradeToPro: () -> Unit,
@@ -167,7 +168,12 @@ fun PaymentSubscriptionScreen(
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = if (isPro) "Curb Pro" else "Curb Free Plan",
+                                        text = when {
+                                            subscriptionState.isPro -> "Curb Pro"
+                                            isJudgeProActive -> "Judge Demo Access"
+                                            isPro -> "Curb Pro"
+                                            else -> "Curb Free Plan"
+                                        },
                                         fontSize = 20.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = CurbOnSurface
@@ -192,7 +198,12 @@ fun PaymentSubscriptionScreen(
                                             )
                                         }
                                         Text(
-                                            text = if (isPro) "ACTIVE" else "FREE",
+                                            text = when {
+                                                subscriptionState.isPro -> "ACTIVE"
+                                                isJudgeProActive -> "DEMO ACCESS"
+                                                isPro -> "ACTIVE"
+                                                else -> "FREE"
+                                            },
                                             color = if (isPro) CurbWhite else BentoTextDark,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold
@@ -275,13 +286,13 @@ fun PaymentSubscriptionScreen(
                                     }
                                     Column {
                                         Text(
-                                            text = "Unlimited AI photo scans unlocked",
+                                            text = if (isJudgeProActive && !subscriptionState.isPro) "Judge demo access active" else "Unlimited AI photo scans unlocked",
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = CurbOnSurface
                                         )
                                         Text(
-                                            text = "Full Pro access enabled with unlimited scans and saved places",
+                                            text = if (isJudgeProActive && !subscriptionState.isPro) "Demo unlocked via code CURB26X. Unlimited scans and saved places." else "Full Pro access enabled with unlimited scans and saved places",
                                             fontSize = 11.sp,
                                             color = CurbOnSurfaceVariant
                                         )
@@ -440,7 +451,7 @@ fun PaymentSubscriptionScreen(
                             onClick = onUpgradeToPro,
                             testTag = "upgrade_pro_button"
                         )
-                    } else {
+                    } else if (subscriptionState.isPro) {
                         CurbPrimaryButton(
                             text = "Manage Subscription",
                             onClick = {
@@ -457,6 +468,12 @@ fun PaymentSubscriptionScreen(
                                 }
                             },
                             testTag = "manage_subscription_button"
+                        )
+                    } else {
+                        CurbPrimaryButton(
+                            text = "Get Store Subscription",
+                            onClick = onUpgradeToPro,
+                            testTag = "upgrade_pro_button"
                         )
                     }
 
