@@ -100,9 +100,9 @@ class CurbRepository(context: Context) {
         return entity?.let { entityToScanResult(it) }
     }
 
-    suspend fun saveScan(scan: ScanResult): Long {
+    suspend fun saveScan(scan: ScanResult): Long = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val entity = scanResultToEntity(scan)
-        return scanDao.insertScan(entity)
+        scanDao.insertScan(entity)
     }
 
     suspend fun deleteScan(id: Long) {

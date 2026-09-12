@@ -119,6 +119,8 @@ abstract class CurbDatabase : RoomDatabase() {
                         MIGRATION_5_6,
                         MIGRATION_6_7
                     )
+                    .fallbackToDestructiveMigration()
+                    .allowMainThreadQueries()
                     .build()
                 INSTANCE = instance
                 instance

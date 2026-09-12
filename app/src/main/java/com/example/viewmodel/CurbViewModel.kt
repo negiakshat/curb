@@ -5,6 +5,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.detection.LocalSignCrop
 import com.example.data.local.ChatUsageInfo
 import com.example.data.local.ChatUsageManager
 import com.example.data.local.ScanUsageInfo
@@ -15,30 +16,28 @@ import com.example.data.location.UserLocationResult
 import com.example.data.model.ActiveParkingSession
 import com.example.data.model.ChatMessage
 import com.example.data.model.CurbNote
+import com.example.data.model.InAppNotification
 import com.example.data.model.ParkingSpot
 import com.example.data.model.SampleSignPreset
 import com.example.data.model.SavedPlace
 import com.example.data.model.ScanResult
-import com.example.data.model.ScanVerdict
+import com.example.data.model.SignBoundingBox
 import com.example.data.model.UserProfile
-import com.example.data.model.InAppNotification
-import com.example.notification.NotificationType
-import com.example.data.remote.GeminiService
 import com.example.data.remote.SubscriptionPackageInfo
 import com.example.data.remote.SubscriptionService
 import com.example.data.remote.SubscriptionUiState
 import com.example.data.remote.WalkingRoute
-import com.example.data.remote.WalkingRouteService
 import com.example.data.repository.CurbRepository
-import android.location.Location
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import com.example.viewmodel.coordinators.ChatCoordinator
+import com.example.viewmodel.coordinators.LocationSpotCoordinator
+import com.example.viewmodel.coordinators.NotificationCoordinator
+import com.example.viewmodel.coordinators.ProfileCoordinator
+import com.example.viewmodel.coordinators.ScanCoordinator
+import com.example.viewmodel.coordinators.UsageCoordinator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -55,11 +54,20 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     val subscriptionService = SubscriptionService(application)
     val locationService = LocationService(application)
 
-    private val _userLocationState = MutableStateFlow<UserLocationResult>(
-        if (locationService.hasLocationPermission()) UserLocationResult.Unavailable("Checking location…")
-        else UserLocationResult.PermissionRequired()
+    // Extracted Coordinators
+    val profileCoordinator = ProfileCoordinator(
+        repository = repository,
+        sessionPreferences = sessionPreferences,
+        scanUsageManager = scanUsageManager,
+        chatUsageManager = chatUsageManager,
+        coroutineScope = viewModelScope
     )
-    val userLocationState: StateFlow<UserLocationResult> = _userLocationState.asStateFlow()
+
+    val locationSpotCoordinator = LocationSpotCoordinator(
+        repository = repository,
+        locationService = locationService,
+        coroutineScope = viewModelScope
+    )
 
     val allScans: StateFlow<List<ScanResult>> = repository.allScans
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -70,9 +78,89 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     val allSessions: StateFlow<List<ActiveParkingSession>> = repository.allSessions
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val notificationCoordinator = NotificationCoordinator(
+        sessionPreferences = sessionPreferences,
+        activeSession = activeSession,
+        allSessions = allSessions,
+        coroutineScope = viewModelScope
+    )
+
+    val scanCoordinator = ScanCoordinator(
+        application = application,
+        repository = repository,
+        scanUsageManager = scanUsageManager,
+        locationService = locationService,
+        userLocationState = locationSpotCoordinator.userLocationState,
+        coroutineScope = viewModelScope
+    )
+
+    val chatCoordinator = ChatCoordinator(
+        chatUsageManager = chatUsageManager,
+        sessionPreferences = sessionPreferences,
+        coroutineScope = viewModelScope
+    )
+
+    val usageCoordinator = UsageCoordinator(
+        scanUsageManager = scanUsageManager,
+        chatUsageManager = chatUsageManager,
+        subscriptionService = subscriptionService,
+        sessionPreferences = sessionPreferences,
+        isJudgeProActiveFlow = profileCoordinator.isJudgeProActive,
+        userProfileFlow = profileCoordinator.userProfile,
+        coroutineScope = viewModelScope
+    )
+
+    // Exposed State Delegates
+    val userLocationState: StateFlow<UserLocationResult> = locationSpotCoordinator.userLocationState
+    val currentUserLocation: StateFlow<UserLocationResult?> = locationSpotCoordinator.currentUserLocation
+    val inAppNotifications: StateFlow<List<InAppNotification>> = notificationCoordinator.inAppNotifications
+    val hasUnreadNotifications: StateFlow<Boolean> = notificationCoordinator.hasUnreadNotifications
+    val showNotificationDialog: StateFlow<Boolean> = notificationCoordinator.showNotificationDialog
+    val isSavingParkingSpot: StateFlow<Boolean> = locationSpotCoordinator.isSavingParkingSpot
+    val parkingSpotSaveError: StateFlow<String?> = locationSpotCoordinator.parkingSpotSaveError
+    val walkingRouteState: StateFlow<WalkingRoute?> = locationSpotCoordinator.walkingRouteState
+
+    val userProfile: StateFlow<UserProfile> = profileCoordinator.userProfile
+    val isJudgeProActive: StateFlow<Boolean> = profileCoordinator.isJudgeProActive
+    val onboardingCompleted: StateFlow<Boolean> = profileCoordinator.onboardingCompleted
+
+    val subscriptionState: StateFlow<SubscriptionUiState> = usageCoordinator.subscriptionState
+    val isUserPro: StateFlow<Boolean> = usageCoordinator.isUserPro
+    val scanUsageInfo: StateFlow<ScanUsageInfo> = usageCoordinator.scanUsageInfo
+    val chatUsageInfo: StateFlow<ChatUsageInfo> = usageCoordinator.chatUsageInfo
+
+    val currentScanResult: StateFlow<ScanResult?> = scanCoordinator.currentScanResult
+    val isProcessingScan: StateFlow<Boolean> = scanCoordinator.isProcessingScan
+    val processingStatusText: StateFlow<String> = scanCoordinator.processingStatusText
+
+    val chatMessages: StateFlow<List<ChatMessage>> = chatCoordinator.chatMessages
+    val isChatLoading: StateFlow<Boolean> = chatCoordinator.isChatLoading
+
+    val savedParkingSpot: StateFlow<ParkingSpot?> = repository.savedParkingSpot
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val demoSavedParkingSpot: StateFlow<ParkingSpot?> = repository.demoSavedParkingSpot
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val savedPlaces: StateFlow<List<SavedPlace>> = repository.savedPlaces
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allNotes: StateFlow<List<CurbNote>> = repository.allNotes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _targetSession = MutableStateFlow<ActiveParkingSession?>(null)
     val targetSession: StateFlow<ActiveParkingSession?> = _targetSession.asStateFlow()
 
+    init {
+        // Initialize RevenueCat with anonymous app user ID
+        subscriptionService.initialize { isProActive ->
+            val updated = profileCoordinator.userProfile.value.copy(isPro = isProActive)
+            profileCoordinator.updateUserProfile(updated)
+            usageCoordinator.refreshUsageInfo()
+        }
+    }
+
+    // Target Session Methods
     fun loadSessionById(sessionId: Long) {
         viewModelScope.launch {
             val session = repository.getSessionById(sessionId)
@@ -86,623 +174,70 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         _targetSession.value = null
     }
 
-    private val _lastNotificationReadTime = MutableStateFlow(sessionPreferences.lastNotificationReadTime)
-    private val _notificationTicker = MutableStateFlow(System.currentTimeMillis())
-    private var notificationTickerJob: Job? = null
+    // Notification Methods
+    fun markNotificationsAsRead() = notificationCoordinator.markNotificationsAsRead()
+    fun setShowNotificationDialog(show: Boolean) = notificationCoordinator.setShowNotificationDialog(show)
 
-    init {
-        viewModelScope.launch {
-            activeSession.collect { active ->
-                notificationTickerJob?.cancel()
-                notificationTickerJob = null
-                if (active != null && !active.isDemo && active.isActive) {
-                    notificationTickerJob = viewModelScope.launch {
-                        while (coroutineContext[Job]?.isActive != false) {
-                            val now = System.currentTimeMillis()
-                            _notificationTicker.value = now
-                            if (active.endTime <= now) {
-                                break
-                            }
-                            delay(5000L)
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // Location & Spot Methods
+    fun refreshLocation() = locationSpotCoordinator.refreshLocation()
+    fun refreshCurrentLocation(onResult: (UserLocationResult) -> Unit = {}) = locationSpotCoordinator.refreshCurrentLocation(onResult)
+    fun startLiveLocationUpdates() = locationSpotCoordinator.startLiveLocationUpdates()
+    fun stopLiveLocationUpdates() = locationSpotCoordinator.stopLiveLocationUpdates()
+    fun updateWalkingRouteIfNeeded(userLat: Double, userLng: Double, carLat: Double, carLng: Double) =
+        locationSpotCoordinator.updateWalkingRouteIfNeeded(userLat, userLng, carLat, carLng)
+    fun saveCurrentParkingSpot(sessionId: Long? = null, isDemo: Boolean? = null, onResult: (Boolean, String?) -> Unit = { _, _ -> }) =
+        locationSpotCoordinator.saveCurrentParkingSpot(sessionId, isDemo, onResult)
+    fun clearParkingSpotSaveError() = locationSpotCoordinator.clearParkingSpotSaveError()
+    fun clearSavedParkingSpot(isDemo: Boolean = false) = locationSpotCoordinator.clearSavedParkingSpot(isDemo)
 
-    val inAppNotifications: StateFlow<List<InAppNotification>> = combine(
-        activeSession,
-        allSessions,
-        _lastNotificationReadTime,
-        _notificationTicker
-    ) { active, sessions, lastRead, currentTime ->
-        val list = mutableListOf<InAppNotification>()
-        val now = currentTime
-
-        if (active != null && !active.isDemo) {
-            val remainingMs = active.endTime - now
-            val remainingMins = (remainingMs / 60000L).toInt().coerceAtLeast(0)
-            val isExpired = remainingMs <= 0
-
-            if (!isExpired) {
-                list.add(
-                    InAppNotification(
-                        id = "active_reminder_${active.id}",
-                        sessionId = active.id,
-                        title = "Parking time running low",
-                        body = "${active.locationName} · $remainingMins min remaining",
-                        locationName = active.locationName,
-                        timestamp = active.startTime,
-                        type = NotificationType.REMINDER,
-                        isRead = active.startTime <= lastRead,
-                        isActiveSession = true,
-                        endTimeMillis = active.endTime,
-                        remainingMinutes = remainingMins
-                    )
-                )
-            } else {
-                list.add(
-                    InAppNotification(
-                        id = "active_expired_${active.id}",
-                        sessionId = active.id,
-                        title = "Parking session expired",
-                        body = "${active.locationName} · Expired",
-                        locationName = active.locationName,
-                        timestamp = active.endTime,
-                        type = NotificationType.EXPIRATION,
-                        isRead = active.endTime <= lastRead,
-                        isActiveSession = false,
-                        endTimeMillis = active.endTime,
-                        remainingMinutes = 0
-                    )
-                )
-            }
-        }
-
-        val realPastSessions = sessions.filter { !it.isDemo && it.id != active?.id }
-        for (session in realPastSessions) {
-            val isExpired = session.endTime <= now
-            list.add(
-                InAppNotification(
-                    id = "past_session_${session.id}",
-                    sessionId = session.id,
-                    title = if (isExpired) "Parking session expired" else "Parking session active",
-                    body = "${session.locationName} · ${session.allowedUntilTime}",
-                    locationName = session.locationName,
-                    timestamp = session.startTime,
-                    type = if (isExpired) NotificationType.EXPIRATION else NotificationType.REMINDER,
-                    isRead = session.startTime <= lastRead,
-                    isActiveSession = false,
-                    endTimeMillis = session.endTime
-                )
-            )
-        }
-
-        list.sortedByDescending { it.timestamp }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val hasUnreadNotifications: StateFlow<Boolean> = combine(
-        inAppNotifications,
-        _lastNotificationReadTime
-    ) { notifications, lastRead ->
-        notifications.any { !it.isRead && it.timestamp > lastRead }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    fun markNotificationsAsRead() {
-        val now = System.currentTimeMillis()
-        sessionPreferences.lastNotificationReadTime = now
-        _lastNotificationReadTime.value = now
-    }
-
-    val savedParkingSpot: StateFlow<ParkingSpot?> = repository.savedParkingSpot
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    val demoSavedParkingSpot: StateFlow<ParkingSpot?> = repository.demoSavedParkingSpot
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    private val _isSavingParkingSpot = MutableStateFlow(false)
-    val isSavingParkingSpot: StateFlow<Boolean> = _isSavingParkingSpot.asStateFlow()
-
-    private val _parkingSpotSaveError = MutableStateFlow<String?>(null)
-    val parkingSpotSaveError: StateFlow<String?> = _parkingSpotSaveError.asStateFlow()
-
-    private val _currentUserLocation = MutableStateFlow<UserLocationResult?>(null)
-    val currentUserLocation: StateFlow<UserLocationResult?> = _currentUserLocation.asStateFlow()
-
-    private val walkingRouteService = WalkingRouteService()
-    private val _walkingRouteState = MutableStateFlow<WalkingRoute?>(null)
-    val walkingRouteState: StateFlow<WalkingRoute?> = _walkingRouteState.asStateFlow()
-
-    val savedPlaces: StateFlow<List<SavedPlace>> = repository.savedPlaces
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val allNotes: StateFlow<List<CurbNote>> = repository.allNotes
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    private val _userProfile = MutableStateFlow(sessionPreferences.getUserProfile())
-    val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
-
-    private val _isJudgeProActive = MutableStateFlow(sessionPreferences.isJudgeProActive)
-    val isJudgeProActive: StateFlow<Boolean> = _isJudgeProActive.asStateFlow()
-
-    val subscriptionState: StateFlow<SubscriptionUiState> = subscriptionService.subscriptionState
-
-    val isUserPro: StateFlow<Boolean> = combine(
-        subscriptionState,
-        _isJudgeProActive,
-        _userProfile
-    ) { subState, judgeActive, profile ->
-        if (subState.isConfigured) {
-            subState.isPro || judgeActive
-        } else {
-            subState.isPro || judgeActive || profile.isPro
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.Eagerly,
-        initialValue = subscriptionService.subscriptionState.value.isPro ||
-                sessionPreferences.isJudgeProActive ||
-                sessionPreferences.getUserProfile().isPro
-    )
-
-    private val _scanUsageInfo = MutableStateFlow(
-        scanUsageManager.getUsageInfo(
-            subscriptionService.subscriptionState.value.isPro ||
-                    sessionPreferences.isJudgeProActive ||
-                    sessionPreferences.getUserProfile().isPro
-        )
-    )
-    val scanUsageInfo: StateFlow<ScanUsageInfo> = _scanUsageInfo.asStateFlow()
-
-    private val _chatUsageInfo = MutableStateFlow(
-        chatUsageManager.getUsageInfo(
-            subscriptionService.subscriptionState.value.isPro ||
-                    sessionPreferences.isJudgeProActive ||
-                    sessionPreferences.getUserProfile().isPro
-        )
-    )
-    val chatUsageInfo: StateFlow<ChatUsageInfo> = _chatUsageInfo.asStateFlow()
-
-    private val _onboardingCompleted = MutableStateFlow(sessionPreferences.isOnboardingAndPermissionsCompleted())
-    val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted.asStateFlow()
-
-    private val _currentScanResult = MutableStateFlow<ScanResult?>(null)
-    val currentScanResult: StateFlow<ScanResult?> = _currentScanResult.asStateFlow()
-
-    private val _isProcessingScan = MutableStateFlow(false)
-    val isProcessingScan: StateFlow<Boolean> = _isProcessingScan.asStateFlow()
-
-    private val _processingStatusText = MutableStateFlow("Reading your parking sign…")
-    val processingStatusText: StateFlow<String> = _processingStatusText.asStateFlow()
-
-    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(
-        listOf(
-            ChatMessage(
-                text = "Hello ${sessionPreferences.getUserProfile().name}. I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
-                isUser = false
-            )
-        )
-    )
-    val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
-
-    private val _isChatLoading = MutableStateFlow(false)
-    val isChatLoading: StateFlow<Boolean> = _isChatLoading.asStateFlow()
-
-    private val _showNotificationDialog = MutableStateFlow(false)
-    val showNotificationDialog: StateFlow<Boolean> = _showNotificationDialog.asStateFlow()
-
-    init {
-        // Automatically sync usage managers when effective Pro status changes
-        viewModelScope.launch {
-            isUserPro.collect { pro ->
-                _scanUsageInfo.value = scanUsageManager.getUsageInfo(pro)
-                _chatUsageInfo.value = chatUsageManager.getUsageInfo(pro)
-            }
-        }
-
-        // Initialize RevenueCat with anonymous app user ID
-        subscriptionService.initialize { isProActive ->
-            val updated = _userProfile.value.copy(isPro = isProActive)
-            _userProfile.value = updated
-            sessionPreferences.saveUserProfile(updated)
-            refreshUsageInfo()
-        }
-
-        // Fetch location if permission is already granted
-        if (locationService.hasLocationPermission()) {
-            refreshLocation()
-        }
-    }
-
-    private var liveLocationJob: Job? = null
-
-    fun refreshLocation() {
-        viewModelScope.launch {
-            if (!locationService.hasLocationPermission()) {
-                _userLocationState.value = UserLocationResult.PermissionRequired()
-                return@launch
-            }
-            val result = locationService.fetchCurrentLocation()
-            _userLocationState.value = result
-        }
-    }
-
-    fun startLiveLocationUpdates() {
-        stopLiveLocationUpdates()
-        liveLocationJob = viewModelScope.launch {
-            if (!locationService.hasLocationPermission()) {
-                _userLocationState.value = UserLocationResult.PermissionRequired()
-                return@launch
-            }
-            locationService.getLocationUpdates(intervalMs = 3000L).collect { result ->
-                _userLocationState.value = result
-            }
-        }
-    }
-
-    fun stopLiveLocationUpdates() {
-        liveLocationJob?.cancel()
-        liveLocationJob = null
-    }
-
-    private var lastRouteFetchLat: Double? = null
-    private var lastRouteFetchLng: Double? = null
-    private var fetchRouteJob: Job? = null
-
-    fun updateWalkingRouteIfNeeded(userLat: Double, userLng: Double, carLat: Double, carLng: Double) {
-        val lastLat = lastRouteFetchLat
-        val lastLng = lastRouteFetchLng
-
-        val needsFetch = if (lastLat == null || lastLng == null || _walkingRouteState.value == null) {
-            true
-        } else {
-            val dist = FloatArray(1)
-            Location.distanceBetween(userLat, userLng, lastLat, lastLng, dist)
-            dist[0] > 8.0 // Refetch route if user's location moves > 8 meters
-        }
-
-        if (needsFetch) {
-            fetchRouteJob?.cancel()
-            fetchRouteJob = viewModelScope.launch {
-                lastRouteFetchLat = userLat
-                lastRouteFetchLng = userLng
-                val route = walkingRouteService.getWalkingRoute(
-                    startLat = userLat,
-                    startLng = userLng,
-                    endLat = carLat,
-                    endLng = carLng
-                )
-                _walkingRouteState.value = route
-            }
-        }
-    }
-
-    fun isUserPro(): Boolean {
-        val subState = subscriptionState.value
-        val judgeActive = _isJudgeProActive.value
-        val profile = _userProfile.value
-        return if (subState.isConfigured) {
-            subState.isPro || judgeActive
-        } else {
-            subState.isPro || judgeActive || profile.isPro
-        }
-    }
+    // Profile & Account Methods
+    fun setUserName(name: String) = profileCoordinator.setUserName(name)
+    fun updateAccount(name: String, gender: String, email: String) = profileCoordinator.updateAccount(name, gender, email)
+    fun completeOnboarding(name: String? = null, isGuest: Boolean = false) = profileCoordinator.completeOnboarding(name, isGuest)
+    fun togglePushNotifications(enabled: Boolean) = profileCoordinator.togglePushNotifications(enabled)
+    fun isOnboardingAndPermissionsCompleted(): Boolean = sessionPreferences.isOnboardingAndPermissionsCompleted()
 
     fun applyPromoCode(code: String): PromoCodeResult {
-        val trimmed = code.trim().uppercase()
-        return if (trimmed == "CURB26X") {
-            _isJudgeProActive.value = true
-            sessionPreferences.isJudgeProActive = true
-            refreshUsageInfo()
-            PromoCodeResult.Success
-        } else {
-            PromoCodeResult.Error("Invalid promo code.")
+        return profileCoordinator.applyPromoCode(code) {
+            usageCoordinator.refreshUsageInfo()
         }
-    }
-
-    fun canPerformScan(): Boolean {
-        return scanUsageManager.canPerformScan(isUserPro())
-    }
-
-    fun canSendChatMessage(): Boolean {
-        return chatUsageManager.canSendMessage(isUserPro())
-    }
-
-    fun refreshUsageInfo() {
-        val pro = isUserPro()
-        _scanUsageInfo.value = scanUsageManager.getUsageInfo(pro)
-        _chatUsageInfo.value = chatUsageManager.getUsageInfo(pro)
-    }
-
-    fun isOnboardingAndPermissionsCompleted(): Boolean {
-        return sessionPreferences.isOnboardingAndPermissionsCompleted()
-    }
-
-    fun setUserName(name: String) {
-        val trimmed = name.trim().ifEmpty { "Alex" }
-        val updated = _userProfile.value.copy(name = trimmed)
-        _userProfile.value = updated
-        sessionPreferences.saveUserProfile(updated)
-    }
-
-    fun completeOnboarding(name: String? = null, isGuest: Boolean = false) {
-        if (!name.isNullOrBlank()) {
-            setUserName(name)
-        }
-        sessionPreferences.isOnboardingCompleted = true
-        sessionPreferences.isPermissionsCompleted = true
-        sessionPreferences.isLoggedIn = true
-        sessionPreferences.isGuest = isGuest
-        sessionPreferences.saveUserProfile(_userProfile.value)
-        _onboardingCompleted.value = true
     }
 
     fun startGuestSession(onComplete: () -> Unit = {}) {
-        viewModelScope.launch {
-            // Logout / Guest semantics: end the current session ONLY. Local Curb data
-            // (Saved Places, Scan History, Notes, Parking Sessions, User Profile, Free Quota)
-            // is intentionally preserved so the user keeps their Curb content and quota.
-            // We only flip the auth flags and reset ephemeral in-memory UI state.
-
-            // 1. Set session/auth flags for guest mode
-            sessionPreferences.isOnboardingCompleted = true
-            sessionPreferences.isPermissionsCompleted = true
-            sessionPreferences.isLoggedIn = true
-            sessionPreferences.isGuest = true
-
-            // 3. Mark session as logged-out for the gating flow
-            _onboardingCompleted.value = true
-
-            // 4. Reset ephemeral in-memory UI state only
-            _currentScanResult.value = null
-            _isProcessingScan.value = false
-            _processingStatusText.value = "Reading your parking sign…"
-            _chatMessages.value = listOf(
-                ChatMessage(
-                    text = "Hello! I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
-                    isUser = false
-                )
-            )
-            _isChatLoading.value = false
-            _showNotificationDialog.value = false
-
+        profileCoordinator.startGuestSession {
+            scanCoordinator.resetScanState()
+            chatCoordinator.resetChatMessages()
+            notificationCoordinator.resetEphemeralState()
             onComplete()
         }
     }
 
     fun logout(onComplete: () -> Unit = {}) {
-        viewModelScope.launch {
-            // Curb is local-first. Logging out MUST end the auth/session only.
-            // It must NEVER delete legitimate user content (Saved Places,
-            // Scan History, Notes, Parking Sessions, the saved UserProfile).
-            //
-            // What logout DOES do:
-            //   - Flip auth/session flags so the splash flow routes to
-            //     WELCOME / NAME_SETUP next time.
-            //   - Reset ephemeral in-memory UI state (current scan, chat
-            //     thread, processing indicators, notification dialog).
-            //
-            // What logout does NOT do (anymore):
-            //   - repository.clearAllData()    // was wiping Saved Places + History
-            //   - sessionPreferences.clearSession()  // was wiping user profile
-
-            sessionPreferences.isLoggedIn = false
-            sessionPreferences.isOnboardingCompleted = false
-            sessionPreferences.isPermissionsCompleted = false
-
-            _onboardingCompleted.value = false
-            _currentScanResult.value = null
-            _isProcessingScan.value = false
-            _processingStatusText.value = "Reading your parking sign…"
-            _chatMessages.value = listOf(
-                ChatMessage(
-                    text = "Hello. I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
-                    isUser = false
-                )
-            )
-            _isChatLoading.value = false
-            _showNotificationDialog.value = false
-
+        profileCoordinator.logout {
+            scanCoordinator.resetScanState()
+            chatCoordinator.resetChatMessages()
+            notificationCoordinator.resetEphemeralState()
             onComplete()
         }
     }
 
     fun deleteAccount(onComplete: () -> Unit = {}) {
-        viewModelScope.launch {
-            repository.clearAllData()
-            sessionPreferences.clearSession()
-            scanUsageManager.resetUsage()
-            chatUsageManager.resetUsage()
-
-            val defaultProfile = UserProfile(name = "Alex", email = "")
-            _userProfile.value = defaultProfile
-            _isJudgeProActive.value = false
-            _currentScanResult.value = null
-            _isProcessingScan.value = false
-            _processingStatusText.value = "Reading your parking sign…"
-            _chatMessages.value = listOf(
-                ChatMessage(
-                    text = "Hello Alex. I'm Curb AI, your dedicated parking assistant. Ask me anything about parking signs, curb colors, street cleaning schedules, or meter rules.",
-                    isUser = false
-                )
-            )
-            _isChatLoading.value = false
-            _showNotificationDialog.value = false
-            _onboardingCompleted.value = false
-            _scanUsageInfo.value = scanUsageManager.getUsageInfo(false)
-            _chatUsageInfo.value = chatUsageManager.getUsageInfo(false)
-
+        profileCoordinator.deleteAccount {
+            scanCoordinator.resetScanState()
+            chatCoordinator.resetChatMessages()
+            notificationCoordinator.resetEphemeralState()
+            usageCoordinator.updateUsageForReset(false)
             onComplete()
         }
     }
 
-    fun processCapturedImage(
-        bitmap: Bitmap?,
-        explicitLocationName: String? = null,
-        explicitCityState: String? = null,
-        detectionBoxes: List<com.example.data.model.SignBoundingBox> = emptyList(),
-        localDetections: List<com.example.data.detection.LocalSignCrop> = emptyList(),
-        onPaywallRequired: () -> Unit,
-        onComplete: () -> Unit
-    ) {
-        if (_isProcessingScan.value) return
+    // Usage & Pro Methods
+    fun isUserPro(): Boolean = usageCoordinator.checkIsUserPro()
+    fun canPerformScan(): Boolean = usageCoordinator.canPerformScan()
+    fun canSendChatMessage(): Boolean = usageCoordinator.canSendChatMessage()
+    fun refreshUsageInfo() = usageCoordinator.refreshUsageInfo()
 
-        val userIsPro = isUserPro()
-        if (!scanUsageManager.canPerformScan(userIsPro)) {
-            onPaywallRequired()
-            return
-        }
-
-        viewModelScope.launch {
-            _isProcessingScan.value = true
-            _processingStatusText.value = "Reading your parking sign…"
-
-            try {
-                // Build real sign crops from captured bitmap or pre-supplied local detections
-                val detectedCrops = if (localDetections.isNotEmpty()) {
-                    android.util.Log.d("CurbPipeline", "Using pre-supplied local detections: ${localDetections.size}")
-                    localDetections
-                } else if (bitmap != null) {
-                    android.util.Log.d("CurbPipeline", "Running on-device sign detection on captured bitmap ${bitmap.width}x${bitmap.height}")
-                    val detectionResult = com.example.data.detection.SignDetectionService.detectAndCropSigns(
-                        getApplication(),
-                        bitmap
-                    )
-                    if (detectionResult.signs.isNotEmpty()) {
-                        detectionResult.signs
-                    } else if (detectionBoxes.isNotEmpty()) {
-                        // Fallback to cropping from live camera preview bounding boxes
-                        com.example.data.detection.SignDetectionService.cropSignsFromBoxes(
-                            getApplication(),
-                            bitmap,
-                            detectionBoxes
-                        )
-                    } else {
-                        emptyList()
-                    }
-                } else {
-                    emptyList()
-                }
-
-                android.util.Log.d(
-                    "CurbPipeline",
-                    "Final detected crops count: ${detectedCrops.size} (files: ${detectedCrops.map { it.fileUri }})"
-                )
-
-                _processingStatusText.value = "Reading your parking sign…"
-
-                // Resolve location context
-                val (resolvedLocName, resolvedCityState, isKnown) = if (!explicitLocationName.isNullOrBlank()) {
-                    // User explicitly selected a saved place or custom spot
-                    Triple(explicitLocationName, explicitCityState ?: "", true)
-                } else {
-                    // Use actual device location if available, otherwise attempt fresh fetch
-                    val currentLoc = if (_userLocationState.value !is UserLocationResult.Success && locationService.hasLocationPermission()) {
-                        locationService.fetchCurrentLocation().also { _userLocationState.value = it }
-                    } else {
-                        _userLocationState.value
-                    }
-
-                    when (currentLoc) {
-                        is UserLocationResult.Success -> {
-                            Triple(currentLoc.locationName, currentLoc.cityState, true)
-                        }
-                        is UserLocationResult.PermissionRequired -> {
-                            Triple("Location access needed", "", false)
-                        }
-                        is UserLocationResult.Unavailable -> {
-                            Triple("Location unavailable", "", false)
-                        }
-                    }
-                }
-
-                val result = GeminiService.analyzeParkingSigns(
-                    bitmap = bitmap,
-                    locationName = resolvedLocName,
-                    cityState = resolvedCityState,
-                    isLocationKnown = isKnown,
-                    localDetections = detectedCrops,
-                    context = getApplication()
-                )
-                val scanId = repository.saveScan(result)
-                val savedResult = result.copy(id = scanId)
-                _currentScanResult.value = savedResult
-
-                // Consume scan count only after successful analysis
-                _scanUsageInfo.value = scanUsageManager.consumeScan(userIsPro)
-            } catch (e: Exception) {
-                android.util.Log.e("CurbPipeline", "Error analyzing parking sign", e)
-                // Failed scan does not consume quota
-            } finally {
-                _isProcessingScan.value = false
-                onComplete()
-            }
-        }
-    }
-
-    fun processPresetSign(
-        preset: SampleSignPreset,
-        onPaywallRequired: () -> Unit = {},
-        onComplete: () -> Unit
-    ) {
-        if (_isProcessingScan.value) return
-
-        val userIsPro = isUserPro()
-        if (!scanUsageManager.canPerformScan(userIsPro)) {
-            onPaywallRequired()
-            return
-        }
-
-        viewModelScope.launch {
-            _isProcessingScan.value = true
-            _processingStatusText.value = "Reading your parking sign…"
-            try {
-                delay(1000)
-
-                val enrichedSigns = preset.detectedSigns.map { sign ->
-                    val cropPath = if (!sign.croppedImageUri.isNullOrBlank() && java.io.File(sign.croppedImageUri).exists()) {
-                        sign.croppedImageUri
-                    } else {
-                        com.example.data.detection.SignDetectionService.getOrCreateSampleSignCrop(
-                            getApplication(),
-                            sign.id,
-                            sign.title,
-                            sign.subtitle,
-                            sign.isRestrictingNow
-                        )
-                    }
-                    sign.copy(croppedImageUri = cropPath, isDemo = true)
-                }
-
-                val scanResult = ScanResult(
-                    locationName = preset.locationName,
-                    cityState = "",
-                    verdict = preset.simulatedVerdict,
-                    statusChipText = if (preset.simulatedVerdict == ScanVerdict.ALLOWED) "Updated just now" else if (preset.simulatedVerdict == ScanVerdict.RESTRICTED) "Enforced now" else "Rule unclear",
-                    allowedUntilTime = preset.allowedUntil,
-                    timeRemaining = if (preset.simulatedVerdict == ScanVerdict.ALLOWED) "2h 00m remaining" else "0m",
-                    parkingRules = preset.rules,
-                    explanation = preset.explanation,
-                    detectedSigns = enrichedSigns,
-                    zoneType = "Parking zone",
-                    paymentInfo = "",
-                    isDemo = true
-                )
-                val id = repository.saveScan(scanResult)
-                val finalResult = scanResult.copy(id = id)
-                _currentScanResult.value = finalResult
-
-                _scanUsageInfo.value = scanUsageManager.consumeScan(userIsPro)
-            } catch (e: Exception) {
-                android.util.Log.e("CurbPipeline", "Error processing preset sign", e)
-            } finally {
-                _isProcessingScan.value = false
-                onComplete()
-            }
-        }
-    }
-
+    // Subscription Service Delegation
     fun purchaseSubscription(
         activity: Activity,
         packageInfo: SubscriptionPackageInfo,
@@ -720,14 +255,11 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun restoreSubscriptionPurchases(
-        onResult: (Boolean, String) -> Unit
-    ) {
+    fun restoreSubscriptionPurchases(onResult: (Boolean, String) -> Unit) {
         subscriptionService.restorePurchases(
             onSuccess = { isProRestored ->
-                val updated = _userProfile.value.copy(isPro = isProRestored)
-                _userProfile.value = updated
-                sessionPreferences.saveUserProfile(updated)
+                val updated = profileCoordinator.userProfile.value.copy(isPro = isProRestored)
+                profileCoordinator.updateUserProfile(updated)
                 refreshUsageInfo()
                 if (isProRestored) {
                     onResult(true, "Your Curb Pro subscription has been restored.")
@@ -741,10 +273,61 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun setCurrentScan(scanResult: ScanResult) {
-        _currentScanResult.value = scanResult
+    // Scan Methods
+    fun setCurrentScan(scanResult: ScanResult) = scanCoordinator.setCurrentScan(scanResult)
+
+    fun processCapturedImage(
+        bitmap: Bitmap?,
+        explicitLocationName: String? = null,
+        explicitCityState: String? = null,
+        detectionBoxes: List<SignBoundingBox> = emptyList(),
+        localDetections: List<LocalSignCrop> = emptyList(),
+        onPaywallRequired: () -> Unit,
+        onComplete: () -> Unit
+    ) {
+        scanCoordinator.processCapturedImage(
+            bitmap = bitmap,
+            explicitLocationName = explicitLocationName,
+            explicitCityState = explicitCityState,
+            detectionBoxes = detectionBoxes,
+            localDetections = localDetections,
+            isUserPro = isUserPro(),
+            onPaywallRequired = onPaywallRequired,
+            onComplete = {
+                usageCoordinator.refreshUsageInfo()
+                onComplete()
+            }
+        )
     }
 
+    fun processPresetSign(
+        preset: SampleSignPreset,
+        onPaywallRequired: () -> Unit = {},
+        onComplete: () -> Unit
+    ) {
+        scanCoordinator.processPresetSign(
+            preset = preset,
+            isUserPro = isUserPro(),
+            onPaywallRequired = onPaywallRequired,
+            onComplete = {
+                usageCoordinator.refreshUsageInfo()
+                onComplete()
+            }
+        )
+    }
+
+    // Chat Methods
+    fun sendChatMessage(query: String, onLimitReached: () -> Unit = {}) {
+        chatCoordinator.sendChatMessage(
+            query = query,
+            isUserPro = isUserPro(),
+            currentScan = scanCoordinator.currentScanResult.value,
+            onLimitReached = onLimitReached
+        )
+        usageCoordinator.refreshUsageInfo()
+    }
+
+    // Parking Session Methods (delegating to CurbRepository)
     fun startParkingSession(
         scanResultId: Long = 0,
         locationName: String = "Parked Spot",
@@ -789,140 +372,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveCurrentParkingSpot(
-        sessionId: Long? = null,
-        isDemo: Boolean? = null,
-        onResult: (Boolean, String?) -> Unit = { _, _ -> }
-    ) {
-        viewModelScope.launch {
-            _isSavingParkingSpot.value = true
-            _parkingSpotSaveError.value = null
-
-            val targetSession = if (sessionId != null && sessionId > 0) repository.getSessionById(sessionId) else null
-            val effectiveIsDemo = isDemo ?: (targetSession?.isDemo == true)
-
-            if (!locationService.hasLocationPermission()) {
-                val errorMsg = "Location permission is required to save your parking spot."
-                _isSavingParkingSpot.value = false
-                _parkingSpotSaveError.value = errorMsg
-                onResult(false, errorMsg)
-                return@launch
-            }
-
-            val result = locationService.fetchCurrentLocation()
-            when (result) {
-                is UserLocationResult.Success -> {
-                    repository.saveParkingSpot(
-                        latitude = result.latitude,
-                        longitude = result.longitude,
-                        accuracy = result.accuracy,
-                        timestamp = result.timestamp,
-                        locationName = result.locationName,
-                        sessionId = sessionId,
-                        isDemo = effectiveIsDemo
-                    )
-                    _isSavingParkingSpot.value = false
-                    _parkingSpotSaveError.value = null
-                    onResult(true, null)
-                }
-                is UserLocationResult.PermissionRequired -> {
-                    _isSavingParkingSpot.value = false
-                    _parkingSpotSaveError.value = result.message
-                    onResult(false, result.message)
-                }
-                is UserLocationResult.Unavailable -> {
-                    _isSavingParkingSpot.value = false
-                    _parkingSpotSaveError.value = result.message
-                    onResult(false, result.message)
-                }
-            }
-        }
-    }
-
-    fun clearParkingSpotSaveError() {
-        _parkingSpotSaveError.value = null
-    }
-
-    fun clearSavedParkingSpot(isDemo: Boolean = false) {
-        viewModelScope.launch {
-            repository.clearActiveParkingSpots(isDemo = isDemo)
-        }
-    }
-
-    fun refreshCurrentLocation(onResult: (UserLocationResult) -> Unit = {}) {
-        viewModelScope.launch {
-            if (!locationService.hasLocationPermission()) {
-                val req = UserLocationResult.PermissionRequired()
-                _currentUserLocation.value = req
-                onResult(req)
-                return@launch
-            }
-            val loc = locationService.fetchCurrentLocation()
-            _currentUserLocation.value = loc
-            onResult(loc)
-        }
-    }
-
-    fun sendChatMessage(
-        query: String,
-        onLimitReached: () -> Unit = {}
-    ) {
-        val trimmed = query.trim()
-        if (trimmed.isEmpty()) return
-        if (_isChatLoading.value) return
-
-        val userIsPro = isUserPro()
-        if (!chatUsageManager.canSendMessage(userIsPro)) {
-            _chatUsageInfo.value = chatUsageManager.getUsageInfo(userIsPro)
-            onLimitReached()
-            return
-        }
-
-        val userMsg = ChatMessage(text = trimmed, isUser = true)
-        _chatMessages.value = _chatMessages.value + userMsg
-        _isChatLoading.value = true
-
-        // Increment usage allowance counter once request is submitted
-        _chatUsageInfo.value = chatUsageManager.incrementUsage(userIsPro)
-
-        viewModelScope.launch {
-            try {
-                val currentScan = _currentScanResult.value
-                val responseText = GeminiService.askParkingAssistant(trimmed, _chatMessages.value, currentScan)
-                val aiMsg = ChatMessage(text = responseText, isUser = false)
-                _chatMessages.value = _chatMessages.value + aiMsg
-            } catch (e: Exception) {
-                val errMsg = ChatMessage(
-                    text = "I'm having trouble connecting right now. Please try again in a moment.",
-                    isUser = false
-                )
-                _chatMessages.value = _chatMessages.value + errMsg
-            } finally {
-                _isChatLoading.value = false
-            }
-        }
-    }
-
-    fun togglePushNotifications(enabled: Boolean) {
-        val updated = _userProfile.value.copy(pushNotificationsEnabled = enabled)
-        _userProfile.value = updated
-        sessionPreferences.saveUserProfile(updated)
-    }
-
-    fun setShowNotificationDialog(show: Boolean) {
-        _showNotificationDialog.value = show
-    }
-
-    fun updateAccount(name: String, gender: String, email: String) {
-        val updated = _userProfile.value.copy(
-            name = name.trim().ifEmpty { _userProfile.value.name },
-            gender = gender,
-            email = email.trim().ifEmpty { _userProfile.value.email }
-        )
-        _userProfile.value = updated
-        sessionPreferences.saveUserProfile(updated)
-    }
-
+    // Saved Places & Notes Methods (delegating to CurbRepository)
     fun addSavedPlace(name: String, address: String, note: String) {
         viewModelScope.launch {
             repository.addSavedPlace(
