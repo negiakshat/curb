@@ -1,9 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,16 +11,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,12 +31,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbSecondaryButton
+import com.example.ui.components.CurbSettingsDivider
+import com.example.ui.components.CurbSettingsRow
+import com.example.ui.components.CurbTopAppBar
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbBlack
 import com.example.ui.theme.CurbOnSurface
 import com.example.ui.theme.CurbOnSurfaceVariant
 import com.example.ui.theme.CurbSurface
-import com.example.ui.theme.CurbSurfaceVariant
 
 @Composable
 fun HelpSupportScreen(
@@ -60,29 +56,11 @@ fun HelpSupportScreen(
             .testTag("help_support_screen")
     ) {
         // TOP BAR
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier.testTag("help_back_button")
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = CurbOnSurface
-                )
-            }
-            Text(
-                text = "Help & Support",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = CurbOnSurface
-            )
-        }
+        CurbTopAppBar(
+            title = "Help & Support",
+            onBack = onBack,
+            backTestTag = "help_back_button"
+        )
 
         LazyColumn(
             modifier = Modifier
@@ -136,57 +114,17 @@ fun HelpSupportScreen(
                     backgroundColor = CurbSurface
                 ) {
                     Column {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onPrivacyClicked() }
-                                .padding(20.dp)
-                                .testTag("help_privacy_policy_link"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Privacy Policy",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = CurbOnSurface
-                            )
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = CurbOnSurfaceVariant
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .padding(horizontal = 20.dp)
-                                .background(CurbSurfaceVariant)
+                        CurbSettingsRow(
+                            title = "Privacy Policy",
+                            onClick = onPrivacyClicked,
+                            testTag = "help_privacy_policy_link"
                         )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onTermsClicked() }
-                                .padding(20.dp)
-                                .testTag("help_terms_service_link"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Terms of Service",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = CurbOnSurface
-                            )
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = CurbOnSurfaceVariant
-                            )
-                        }
+                        CurbSettingsDivider()
+                        CurbSettingsRow(
+                            title = "Terms of Service",
+                            onClick = onTermsClicked,
+                            testTag = "help_terms_service_link"
+                        )
                     }
                 }
             }

@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.CurbNote
 import com.example.data.model.SavedPlace
 import com.example.ui.components.CurbCard
+import com.example.ui.components.CurbTopAppBar
 import com.example.ui.components.CurbNoteDialog
 import com.example.ui.components.CurbNoteSection
 import com.example.ui.components.CurbPrimaryButton
@@ -106,32 +107,11 @@ fun SavedPlacesScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // TOP BAR
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier.testTag("saved_places_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = CurbOnSurface
-                        )
-                    }
-                    Text(
-                        text = "Saved Places",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = CurbOnSurface
-                    )
-                }
-            }
+            CurbTopAppBar(
+                title = "Saved Places",
+                onBack = onBack,
+                backTestTag = "saved_places_back_button"
+            )
 
             LazyColumn(
                 modifier = Modifier
@@ -147,38 +127,11 @@ fun SavedPlacesScreen(
                                 .fillMaxWidth()
                                 .padding(vertical = 40.dp)
                         ) {
-                            CurbCard(
-                                cornerRadius = RadiusCard,
-                                backgroundColor = CurbSurface
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(28.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Bookmark,
-                                        contentDescription = null,
-                                        tint = CurbOnSurfaceVariant,
-                                        modifier = Modifier.size(36.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text = "No saved places yet",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = CurbOnSurface
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Save your frequent parking spots like Home or Work for fast rule checks.",
-                                        fontSize = 13.sp,
-                                        color = CurbOnSurfaceVariant,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                    )
-                                }
-                            }
+                            com.example.ui.components.CurbEmptyState(
+                                title = "No saved places yet",
+                                subtitle = "Save your frequent parking spots like Home or Work for fast rule checks.",
+                                icon = Icons.Default.Bookmark
+                            )
                         }
                     }
                 } else {

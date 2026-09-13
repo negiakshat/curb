@@ -229,30 +229,10 @@ fun ActivityScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp, vertical = 20.dp)
                 ) {
-                    CurbCard(
-                        cornerRadius = RadiusCard,
-                        backgroundColor = BentoWhite
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(28.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "No scans yet",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BentoTextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Your parking scans will appear here.",
-                                fontSize = 14.sp,
-                                color = BentoTextSecondary
-                            )
-                        }
-                    }
+                    com.example.ui.components.CurbEmptyState(
+                        title = "No scans yet",
+                        subtitle = "Your parking scans will appear here."
+                    )
                 }
             }
         } else {

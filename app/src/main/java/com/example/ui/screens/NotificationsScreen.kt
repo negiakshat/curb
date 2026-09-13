@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.InAppNotification
 import com.example.notification.NotificationType
 import com.example.ui.components.CurbCard
+import com.example.ui.components.CurbTopAppBar
 import com.example.ui.theme.BentoCanvas
 import com.example.ui.theme.BentoPrimary
 import com.example.ui.theme.BentoPrimaryDark
@@ -71,72 +72,38 @@ fun NotificationsScreen(
             .testTag("notification_center_screen")
     ) {
         // TOP BAR
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        CurbTopAppBar(
+            title = "Notifications",
+            onBack = onBack,
+            backTestTag = "notification_center_back_button",
+            actions = {
                 IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.testTag("notification_center_back_button")
+                    onClick = onOpenSettings,
+                    modifier = Modifier.testTag("notification_settings_gear_button")
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Notification Settings",
                         tint = CurbOnSurface
                     )
                 }
-                Text(
-                    text = "Notifications",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface
-                )
             }
-
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.testTag("notification_settings_gear_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = "Notification Settings",
-                    tint = CurbOnSurface
-                )
-            }
-        }
+        )
 
         if (notifications.isEmpty()) {
             // EMPTY STATE
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(32.dp)
-                    .testTag("notification_empty_state"),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.CheckCircleOutline,
-                    contentDescription = null,
-                    tint = CurbOnSurfaceVariant,
-                    modifier = Modifier.size(64.dp)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "You're all caught up",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "No parking alerts right now.",
-                    fontSize = 14.sp,
-                    color = CurbOnSurfaceVariant
+                com.example.ui.components.CurbEmptyState(
+                    title = "You're all caught up",
+                    subtitle = "No parking alerts right now.",
+                    icon = Icons.Outlined.CheckCircleOutline,
+                    testTag = "notification_empty_state",
+                    useCard = false
                 )
             }
         } else {

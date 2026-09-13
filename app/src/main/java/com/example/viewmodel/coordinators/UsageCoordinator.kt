@@ -40,7 +40,7 @@ class UsageCoordinator(
         }
     }.stateIn(
         scope = coroutineScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.Eagerly,
         initialValue = checkIsUserPro()
     )
 
@@ -61,7 +61,7 @@ class UsageCoordinator(
         scanUsageManager.getUsageInfo(pro)
     }.stateIn(
         scope = coroutineScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.Eagerly,
         initialValue = scanUsageManager.getUsageInfo(checkIsUserPro())
     )
 
@@ -69,7 +69,7 @@ class UsageCoordinator(
         chatUsageManager.getUsageInfo(pro)
     }.stateIn(
         scope = coroutineScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.Eagerly,
         initialValue = chatUsageManager.getUsageInfo(checkIsUserPro())
     )
 

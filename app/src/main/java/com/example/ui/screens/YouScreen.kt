@@ -51,6 +51,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserProfile
 import com.example.ui.components.CurbCard
+import com.example.ui.components.CurbSectionHeader
+import com.example.ui.components.CurbSettingsDivider
+import com.example.ui.components.CurbSettingsRow
 import com.example.ui.theme.BentoBorder
 import com.example.ui.theme.BentoPrimary
 import com.example.ui.theme.BentoSand
@@ -212,22 +215,22 @@ fun YouScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // 3. ACCOUNT SECTION
-                SectionHeader(title = "ACCOUNT")
+                CurbSectionHeader(title = "ACCOUNT")
                 Spacer(modifier = Modifier.height(8.dp))
                 CurbCard(
                     cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface
                 ) {
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        SettingsRow(
+                        CurbSettingsRow(
                             icon = Icons.Default.PersonOutline,
                             title = "Account Information",
                             subtitle = "Name, email & profile details",
                             onClick = onAccountInfoClicked,
                             testTag = "setting_account_info"
                         )
-                        SettingsDivider()
-                        SettingsRow(
+                        CurbSettingsDivider()
+                        CurbSettingsRow(
                             icon = Icons.Default.CreditCard,
                             title = "Payment & Subscription",
                             subtitle = if (isPro) "Curb Pro active • Manage plan & quotas" else "Upgrade to Pro • View plans & promo codes",
@@ -240,22 +243,22 @@ fun YouScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // 4. PREFERENCES SECTION
-                SectionHeader(title = "PREFERENCES")
+                CurbSectionHeader(title = "PREFERENCES")
                 Spacer(modifier = Modifier.height(8.dp))
                 CurbCard(
                     cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface
                 ) {
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        SettingsRow(
+                        CurbSettingsRow(
                             icon = Icons.Default.NotificationsNone,
                             title = "Notification Settings",
                             subtitle = "Parking alerts & push notifications",
                             onClick = onNotificationsClicked,
                             testTag = "setting_notifications"
                         )
-                        SettingsDivider()
-                        SettingsRow(
+                        CurbSettingsDivider()
+                        CurbSettingsRow(
                             icon = Icons.Default.BookmarkBorder,
                             title = "Saved Places",
                             subtitle = "Pinned parking locations & notes",
@@ -268,38 +271,38 @@ fun YouScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // 5. SUPPORT & INFORMATION SECTION
-                SectionHeader(title = "SUPPORT & INFORMATION")
+                CurbSectionHeader(title = "SUPPORT & INFORMATION")
                 Spacer(modifier = Modifier.height(8.dp))
                 CurbCard(
                     cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface
                 ) {
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        SettingsRow(
+                        CurbSettingsRow(
                             icon = Icons.Default.HelpOutline,
                             title = "Help & Support",
                             subtitle = "FAQs, contact support & app feedback",
                             onClick = onHelpSupportClicked,
                             testTag = "setting_help_support"
                         )
-                        SettingsDivider()
-                        SettingsRow(
+                        CurbSettingsDivider()
+                        CurbSettingsRow(
                             icon = Icons.Default.Shield,
                             title = "Privacy Policy",
                             subtitle = "Data protection & privacy rights",
                             onClick = onPrivacyPolicyClicked,
                             testTag = "setting_privacy_policy"
                         )
-                        SettingsDivider()
-                        SettingsRow(
+                        CurbSettingsDivider()
+                        CurbSettingsRow(
                             icon = Icons.Default.Description,
                             title = "Terms of Service",
                             subtitle = "Terms & conditions of use",
                             onClick = onTermsOfServiceClicked,
                             testTag = "setting_terms_of_service"
                         )
-                        SettingsDivider()
-                        SettingsRow(
+                        CurbSettingsDivider()
+                        CurbSettingsRow(
                             icon = Icons.Default.Info,
                             title = "About Curb AI",
                             subtitle = "Version 1.0.0 • AI Parking Assistant",
@@ -316,7 +319,7 @@ fun YouScreen(
                     cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface
                 ) {
-                    SettingsRow(
+                    CurbSettingsRow(
                         icon = Icons.AutoMirrored.Filled.Logout,
                         title = "Log Out",
                         subtitle = "End current session on this device",
@@ -490,93 +493,5 @@ private fun CurbProBanner(
             }
         }
     }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Bold,
-        color = CurbOnSurfaceVariant,
-        letterSpacing = 0.8.sp,
-        modifier = Modifier.padding(horizontal = 4.dp)
-    )
-}
-
-@Composable
-private fun SettingsRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String? = null,
-    onClick: () -> Unit,
-    tint: Color = CurbBlack,
-    textColor: Color = CurbOnSurface,
-    testTag: String = ""
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 14.dp)
-            .testTag(testTag),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(CurbSurfaceVariant, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Column {
-                Text(
-                    text = title,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = textColor
-                )
-                if (!subtitle.isNullOrBlank()) {
-                    Text(
-                        text = subtitle,
-                        fontSize = 12.sp,
-                        color = CurbOnSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = CurbOnSurfaceVariant,
-            modifier = Modifier.size(18.dp)
-        )
-    }
-}
-
-@Composable
-private fun SettingsDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .padding(horizontal = 18.dp)
-            .background(CurbSurfaceVariant)
-    )
 }
 

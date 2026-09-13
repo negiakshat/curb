@@ -181,6 +181,8 @@ class ViewModelDecompositionTest {
         )
 
         testScheduler.advanceUntilIdle()
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        testScheduler.advanceUntilIdle()
 
         assertTrue(completed)
         assertNotNull(coordinator.currentScanResult.value)

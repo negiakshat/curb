@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.UserProfile
 import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.components.CurbTopAppBar
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbBlack
 import com.example.ui.theme.CurbError
@@ -74,29 +75,11 @@ fun AccountInfoScreen(
             .testTag("account_info_screen")
     ) {
         // TOP BAR
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier.testTag("account_back_button")
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = CurbOnSurface
-                )
-            }
-            Text(
-                text = "Account Information",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = CurbOnSurface
-            )
-        }
+        CurbTopAppBar(
+            title = "Account Information",
+            onBack = onBack,
+            backTestTag = "account_back_button"
+        )
 
         Column(
             modifier = Modifier

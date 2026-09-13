@@ -115,14 +115,14 @@ class NotificationCoordinator(
         }
 
         list.sortedByDescending { it.timestamp }
-    }.stateIn(coroutineScope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(coroutineScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val hasUnreadNotifications: StateFlow<Boolean> = combine(
         inAppNotifications,
         _lastNotificationReadTime
     ) { notifications, lastRead ->
         notifications.any { !it.isRead && it.timestamp > lastRead }
-    }.stateIn(coroutineScope, SharingStarted.Eagerly, false)
+    }.stateIn(coroutineScope, SharingStarted.WhileSubscribed(5000), false)
 
     fun markNotificationsAsRead() {
         val now = System.currentTimeMillis()
