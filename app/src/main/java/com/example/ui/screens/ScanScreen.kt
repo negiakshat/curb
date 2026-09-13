@@ -339,7 +339,7 @@ fun ScanScreen(
                 IconButton(
                     onClick = { showHelpSheet = true },
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(48.dp)
                         .background(CurbBlack.copy(alpha = 0.6f), CircleShape)
                         .testTag("scan_help_button")
                 ) {

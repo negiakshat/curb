@@ -28,7 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CompassCalibration
 import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
@@ -601,8 +601,8 @@ fun FindMyCarScreen(
                                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.DirectionsWalk,
-                                                    contentDescription = null,
+                                                    imageVector = Icons.AutoMirrored.Filled.DirectionsWalk,
+                                                    contentDescription = "Walking directions",
                                                     tint = Color(0xFF1A73E8),
                                                     modifier = Modifier.size(16.dp)
                                                 )
