@@ -63,6 +63,12 @@ import com.example.ui.components.StartSessionConfirmationSheet
 import com.example.util.ParkingTimerCalculator
 import com.example.util.ParkingTimerConfig
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.runtime.LaunchedEffect
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScanOutputScreen(
@@ -83,6 +89,11 @@ fun ScanOutputScreen(
     var showNotesProSheet by remember { mutableStateOf(false) }
     var showNoteDialog by remember { mutableStateOf(false) }
     var showStartConfirmationSheet by remember { mutableStateOf(false) }
+
+    var isContentVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(scanResult) {
+        isContentVisible = true
+    }
 
     val timerConfig = remember(scanResult) {
         ParkingTimerCalculator.calculateConfig(scanResult)
@@ -152,71 +163,91 @@ fun ScanOutputScreen(
         ) {
             // 1. OVERALL PARKING DECISION (HERO BANNER)
             item {
-                ParkingVerdictCard(
-                    scanResult = scanResult,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(18.dp))
+                AnimatedVisibility(
+                    visible = isContentVisible,
+                    enter = fadeIn(animationSpec = tween(350)) + slideInVertically(
+                        initialOffsetY = { it / 3 },
+                        animationSpec = tween(350)
+                    )
+                ) {
+                    Column {
+                        ParkingVerdictCard(
+                            scanResult = scanResult,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(18.dp))
+                    }
+                }
             }
 
             // 2. EVIDENCE & FULL DETAILS BANNER
             item {
-                CurbCard(
-                    cornerRadius = RadiusCard,
-                    backgroundColor = CurbSurface,
-                    modifier = Modifier
-                        .clickable { onViewDetails() }
-                        .testTag("view_details_card")
+                AnimatedVisibility(
+                    visible = isContentVisible,
+                    enter = fadeIn(animationSpec = tween(450)) + slideInVertically(
+                        initialOffsetY = { it / 2 },
+                        animationSpec = tween(450)
+                    )
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            modifier = Modifier.weight(1f)
+                    Column {
+                        CurbCard(
+                            cornerRadius = RadiusCard,
+                            backgroundColor = CurbSurface,
+                            modifier = Modifier
+                                .clickable { onViewDetails() }
+                                .testTag("view_details_card")
                         ) {
-                            Box(
+                            Row(
                                 modifier = Modifier
-                                    .size(42.dp)
-                                    .background(CurbSurfaceVariant, CircleShape),
-                                contentAlignment = Alignment.Center
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .background(CurbSurfaceVariant, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ReceiptLong,
+                                            contentDescription = null,
+                                            tint = CurbBlack,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "View full evidence & details",
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = CurbOnSurface
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "${scanResult.detectedSigns.size} sign(s) read • Complete rule analysis",
+                                            fontSize = 12.sp,
+                                            color = CurbOnSurfaceVariant
+                                        )
+                                    }
+                                }
+
                                 Icon(
-                                    imageVector = Icons.Default.ReceiptLong,
-                                    contentDescription = null,
-                                    tint = CurbBlack,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Column {
-                                Text(
-                                    text = "View full evidence & details",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = CurbOnSurface
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "${scanResult.detectedSigns.size} sign(s) read • Complete rule analysis",
-                                    fontSize = 12.sp,
-                                    color = CurbOnSurfaceVariant
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = "View Details",
+                                    tint = CurbOnSurfaceVariant
                                 )
                             }
                         }
-
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "View Details",
-                            tint = CurbOnSurfaceVariant
-                        )
+                        Spacer(modifier = Modifier.height(18.dp))
                     }
                 }
-                Spacer(modifier = Modifier.height(18.dp))
             }
 
             // 3. PERSONAL NOTE SECTION

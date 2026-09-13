@@ -98,12 +98,8 @@ class ViewModelDecompositionTest {
             sessionPreferences = sessionPreferences,
             isJudgeProActiveFlow = judgeProFlow,
             userProfileFlow = profileFlow,
-            coroutineScope = this
+            coroutineScope = backgroundScope
         )
-
-        backgroundScope.launch { coordinator.isUserPro.collect {} }
-        backgroundScope.launch { coordinator.scanUsageInfo.collect {} }
-        backgroundScope.launch { coordinator.chatUsageInfo.collect {} }
 
         assertTrue(coordinator.isUserPro.value)
         assertTrue(coordinator.canPerformScan())
@@ -132,7 +128,7 @@ class ViewModelDecompositionTest {
             sessionPreferences = sessionPreferences,
             activeSession = activeFlow,
             allSessions = allSessionsFlow,
-            coroutineScope = this
+            coroutineScope = backgroundScope
         )
 
         backgroundScope.launch { coordinator.inAppNotifications.collect {} }
@@ -167,7 +163,7 @@ class ViewModelDecompositionTest {
             scanUsageManager = scanUsageManager,
             locationService = locationService,
             userLocationState = activeLocFlow,
-            coroutineScope = this
+            coroutineScope = backgroundScope
         )
 
         val presets = com.example.data.remote.GeminiService.getPreparedPresets(application)
@@ -180,9 +176,16 @@ class ViewModelDecompositionTest {
             onComplete = { completed = true }
         )
 
+        testScheduler.advanceTimeBy(1500)
         testScheduler.advanceUntilIdle()
         org.robolectric.shadows.ShadowLooper.idleMainLooper()
         testScheduler.advanceUntilIdle()
+
+        var attempts = 0
+        while (!completed && attempts++ < 50) {
+            Thread.sleep(50)
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        }
 
         assertTrue(completed)
         assertNotNull(coordinator.currentScanResult.value)

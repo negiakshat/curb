@@ -14,9 +14,11 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -496,13 +498,19 @@ fun ScanScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    Text(
-                        text = processingStatusText,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = CurbWhite,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
+                    AnimatedContent(
+                        targetState = processingStatusText,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "processingStatusTextAnimation"
+                    ) { targetText ->
+                        Text(
+                            text = targetText,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CurbWhite,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
