@@ -115,8 +115,13 @@ fun CurbApp(
     val currentRoute = navBackStackEntry?.destination?.route
 
     androidx.compose.runtime.LaunchedEffect(intent) {
-        val targetRoute = intent?.getStringExtra(com.example.notification.ParkingNotificationScheduler.EXTRA_NAVIGATE_ROUTE)
-        val sessionId = intent?.getLongExtra(com.example.notification.ParkingNotificationScheduler.EXTRA_SESSION_ID, -1L) ?: -1L
+        if (intent == null) return@LaunchedEffect
+        val targetRoute = try {
+            intent.getStringExtra(com.example.notification.ParkingNotificationScheduler.EXTRA_NAVIGATE_ROUTE)
+        } catch (_: Exception) { null }
+        val sessionId = try {
+            intent.getLongExtra(com.example.notification.ParkingNotificationScheduler.EXTRA_SESSION_ID, -1L)
+        } catch (_: Exception) { -1L }
         if (targetRoute == Routes.PARKING_TIMER) {
             if (sessionId > 0) {
                 viewModel.loadSessionById(sessionId)
