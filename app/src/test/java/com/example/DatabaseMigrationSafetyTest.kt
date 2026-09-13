@@ -161,4 +161,141 @@ class DatabaseMigrationSafetyTest {
 
         migratedDb.close()
     }
+
+    @Test
+    fun `fresh database has current Room schema without database defaults`() {
+        val freshDb = Room.inMemoryDatabaseBuilder(context, CurbDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val db = freshDb.openHelper.writableDatabase
+
+        assertNull(columnDefault(db, "scan_results", "imageUri"))
+        assertNull(columnDefault(db, "scan_results", "isDemo"))
+        assertNull(columnDefault(db, "parking_sessions", "timerMode"))
+        assertNull(columnDefault(db, "parking_sessions", "isDemo"))
+        assertNull(columnDefault(db, "parking_spots", "locationName"))
+        assertNull(columnDefault(db, "parking_spots", "isActive"))
+        assertNull(columnDefault(db, "parking_spots", "isDemo"))
+        assertEquals(listOf("targetType", "targetId"), uniqueIndexColumns(db, "curb_notes"))
+        freshDb.close()
+    }
+
+    @Test
+    fun `each explicit migration applies sequentially without destructive fallback`() {
+        val helperFactory = FrameworkSQLiteOpenHelperFactory()
+        val stepDbName = "test_curb_stepwise.db"
+        context.deleteDatabase(stepDbName)
+        val configuration = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(stepDbName)
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
+                override fun onCreate(db: SupportSQLiteDatabase) = createVersion1Schema(db)
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            })
+            .build()
+        val helper = helperFactory.create(configuration)
+        val db = helper.writableDatabase
+
+        CurbDatabase.MIGRATION_1_2.migrate(db)
+        assertNull(columnDefault(db, "scan_results", "imageUri"))
+        assertNull(columnDefault(db, "scan_results", "isDemo"))
+
+        CurbDatabase.MIGRATION_2_3.migrate(db)
+        assertNull(columnDefault(db, "parking_sessions", "timerMode"))
+        assertNull(columnDefault(db, "parking_sessions", "isDemo"))
+
+        CurbDatabase.MIGRATION_3_4.migrate(db)
+        assertTrue(tableExists(db, "saved_places"))
+
+        CurbDatabase.MIGRATION_4_5.migrate(db)
+        assertEquals(listOf("targetType", "targetId"), uniqueIndexColumns(db, "curb_notes"))
+
+        CurbDatabase.MIGRATION_5_6.migrate(db)
+        assertNull(columnDefault(db, "parking_spots", "locationName"))
+        assertNull(columnDefault(db, "parking_spots", "isActive"))
+
+        CurbDatabase.MIGRATION_6_7.migrate(db)
+        assertNull(columnDefault(db, "parking_spots", "isDemo"))
+        helper.close()
+        context.deleteDatabase(stepDbName)
+    }
+
+    private fun createVersion1Schema(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE scan_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                locationName TEXT NOT NULL,
+                cityState TEXT NOT NULL,
+                verdict TEXT NOT NULL,
+                statusChipText TEXT NOT NULL,
+                allowedUntilTime TEXT NOT NULL,
+                timeRemaining TEXT NOT NULL,
+                parkingRulesJson TEXT NOT NULL,
+                explanation TEXT NOT NULL,
+                detectedSignsJson TEXT NOT NULL,
+                zoneType TEXT NOT NULL,
+                paymentInfo TEXT NOT NULL,
+                vehicleApplicability TEXT NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE parking_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                scanResultId INTEGER NOT NULL DEFAULT 0,
+                locationName TEXT NOT NULL,
+                startTime INTEGER NOT NULL,
+                endTime INTEGER NOT NULL,
+                allowedUntilTime TEXT NOT NULL,
+                reminderMinutesBefore INTEGER NOT NULL DEFAULT 15,
+                notes TEXT NOT NULL DEFAULT '',
+                timerBasis TEXT NOT NULL DEFAULT '',
+                parkingRuleSummary TEXT NOT NULL DEFAULT '',
+                isActive INTEGER NOT NULL DEFAULT 1
+            )
+            """.trimIndent()
+        )
+    }
+
+    private fun tableExists(db: SupportSQLiteDatabase, table: String): Boolean {
+        db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", arrayOf(table)).use { cursor ->
+            return cursor.moveToFirst()
+        }
+    }
+
+    private fun columnDefault(db: SupportSQLiteDatabase, table: String, column: String): String? {
+        db.query("PRAGMA table_info(`$table`)").use { cursor ->
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            val defaultIndex = cursor.getColumnIndexOrThrow("dflt_value")
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex) == column) {
+                    return if (cursor.isNull(defaultIndex)) null else cursor.getString(defaultIndex)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun uniqueIndexColumns(db: SupportSQLiteDatabase, table: String): List<String> {
+        var indexName: String? = null
+        db.query("PRAGMA index_list(`$table`)").use { cursor ->
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            val uniqueIndex = cursor.getColumnIndexOrThrow("unique")
+            while (cursor.moveToNext()) {
+                if (cursor.getInt(uniqueIndex) == 1) {
+                    indexName = cursor.getString(nameIndex)
+                    break
+                }
+            }
+        }
+        val selectedIndex = indexName ?: return emptyList()
+        db.query("PRAGMA index_info(`$selectedIndex`)").use { cursor ->
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            val columns = mutableListOf<String>()
+            while (cursor.moveToNext()) columns += cursor.getString(nameIndex)
+            return columns
+        }
+    }
 }

@@ -31,17 +31,19 @@ abstract class CurbDatabase : RoomDatabase() {
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE scan_results ADD COLUMN imageUri TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE scan_results ADD COLUMN imageUri TEXT")
                 db.execSQL("ALTER TABLE scan_results ADD COLUMN isDemo INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("UPDATE scan_results SET verdict = 'AMBIGUOUS' WHERE verdict NOT IN ('ALLOWED', 'RESTRICTED', 'AMBIGUOUS')")
+                rebuildScanResults(db)
             }
         }
 
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE parking_sessions ADD COLUMN maxAllowedEndTimeMillis INTEGER DEFAULT NULL")
+                db.execSQL("ALTER TABLE parking_sessions ADD COLUMN maxAllowedEndTimeMillis INTEGER")
                 db.execSQL("ALTER TABLE parking_sessions ADD COLUMN timerMode TEXT NOT NULL DEFAULT 'TIMED_LIMIT'")
                 db.execSQL("ALTER TABLE parking_sessions ADD COLUMN isDemo INTEGER NOT NULL DEFAULT 0")
+                rebuildParkingSessions(db)
             }
         }
 
@@ -75,7 +77,10 @@ abstract class CurbDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
-                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_curb_notes_targetType_targetId ON curb_notes (targetType, targetId)")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_curb_notes_targetType_targetId " +
+                        "ON curb_notes (targetType, targetId)"
+                )
             }
         }
 
@@ -89,9 +94,9 @@ abstract class CurbDatabase : RoomDatabase() {
                         longitude REAL NOT NULL,
                         timestamp INTEGER NOT NULL,
                         accuracy REAL,
-                        locationName TEXT NOT NULL DEFAULT '',
+                        locationName TEXT NOT NULL,
                         sessionId INTEGER,
-                        isActive INTEGER NOT NULL DEFAULT 1
+                        isActive INTEGER NOT NULL
                     )
                     """.trimIndent()
                 )
@@ -101,6 +106,7 @@ abstract class CurbDatabase : RoomDatabase() {
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE parking_spots ADD COLUMN isDemo INTEGER NOT NULL DEFAULT 0")
+                rebuildParkingSpots(db)
             }
         }
 
@@ -119,11 +125,121 @@ abstract class CurbDatabase : RoomDatabase() {
                         MIGRATION_5_6,
                         MIGRATION_6_7
                     )
-                    .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
                 instance
             }
+        }
+
+        private fun rebuildScanResults(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE scan_results_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    locationName TEXT NOT NULL,
+                    cityState TEXT NOT NULL,
+                    verdict TEXT NOT NULL,
+                    statusChipText TEXT NOT NULL,
+                    allowedUntilTime TEXT NOT NULL,
+                    timeRemaining TEXT NOT NULL,
+                    parkingRulesJson TEXT NOT NULL,
+                    explanation TEXT NOT NULL,
+                    detectedSignsJson TEXT NOT NULL,
+                    zoneType TEXT NOT NULL,
+                    paymentInfo TEXT NOT NULL,
+                    vehicleApplicability TEXT NOT NULL,
+                    imageUri TEXT,
+                    isDemo INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                INSERT INTO scan_results_new (
+                    id, timestamp, locationName, cityState, verdict, statusChipText,
+                    allowedUntilTime, timeRemaining, parkingRulesJson, explanation,
+                    detectedSignsJson, zoneType, paymentInfo, vehicleApplicability,
+                    imageUri, isDemo
+                )
+                SELECT id, timestamp, locationName, cityState, verdict, statusChipText,
+                       allowedUntilTime, timeRemaining, parkingRulesJson, explanation,
+                       detectedSignsJson, zoneType, paymentInfo, vehicleApplicability,
+                       imageUri, isDemo
+                FROM scan_results
+                """.trimIndent()
+            )
+            db.execSQL("DROP TABLE scan_results")
+            db.execSQL("ALTER TABLE scan_results_new RENAME TO scan_results")
+        }
+
+        private fun rebuildParkingSessions(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE parking_sessions_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    scanResultId INTEGER NOT NULL,
+                    locationName TEXT NOT NULL,
+                    startTime INTEGER NOT NULL,
+                    endTime INTEGER NOT NULL,
+                    allowedUntilTime TEXT NOT NULL,
+                    reminderMinutesBefore INTEGER NOT NULL,
+                    notes TEXT NOT NULL,
+                    timerBasis TEXT NOT NULL,
+                    parkingRuleSummary TEXT NOT NULL,
+                    isActive INTEGER NOT NULL,
+                    maxAllowedEndTimeMillis INTEGER,
+                    timerMode TEXT NOT NULL,
+                    isDemo INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                INSERT INTO parking_sessions_new (
+                    id, scanResultId, locationName, startTime, endTime, allowedUntilTime,
+                    reminderMinutesBefore, notes, timerBasis, parkingRuleSummary, isActive,
+                    maxAllowedEndTimeMillis, timerMode, isDemo
+                )
+                SELECT id, scanResultId, locationName, startTime, endTime, allowedUntilTime,
+                       reminderMinutesBefore, notes, timerBasis, parkingRuleSummary, isActive,
+                       maxAllowedEndTimeMillis, timerMode, isDemo
+                FROM parking_sessions
+                """.trimIndent()
+            )
+            db.execSQL("DROP TABLE parking_sessions")
+            db.execSQL("ALTER TABLE parking_sessions_new RENAME TO parking_sessions")
+        }
+
+        private fun rebuildParkingSpots(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE parking_spots_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    accuracy REAL,
+                    locationName TEXT NOT NULL,
+                    sessionId INTEGER,
+                    isActive INTEGER NOT NULL,
+                    isDemo INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                INSERT INTO parking_spots_new (
+                    id, latitude, longitude, timestamp, accuracy, locationName,
+                    sessionId, isActive, isDemo
+                )
+                SELECT id, latitude, longitude, timestamp, accuracy, locationName,
+                       sessionId, isActive, isDemo
+                FROM parking_spots
+                """.trimIndent()
+            )
+            db.execSQL("DROP TABLE parking_spots")
+            db.execSQL("ALTER TABLE parking_spots_new RENAME TO parking_spots")
         }
     }
 }
