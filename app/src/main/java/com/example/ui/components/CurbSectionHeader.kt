@@ -18,10 +18,10 @@ fun CurbSectionHeader(
 ) {
     Text(
         text = title,
-        fontSize = 12.sp,
+        fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
         color = CurbOnSurfaceVariant,
-        letterSpacing = 0.8.sp,
+        letterSpacing = 1.sp,
         modifier = modifier.padding(horizontal = horizontalPadding)
     )
 }

@@ -98,17 +98,17 @@ fun YouScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
                 // PAGE TITLE
                 Text(
                     text = "You",
-                    fontSize = 32.sp,
+                    fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = CurbOnSurface
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // 1. PROFILE HEADER CARD
                 CurbCard(
@@ -119,18 +119,18 @@ fun YouScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 18.dp, vertical = 16.dp),
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
                             modifier = Modifier.weight(1f)
                         ) {
                             // Avatar container
                             Box(
                                 modifier = Modifier
-                                    .size(52.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
                                     .background(CurbBlack),
                                 contentAlignment = Alignment.Center
@@ -138,7 +138,7 @@ fun YouScreen(
                                 Text(
                                     text = userProfile.name.take(1).uppercase(Locale.ROOT),
                                     color = CurbWhite,
-                                    fontSize = 20.sp,
+                                    fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -152,7 +152,7 @@ fun YouScreen(
                                 ) {
                                     Text(
                                         text = userProfile.name,
-                                        fontSize = 18.sp,
+                                        fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = CurbOnSurface
                                     )
@@ -165,9 +165,9 @@ fun YouScreen(
                                             Text(
                                                 text = "PRO",
                                                 color = CurbWhite,
-                                                fontSize = 10.sp,
+                                                fontSize = 9.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
                                     } else {
@@ -178,15 +178,15 @@ fun YouScreen(
                                             Text(
                                                 text = "FREE",
                                                 color = BentoTextDark,
-                                                fontSize = 10.sp,
+                                                fontSize = 9.sp,
                                                 fontWeight = FontWeight.SemiBold,
-                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(3.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
 
                                 val subtitleText = if (userProfile.email.isNotBlank()) {
                                     userProfile.email
@@ -196,7 +196,7 @@ fun YouScreen(
 
                                 Text(
                                     text = subtitleText,
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     color = CurbOnSurfaceVariant
                                 )
                             }
@@ -204,7 +204,7 @@ fun YouScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // 2. CURB PRO BANNER CARD
                 CurbProBanner(
@@ -212,16 +212,16 @@ fun YouScreen(
                     onClick = onPaymentSubscriptionClicked
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 // 3. ACCOUNT SECTION
                 CurbSectionHeader(title = "ACCOUNT")
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 CurbCard(
                     cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface
                 ) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    Column(modifier = Modifier.padding(vertical = 2.dp)) {
                         CurbSettingsRow(
                             icon = Icons.Default.PersonOutline,
                             title = "Account Information",
@@ -240,16 +240,16 @@ fun YouScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 // 4. PREFERENCES SECTION
                 CurbSectionHeader(title = "PREFERENCES")
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 CurbCard(
                     cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface
                 ) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    Column(modifier = Modifier.padding(vertical = 2.dp)) {
                         CurbSettingsRow(
                             icon = Icons.Default.NotificationsNone,
                             title = "Notification Settings",
@@ -268,16 +268,16 @@ fun YouScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 // 5. SUPPORT & INFORMATION SECTION
                 CurbSectionHeader(title = "SUPPORT & INFORMATION")
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 CurbCard(
                     cornerRadius = RadiusCard,
                     backgroundColor = CurbSurface
                 ) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    Column(modifier = Modifier.padding(vertical = 2.dp)) {
                         CurbSettingsRow(
                             icon = Icons.Default.HelpOutline,
                             title = "Help & Support",
@@ -312,7 +312,7 @@ fun YouScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 // 6. LOG OUT ACTION
                 CurbCard(
@@ -388,18 +388,18 @@ private fun CurbProBanner(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onClick)
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .background(BentoPrimary, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
@@ -407,23 +407,25 @@ private fun CurbProBanner(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
                             tint = CurbWhite,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                     Column {
                         Text(
                             text = "Curb Pro Member",
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = BentoTextDark
                         )
                         Text(
                             text = "Unlimited sign scans & parking AI assistant unlocked",
-                            fontSize = 12.sp,
-                            color = CurbOnSurfaceVariant
+                            fontSize = 11.sp,
+                            color = CurbOnSurfaceVariant,
+                            maxLines = 2
                         )
                     }
                 }
+                Spacer(modifier = Modifier.width(8.dp))
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
@@ -442,18 +444,18 @@ private fun CurbProBanner(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onClick)
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .background(CurbWhite.copy(alpha = 0.2f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
@@ -461,23 +463,27 @@ private fun CurbProBanner(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
                             tint = CurbWhite,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
-                    Column {
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Text(
                             text = "Upgrade to Curb Pro",
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = CurbWhite
                         )
                         Text(
                             text = "Get unlimited scans, AI advice & timer alerts",
-                            fontSize = 12.sp,
-                            color = CurbWhite.copy(alpha = 0.85f)
+                            fontSize = 11.sp,
+                            color = CurbWhite.copy(alpha = 0.85f),
+                            maxLines = 2
                         )
                     }
                 }
+                Spacer(modifier = Modifier.width(8.dp))
                 Surface(
                     shape = RoundedCornerShape(RadiusSmall),
                     color = CurbWhite
@@ -485,9 +491,9 @@ private fun CurbProBanner(
                     Text(
                         text = "Upgrade",
                         color = BentoPrimary,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                     )
                 }
             }

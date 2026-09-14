@@ -46,7 +46,7 @@ fun CurbSettingsRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 14.dp)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
             .run { if (testTag.isNotBlank()) testTag(testTag) else this },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -59,7 +59,7 @@ fun CurbSettingsRow(
             if (icon != null) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(38.dp)
                         .background(CurbSurfaceVariant, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
@@ -67,7 +67,7 @@ fun CurbSettingsRow(
                         imageVector = icon,
                         contentDescription = null,
                         tint = tint,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
             }
@@ -81,7 +81,7 @@ fun CurbSettingsRow(
                 if (!subtitle.isNullOrBlank()) {
                     Text(
                         text = subtitle,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         color = CurbOnSurfaceVariant
                     )
                 }
@@ -106,7 +106,7 @@ fun CurbSettingsDivider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .padding(horizontal = 18.dp)
+            .padding(horizontal = 16.dp)
             .background(CurbSurfaceVariant)
     )
 }
