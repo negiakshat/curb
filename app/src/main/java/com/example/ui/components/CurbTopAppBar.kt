@@ -53,7 +53,9 @@ fun CurbTopAppBar(
                 text = title,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = CurbOnSurface
+                color = CurbOnSurface,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
 

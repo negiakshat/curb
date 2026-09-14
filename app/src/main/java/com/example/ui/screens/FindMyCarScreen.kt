@@ -157,13 +157,17 @@ fun FindMyCarScreen(
                             text = "Find My Car",
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
-                            color = MapTextDark
+                            color = MapTextDark,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                         if (savedParkingSpot != null) {
                             Text(
                                 text = "Saved Parking Spot",
                                 fontSize = 12.sp,
-                                color = MapTextMuted
+                                color = MapTextMuted,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                         }
                     }

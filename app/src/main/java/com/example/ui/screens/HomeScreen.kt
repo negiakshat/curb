@@ -228,7 +228,8 @@ fun HomeScreen(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
                         Box(
                             modifier = Modifier
@@ -240,7 +241,9 @@ fun HomeScreen(
                             text = locationLabel,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
-                            color = BentoTextSecondary
+                            color = BentoTextSecondary,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                 }

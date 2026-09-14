@@ -122,7 +122,10 @@ fun ParkingDetailsScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f, fill = false)
+            ) {
                 IconButton(
                     onClick = onBack,
                     modifier = Modifier.testTag("details_back_button")
@@ -137,7 +140,9 @@ fun ParkingDetailsScreen(
                     text = "Parking details",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface
+                    color = CurbOnSurface,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
 

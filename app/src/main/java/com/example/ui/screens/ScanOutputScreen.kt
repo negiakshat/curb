@@ -133,7 +133,8 @@ fun ScanOutputScreen(
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = CurbOnSurface,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
 

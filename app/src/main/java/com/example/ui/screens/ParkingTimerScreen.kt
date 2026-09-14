@@ -210,7 +210,9 @@ fun ParkingTimerScreen(
                 text = "Parking Timer",
                 fontSize = 19.sp,
                 fontWeight = FontWeight.Bold,
-                color = TimerTextDark
+                color = TimerTextDark,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
 
             // Circular More Menu Button

@@ -179,13 +179,17 @@ fun SavedPlacesScreen(
                                                 text = place.name,
                                                 fontSize = 16.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = CurbOnSurface
+                                                color = CurbOnSurface,
+                                                maxLines = 1,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                             )
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(
                                                 text = place.address,
                                                 fontSize = 13.sp,
-                                                color = CurbOnSurfaceVariant
+                                                color = CurbOnSurfaceVariant,
+                                                maxLines = 2,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                             )
                                             if (place.parkingNote.isNotBlank()) {
                                                 Spacer(modifier = Modifier.height(2.dp))
