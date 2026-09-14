@@ -256,31 +256,7 @@ fun ScanScreen(
             }
         }
 
-        // REAL ON-DEVICE BOUNDING BOX OVERLAY (Clean white outline around real detected signs)
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-
-            // Draw clean white outline around each real detected sign
-            liveDetectedBoxes.forEach { box ->
-                val left = box.left * w
-                val top = box.top * h
-                val right = box.right * w
-                val bottom = box.bottom * h
-                val boxWidth = right - left
-                val boxHeight = bottom - top
-
-                if (boxWidth > 10 && boxHeight > 10) {
-                    drawRoundRect(
-                        color = Color.White,
-                        topLeft = Offset(left, top),
-                        size = Size(boxWidth, boxHeight),
-                        cornerRadius = CornerRadius(4.dp.toPx()),
-                        style = Stroke(width = 2.5.dp.toPx())
-                    )
-                }
-            }
-        }
+        // Clean camera viewfinder without box overlay animations
 
         // TOP CONTROLS & HUD STATUS BAR
         Column(

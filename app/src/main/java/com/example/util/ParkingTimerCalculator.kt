@@ -32,7 +32,8 @@ data class ParkingTimerConfig(
     val allowedUntilTimeFormatted: String = "",
     val confirmationHeadline: String = "",
     val confirmationSubtext: String = "",
-    val ruleSummary: String = ""
+    val ruleSummary: String = "",
+    val nextRestrictionText: String = ""
 )
 
 object ParkingTimerCalculator {
@@ -122,11 +123,11 @@ object ParkingTimerCalculator {
                     endTime = currentTimeMillis,
                     maxAllowedEndTimeMillis = null,
                     calculatedMinutes = 0,
-                    formattedDuration = if (isPayment) "Pay to park" else "No time limit",
+                    formattedDuration = if (isPayment) "Pay to park" else "No fixed time limit",
                     timerBasis = if (isPayment) "Metered parking" else "Unrestricted parking",
                     allowedUntilTimeFormatted = scanResult.allowedUntilTime,
-                    confirmationHeadline = if (isPayment) "Pay to park" else "No time limit",
-                    confirmationSubtext = if (isPayment) "Metered parking detected, but no verified time limit was established by signage." else "You can park here without time restrictions. No legal-limit countdown can be set.",
+                    confirmationHeadline = if (isPayment) "Pay to park" else "Parking allowed — no fixed time limit detected",
+                    confirmationSubtext = if (isPayment) "Metered parking detected, but no verified time limit was established by signage." else "You can park here without a fixed time limit countdown.",
                     ruleSummary = scanResult.parkingRules.firstOrNull() ?: "No verified time limit"
                 )
             }
@@ -164,11 +165,11 @@ object ParkingTimerCalculator {
                 endTime = currentTimeMillis,
                 maxAllowedEndTimeMillis = null,
                 calculatedMinutes = 0,
-                formattedDuration = "No time limit",
+                formattedDuration = "No fixed time limit",
                 timerBasis = "Unrestricted parking",
-                allowedUntilTimeFormatted = "No time limit",
-                confirmationHeadline = "Parking allowed with no time limit.",
-                confirmationSubtext = "You can park here without time restrictions. No timer is required.",
+                allowedUntilTimeFormatted = "No fixed time limit",
+                confirmationHeadline = "Parking allowed — no fixed time limit detected",
+                confirmationSubtext = "You can park here without a fixed time limit countdown.",
                 ruleSummary = scanResult.parkingRules.firstOrNull() ?: "Unrestricted parking"
             )
         }
@@ -182,10 +183,10 @@ object ParkingTimerCalculator {
             scanResult.detectedSigns.forEach { append(it.title).append(" ").append(it.restrictions).append(" ").append(it.subtitle).append(" ") }
         }.lowercase(Locale.US)
 
-        // Step A: Parse posted duration limit (e.g., "2 Hour Parking" -> 120 mins, "1 Hour" -> 60 mins)
+        // Step A: Parse posted duration limit (e.g., "2 Hour Parking" -> 120 mins)
         val postedLimitMinutes = parsePostedDurationLimitMinutes(signText)
 
-        // Step B: Parse clock cutoff time (e.g., "6:00 PM", "4:00 PM", "18:00")
+        // Step B: Parse clock cutoff time (e.g., "ALLOWED UNTIL 6:00 PM", "NO PARKING AFTER 4:00 PM")
         val clockCutoffMillis = parseClockEndTime(scanResult.allowedUntilTime, combinedText, nowCal, currentTimeMillis)
 
         var minutesUntilClockCutoff: Int? = null
@@ -201,30 +202,36 @@ object ParkingTimerCalculator {
             }
         }
 
-        // Step C: Parse remaining time fallback from scanResult.timeRemaining
-        val timeRemainingMinutes = parseRemainingMinutesFallback(scanResult.timeRemaining)
+        // Step C: Parse remaining time fallback ONLY IF explicit duration or cutoff was indicated
+        val timeRemainingMinutes = if (postedLimitMinutes != null || minutesUntilClockCutoff != null) {
+            parseRemainingMinutesFallback(scanResult.timeRemaining)
+        } else null
 
         val hasPayment = (scanResult.paymentInfo.isNotBlank() &&
                 !scanResult.paymentInfo.contains("free", ignoreCase = true) &&
                 !scanResult.paymentInfo.contains("no fee", ignoreCase = true)) ||
                 combinedText.contains("meter") || combinedText.contains("pay")
 
+        // Parse any upcoming restriction schedule for separate display
+        val nextRestriction = parseNextRestrictionSchedule(signText)
+
         if (postedLimitMinutes == null && minutesUntilClockCutoff == null && timeRemainingMinutes == null) {
             val mode = if (hasPayment) TimerSemanticMode.METERED_WITHOUT_VERIFIED_TIME_LIMIT else TimerSemanticMode.UNRESTRICTED_OR_NO_VERIFIED_LIMIT
             return ParkingTimerConfig(
                 canStart = false,
                 mode = mode,
-                reason = if (hasPayment) "Metered parking detected, but no verified time limit was established." else "No verified time limit established by signage.",
+                reason = if (hasPayment) "Metered parking detected, but no verified time limit was established." else "No verified finite duration limit established by signage.",
                 startTime = currentTimeMillis,
                 endTime = currentTimeMillis,
                 maxAllowedEndTimeMillis = null,
                 calculatedMinutes = 0,
-                formattedDuration = if (hasPayment) "Pay to park" else "Duration unspecified",
-                timerBasis = if (hasPayment) "Metered parking" else "Unspecified limit",
+                formattedDuration = "No fixed time limit",
+                timerBasis = if (hasPayment) "Metered parking" else "No fixed limit",
                 allowedUntilTimeFormatted = scanResult.allowedUntilTime,
-                confirmationHeadline = if (hasPayment) "Pay to park" else "Parking duration unspecified",
-                confirmationSubtext = if (hasPayment) "Metered parking detected, but no maximum time limit was established by signage." else "Curb detected that parking is allowed, but could not determine a specific time limit. Check physical signs on-site before parking.",
-                ruleSummary = scanResult.parkingRules.firstOrNull() ?: "No verified parking rule has been established."
+                confirmationHeadline = "Parking allowed — no fixed time limit detected",
+                confirmationSubtext = if (hasPayment) "Metered parking detected, but no fixed duration limit was established by signage." else "You can park here without a fixed time limit countdown.",
+                ruleSummary = scanResult.parkingRules.firstOrNull() ?: "Parking permitted",
+                nextRestrictionText = nextRestriction
             )
         }
 
@@ -291,8 +298,20 @@ object ParkingTimerCalculator {
             allowedUntilTimeFormatted = formattedEndTimeStr,
             confirmationHeadline = headline,
             confirmationSubtext = subtext,
-            ruleSummary = ruleSummary
+            ruleSummary = ruleSummary,
+            nextRestrictionText = nextRestriction
         )
+    }
+
+    private fun parseNextRestrictionSchedule(text: String): String {
+        val lower = text.lowercase(Locale.US)
+        val scheduleRegex = Regex("""(?i)\b(mon|tue|wed|thu|fri|sat|sun)[-\s]*(mon|tue|wed|thu|fri|sat|sun)?\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*[-–—toTO]+\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b""")
+        val match = scheduleRegex.find(lower)
+        return if (match != null) {
+            "Next restriction: ${match.value.uppercase(Locale.US)}"
+        } else {
+            ""
+        }
     }
 
     private fun parseClockEndTime(
@@ -313,17 +332,19 @@ object ParkingTimerCalculator {
                 continue
             }
 
-            // Check if string is purely a duration expression (e.g. "2 hour parking", "2 hours", "30 min") without AM/PM or :
-            val isDurationOnly = (lower.contains("hour") || lower.contains("hr") || lower.contains("min")) &&
-                    !lower.contains("am") && !lower.contains("pm") && !lower.contains(":")
-            if (isDurationOnly) {
+            // CRITICAL FIX: If text is a recurring schedule window like "MON-FRI 9 AM-5 PM" or "9 AM - 5 PM"
+            // WITHOUT explicit cutoff keywords like "UNTIL", "ALLOWED UNTIL", or "NO PARKING AFTER",
+            // do NOT treat 5 PM as a clock countdown cutoff time!
+            val isRecurringWindow = lower.contains("-") || lower.contains(" to ") || lower.contains("mon") || lower.contains("tue") || lower.contains("wed") || lower.contains("thu") || lower.contains("fri")
+            val hasExplicitCutoffKeyword = lower.contains("until") || lower.contains("allowed until") || lower.contains("after") || lower.contains("ends") || lower.contains("cutoff")
+            if (isRecurringWindow && !hasExplicitCutoffKeyword) {
                 continue
             }
 
             val clean = timeStr.trim().uppercase(Locale.US)
 
-            // Pattern 1: HH:MM AM/PM or HH AM/PM (e.g. "6:00 PM", "6 PM", "12:00 AM", "8 AM")
-            val amPmMatcher = Pattern.compile("(?:UNTIL|ENDS?\\s+AT|BY)?\\s*(\\d{1,2})(?::(\\d{2}))?\\s*(AM|PM)").matcher(clean)
+            // Pattern 1: HH:MM AM/PM or HH AM/PM (e.g. "UNTIL 6:00 PM", "ALLOWED UNTIL 6 PM")
+            val amPmMatcher = Pattern.compile("(?:UNTIL|ALLOWED UNTIL|ENDS?\\s+AT|BY|AFTER)?\\s*(\\d{1,2})(?::(\\d{2}))?\\s*(AM|PM)").matcher(clean)
             if (amPmMatcher.find()) {
                 val hStr = amPmMatcher.group(1) ?: continue
                 val mStr = amPmMatcher.group(2) ?: "0"
@@ -336,28 +357,6 @@ object ParkingTimerCalculator {
 
                 if (amPm == "PM" && hour < 12) hour += 12
                 if (amPm == "AM" && hour == 12) hour = 0
-
-                val targetCal = nowCal.clone() as Calendar
-                targetCal.set(Calendar.HOUR_OF_DAY, hour)
-                targetCal.set(Calendar.MINUTE, min)
-                targetCal.set(Calendar.SECOND, 0)
-                targetCal.set(Calendar.MILLISECOND, 0)
-
-                if (targetCal.timeInMillis <= currentTimeMillis - 1800000L) {
-                    // Crossing midnight or target clock cutoff is tomorrow
-                    targetCal.add(Calendar.DAY_OF_YEAR, 1)
-                }
-
-                if (targetCal.timeInMillis > currentTimeMillis) {
-                    return targetCal.timeInMillis
-                }
-            }
-
-            // Pattern 2: 24-hour military clock (e.g. "18:00", "08:00")
-            val militaryMatcher = Pattern.compile("\\b([01]?\\d|2[0-3]):([0-5]\\d)\\b").matcher(clean)
-            if (militaryMatcher.find()) {
-                val hour = militaryMatcher.group(1)?.toIntOrNull() ?: continue
-                val min = militaryMatcher.group(2)?.toIntOrNull() ?: 0
 
                 val targetCal = nowCal.clone() as Calendar
                 targetCal.set(Calendar.HOUR_OF_DAY, hour)

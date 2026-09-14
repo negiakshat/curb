@@ -87,15 +87,20 @@ object EvidenceAnchoringValidator {
             else -> "Parking zone"
         }
 
+        val cleanRules = anchoredRules.map { SignCandidateValidator.sanitizeText(it, "Sign text could not be confidently read.") }
+            .filter { it.isNotBlank() }
+        val cleanExplanation = SignCandidateValidator.sanitizeText(rawScanResult.explanation, "Parking rules could not be determined from verified sign evidence.")
+
         val anchoredResult = rawScanResult.copy(
             verdict = sanitizedVerdict,
             detectedSigns = anchoredSigns,
-            paymentInfo = sanitizedPaymentInfo,
-            allowedUntilTime = sanitizedAllowedUntil,
-            timeRemaining = sanitizedTimeRemaining,
-            parkingRules = anchoredRules,
-            zoneType = sanitizedZoneType,
-            vehicleApplicability = filterVehicleApplicability(rawScanResult.vehicleApplicability, combinedOcrText)
+            paymentInfo = SignCandidateValidator.sanitizeText(sanitizedPaymentInfo, ""),
+            allowedUntilTime = SignCandidateValidator.sanitizeText(sanitizedAllowedUntil, "Verify physical signage"),
+            timeRemaining = SignCandidateValidator.sanitizeText(sanitizedTimeRemaining, "--"),
+            parkingRules = cleanRules.ifEmpty { listOf("No verified parking rule has been established.") },
+            explanation = cleanExplanation,
+            zoneType = SignCandidateValidator.sanitizeText(sanitizedZoneType, "Parking zone"),
+            vehicleApplicability = SignCandidateValidator.sanitizeText(filterVehicleApplicability(rawScanResult.vehicleApplicability, combinedOcrText), "")
         )
 
         // Pass anchored result through SemanticConsistencyValidator
@@ -111,18 +116,21 @@ object EvidenceAnchoringValidator {
         val defaultTitle = crop.normalizedBox.label.ifBlank { "Sign #${crop.id}" }
 
         if (candidateSign == null) {
+            val cleanOcr = SignCandidateValidator.sanitizeText(cropOcr, "Sign text could not be confidently read.")
+            val schedule = extractScheduleFromOcr(cropOcr)
+            val cleanSched = SignCandidateValidator.sanitizeText(schedule, "")
             return DetectedSign(
                 id = crop.id,
                 title = defaultTitle,
-                subtitle = extractScheduleFromOcr(cropOcr),
-                applicableDaysHours = extractScheduleFromOcr(cropOcr),
-                restrictions = cropOcr.ifBlank { "Unspecified rule" },
+                subtitle = cleanSched,
+                applicableDaysHours = cleanSched,
+                restrictions = SignCandidateValidator.sanitizeText(cropOcr, "Unspecified rule"),
                 exceptions = "",
                 ruleText = SignCandidateValidator.sanitizeOcrText(cropOcr),
                 isRestrictingNow = isRestrictingText(cropOcrUpper),
                 isUncertain = false,
                 statusBadge = if (isRestrictingText(cropOcrUpper)) "Active Restriction" else "Posted Sign",
-                rawText = cropOcr,
+                rawText = cleanOcr,
                 croppedImageUri = crop.fileUri,
                 confidence = crop.normalizedBox.confidence
             )
@@ -150,17 +158,23 @@ object EvidenceAnchoringValidator {
             SignCandidateValidator.sanitizeOcrText(cropOcr)
         }
 
+        val cleanTitle = SignCandidateValidator.sanitizeText(candidateSign.title, defaultTitle)
+        val cleanSubtitle = SignCandidateValidator.sanitizeText(validatedSchedule, "")
+        val cleanRestrictions = SignCandidateValidator.sanitizeText(validatedRestrictions, "Unspecified rule")
+        val cleanExceptions = SignCandidateValidator.sanitizeText(validatedExceptions, "")
+        val cleanRawText = SignCandidateValidator.sanitizeText(cropOcr, "Sign text could not be confidently read.")
+
         return candidateSign.copy(
             id = crop.id, // Strictly tie to crop ID
             croppedImageUri = crop.fileUri, // Strictly tie to crop URI
-            rawText = cropOcr, // Strictly tie to crop OCR
+            rawText = cleanRawText, // Strictly tie to crop OCR
             confidence = crop.normalizedBox.confidence,
-            title = candidateSign.title.ifBlank { defaultTitle },
-            subtitle = validatedSchedule,
-            applicableDaysHours = validatedSchedule,
-            restrictions = validatedRestrictions,
-            ruleText = validatedRestrictions,
-            exceptions = validatedExceptions
+            title = if (cleanTitle == "Sign text could not be confidently read.") defaultTitle else cleanTitle,
+            subtitle = cleanSubtitle,
+            applicableDaysHours = cleanSubtitle,
+            restrictions = cleanRestrictions,
+            ruleText = cleanRestrictions,
+            exceptions = cleanExceptions
         )
     }
 

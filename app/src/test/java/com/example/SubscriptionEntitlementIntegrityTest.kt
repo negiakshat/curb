@@ -121,4 +121,19 @@ class SubscriptionEntitlementIntegrityTest {
         assertTrue("Judge promo must survive logout", viewModel.isJudgeProActive.value)
         assertTrue("Effective Pro must remain true after logout", viewModel.isUserPro())
     }
+
+    @Test
+    fun `test isConfigurableKey accepts test_ keys and standard production keys`() {
+        assertTrue("RevenueCat Test Store key starting with test_ must be accepted", SubscriptionService.isConfigurableKey("test_1234567890abcdef"))
+        assertTrue("Google production key starting with goog_ must be accepted", SubscriptionService.isConfigurableKey("goog_12345678901234567890"))
+        assertTrue("Amazon production key starting with amzn_ must be accepted", SubscriptionService.isConfigurableKey("amzn_12345678901234567890"))
+        assertTrue("RevenueCat key starting with rcb_ must be accepted", SubscriptionService.isConfigurableKey("rcb_12345678901234567890"))
+
+        assertFalse("Null key must be rejected", SubscriptionService.isConfigurableKey(null))
+        assertFalse("Blank key must be rejected", SubscriptionService.isConfigurableKey(""))
+        assertFalse("Placeholder key must be rejected", SubscriptionService.isConfigurableKey("revenuecat_public_api_key"))
+        assertFalse("Dummy key must be rejected", SubscriptionService.isConfigurableKey("dummy_key_value_12345"))
+        assertFalse("Key containing placeholder must be rejected", SubscriptionService.isConfigurableKey("goog_placeholder_value_123"))
+        assertFalse("Short key must be rejected", SubscriptionService.isConfigurableKey("test_123"))
+    }
 }

@@ -207,25 +207,76 @@ object SignCandidateValidator {
     }
 
     /**
+     * Cleans OCR text by stripping out any stray machine metadata, web URLs,
+     * encoded parameter strings, hashes, or UUID tokens, while preserving
+     * legitimate parking schedule text and titles.
+     */
+    private val URL_ENCODED_REGEX = Regex("""(?i)(https?%3A%2F%2F|%2F|%3A|%3F|%3D|%26|%20)""")
+    private val URL_PARAM_GARBAGE_REGEX = Regex("""(?i)(&?imgurl=[^&\s]*|&?url=[^&\s]*|\?imgurl=[^&\s]*|\?url=[^&\s]*|&?utm_[a-z]+=[^&\s]*)""")
+    private val PURE_URL_REGEX = Regex("""(?i)(https?://[^\s]+|www\.[^\s]+|ftp://[^\s]+|file://[^\s]+|[a-z0-9-]+\.(com|org|net|io|gov|edu|co|app|site|xyz|info|bear)\b[^\s]*)""")
+    private val UUID_REGEX_STRICT = Regex("""(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b""")
+    private val LONG_MACHINE_TOKEN_REGEX = Regex("""(?i)\b[a-f0-9]{16,}\b|\b[a-zA-Z0-9_-]{20,}\b""")
+    private val UNIX_TIMESTAMP_STRICT_REGEX = Regex("""\b1[6-9]\d{11,}\b|:\d{10,}:?""")
+    private val FILE_PATH_STRICT_REGEX = Regex("""(?i)\b(IMG_\d+|DCIM|\.jpe?g|\.png|\.webp|\.json|file://|crop_live_[^\s]*|crop_\d+[^\s]*|preset_[^\s]*|sample_[^\s]*)\b""")
+    private val CODE_OR_JSON_REGEX = Regex("""(?i)(\{.*?\}|\[.*?\]|"[a-zA-Z0-9_-]+"\s*:|<[^>]+>)""")
+
+    fun sanitizeText(
+        rawText: String?,
+        fallbackIfEmpty: String = "Sign text could not be confidently read."
+    ): String {
+        if (rawText.isNullOrBlank()) return fallbackIfEmpty
+
+        var cleaned = rawText
+        // 1. Remove JSON / code fragments
+        cleaned = CODE_OR_JSON_REGEX.replace(cleaned, " ")
+
+        // 2. Remove URL parameters & encoded URL strings (e.g. &imgurl=https%3A%2F%2F...)
+        cleaned = URL_PARAM_GARBAGE_REGEX.replace(cleaned, " ")
+        cleaned = URL_ENCODED_REGEX.replace(cleaned, " ")
+
+        // 3. Remove web URLs, domains, CDN addresses
+        cleaned = PURE_URL_REGEX.replace(cleaned, " ")
+        cleaned = URL_REGEX.replace(cleaned, " ")
+
+        // 4. Remove UUIDs & filenames / file path metadata
+        cleaned = UUID_REGEX_STRICT.replace(cleaned, " ")
+        cleaned = FILE_PATH_STRICT_REGEX.replace(cleaned, " ")
+        cleaned = FILE_PATH_REGEX.replace(cleaned, " ")
+
+        // 5. Remove long machine tokens / hashes
+        cleaned = LONG_MACHINE_TOKEN_REGEX.replace(cleaned, " ")
+        cleaned = HASH_TOKEN_REGEX.replace(cleaned, " ")
+        cleaned = UNIX_TIMESTAMP_STRICT_REGEX.replace(cleaned, " ")
+
+        // 6. Condense whitespace and strip orphan symbols
+        cleaned = cleaned
+            .replace(Regex("""[&?=#%_<>{}\[\]"\\]+"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim(' ', ':', ';', ',', '-', '_', '.')
+
+        if (cleaned.isBlank()) return fallbackIfEmpty
+
+        // 7. Check if remaining string has any recognizable parking vocabulary or schedule
+        val hasDigitsOrLetters = cleaned.any { it.isLetterOrDigit() }
+        if (!hasDigitsOrLetters) return fallbackIfEmpty
+
+        if (containsExplicitParkingRule(cleaned) || validateOcr(cleaned).isValid) {
+            return cleaned
+        }
+
+        val words = cleaned.split(Regex("""\s+""")).filter { it.isNotBlank() }
+        if (words.all { w -> w.all { c -> c.isLetterOrDigit() || c == '-' || c == '/' || c == '&' } && w.length < 20 }) {
+            return cleaned
+        }
+
+        return fallbackIfEmpty
+    }
+
+    /**
      * Cleans OCR text by stripping out any stray machine metadata or hash tokens,
      * while preserving legitimate parking schedule text.
      */
     fun sanitizeOcrText(rawText: String): String {
-        var text = rawText
-            .replace(URL_REGEX, "")
-            .replace(UUID_REGEX, "")
-            .replace(HASH_TOKEN_REGEX, "")
-            .replace(UNIX_TIMESTAMP_REGEX, "")
-            .replace(FILE_PATH_REGEX, "")
-            .trim()
-
-        text = text.replace(Regex("""\s+"""), " ")
-            .trim(' ', ':', ';', ',', '-', '_')
-
-        return if (text.isBlank() || !containsExplicitParkingRule(text)) {
-            "Unclear Sign Rule"
-        } else {
-            text
-        }
+        return sanitizeText(rawText, fallbackIfEmpty = "Unclear Sign Rule")
     }
 }

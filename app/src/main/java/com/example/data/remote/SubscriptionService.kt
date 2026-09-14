@@ -85,6 +85,8 @@ class SubscriptionService(private val context: Context) {
         /**
          * Validates whether a given API key is a usable RevenueCat Public API key
          * and not an empty, placeholder, or dummy key string.
+         * Accepts RevenueCat Test Store keys beginning with 'test_', as well as
+         * production keys starting with 'goog_', 'amzn_', or 'rcb_'.
          */
         fun isConfigurableKey(key: String?): Boolean {
             if (key.isNullOrBlank()) return false
@@ -95,16 +97,20 @@ class SubscriptionService(private val context: Context) {
                 lower.contains("default_value") ||
                 lower.contains("your_key") ||
                 lower.contains("curb_pro") ||
-                lower.contains("dummy") ||
-                lower.contains("test")
+                lower.contains("dummy")
             ) {
                 return false
             }
-            // RevenueCat Android public keys must start with 'goog_' or 'amzn_' and typically contain 30+ characters
-            if (!trimmed.startsWith("goog_") && !trimmed.startsWith("amzn_")) {
+            // RevenueCat public keys: Test Store keys begin with 'test_'
+            // Production keys begin with 'goog_', 'amzn_', 'rcb_', etc.
+            if (!trimmed.startsWith("test_") &&
+                !trimmed.startsWith("goog_") &&
+                !trimmed.startsWith("amzn_") &&
+                !trimmed.startsWith("rcb_")
+            ) {
                 return false
             }
-            return trimmed.length >= 24
+            return trimmed.length >= 10
         }
     }
 
@@ -128,9 +134,11 @@ class SubscriptionService(private val context: Context) {
                 ""
             }
 
+            val keyType = if (apiKey.trim().startsWith("test_")) "Test Store" else "production"
+
             // Only attempt RevenueCat SDK configuration if a valid key is supplied
             if (!isConfigurableKey(apiKey)) {
-                Log.d(TAG, "RevenueCat public API key is not configured or is a placeholder.")
+                Log.d(TAG, "RevenueCat configured: false, key type: $keyType")
                 _subscriptionState.value = _subscriptionState.value.copy(
                     isConfigured = false,
                     packages = DEFAULT_PACKAGES,
@@ -179,8 +187,9 @@ class SubscriptionService(private val context: Context) {
                         .showInAppMessagesAutomatically(false)
                         .build()
                 )
-                Log.d(TAG, "RevenueCat initialized successfully with anonymous app user ID.")
             }
+
+            Log.d(TAG, "RevenueCat configured: ${Purchases.isConfigured}, key type: $keyType")
 
             _subscriptionState.value = _subscriptionState.value.copy(isConfigured = true)
 

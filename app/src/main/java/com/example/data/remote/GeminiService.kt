@@ -370,6 +370,24 @@ object GeminiService {
         history: List<ChatMessage>,
         scanContext: ScanResult? = null
     ): String = withContext(Dispatchers.IO) {
+        val lowerQuery = query.trim().lowercase(Locale.ROOT)
+
+        // 1. GREETINGS INTENT GUARD
+        val isGreeting = listOf("hi", "hello", "hey", "good morning", "good afternoon", "greetings", "yo", "hi there", "hello there")
+            .any { lowerQuery == it || lowerQuery.startsWith("$it ") || lowerQuery.startsWith("$it,") || lowerQuery.startsWith("$it!") }
+        if (isGreeting) {
+            val greetingResp = "Hello! How can I help you with your parking today? Feel free to ask about nearby signs, rules, or schedules."
+            if (!isDuplicateResponse(greetingResp, history)) return@withContext greetingResp
+        }
+
+        // 2. THANKS / ACKNOWLEDGMENT INTENT GUARD
+        val isThanks = listOf("thanks", "thank you", "thx", "okay", "ok", "got it", "cool", "perfect", "sounds good", "alright", "great")
+            .any { lowerQuery == it || lowerQuery.startsWith("$it ") || lowerQuery.startsWith("$it,") || lowerQuery.startsWith("$it!") }
+        if (isThanks) {
+            val thanksResp = "You're welcome! Let me know if you have any more questions about this parking spot or any other signage."
+            if (!isDuplicateResponse(thanksResp, history)) return@withContext thanksResp
+        }
+
         val apiKey = try {
             BuildConfig.GEMINI_API_KEY
         } catch (e: Exception) {
@@ -401,8 +419,8 @@ object GeminiService {
             
             COPILOT DIRECTIVES:
             - Answer the user's query specifically about THIS scanned parking spot using the evidence and scan context provided.
-            - Do NOT re-run the scan or pretend you don't know the spot context.
-            - Clearly distinguish physical evidence (e.g., "Sign #1 posted on the pole says...") from your AI interpretation.
+            - If query is short (e.g. "why?", "which one?", "when?"), use context from recent chat messages and this scan.
+            - Clearly distinguish physical evidence (e.g., "Sign #1 posted on the pole says...") from AI interpretation.
             - If verdict is AMBIGUOUS / Rule Unclear, explain the exact ambiguity or missing physical sign evidence.
             - If verdict is RESTRICTED, explain which sign or rule prohibits parking and when the restriction ends.
             - If verdict is ALLOWED, explain permissions and any upcoming inactive restrictions.
@@ -418,8 +436,16 @@ object GeminiService {
                     You are Curb AI, an expert Android parking copilot.
                     $scanContextPrompt
                     
+                    CONVERSATIONAL INTENT DIRECTIVES:
+                    1. GREETINGS (hi, hello, hey, morning): Respond with a friendly, natural greeting. Do NOT output a scan verdict or parking rules unless asked.
+                    2. THANKS / ACKNOWLEDGMENT (thanks, thank you, okay, got it, cool): Respond with a polite, brief acknowledgment (e.g. "You're welcome! Let me know if you have any other questions about this spot."). Do NOT output parking rules.
+                    3. SPECIFIC QUESTIONS & FOLLOW-UPS (why?, which sign?, when?, what about tomorrow?, permits?):
+                       - Answer the specific query directly.
+                       - Use conversation history to resolve follow-ups like "why?" or "which one?".
+                       - Do NOT output the same generic scan summary if the user is asking a targeted question or follow-up.
+                    4. DUPLICATE ANSWER PREVENTION: Do not repeat identical sentences from previous responses in the conversation.
+                    
                     Keep responses focused, direct, concise, and helpful (under 3 short paragraphs).
-                    Never repeat information unnecessarily; assume the user already sees the current scan result.
                 """.trimIndent()
 
                 val jsonBody = JSONObject().apply {
@@ -463,7 +489,10 @@ object GeminiService {
                     val parts = content?.optJSONArray("parts")
                     val text = parts?.optJSONObject(0)?.optString("text")
                     if (!text.isNullOrBlank()) {
-                        return@withContext text.trim()
+                        val trimmed = text.trim()
+                        if (!isDuplicateResponse(trimmed, history)) {
+                            return@withContext trimmed
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -472,33 +501,64 @@ object GeminiService {
         }
 
         // Intelligent parking domain reasoning fallback
-        answerParkingLocally(query, scanContext)
+        val localResult = answerParkingLocally(query, history, scanContext)
+        if (isDuplicateResponse(localResult, history)) {
+            return@withContext "To clarify your question regarding '${query.take(30)}': Based on the verified signage at ${scanContext?.locationName ?: "this spot"}, ${scanContext?.explanation ?: "please verify posted physical signs on-site."}"
+        }
+        localResult
     }
 
-    fun answerParkingLocally(query: String, scanContext: ScanResult? = null): String {
-        val lower = query.lowercase(Locale.ROOT)
+    private fun isDuplicateResponse(newText: String, history: List<ChatMessage>): Boolean {
+        val lastModelMessage = history.lastOrNull { !it.isUser }?.text ?: return false
+        val normNew = newText.lowercase(Locale.ROOT).replace(Regex("""\W+"""), "")
+        val normLast = lastModelMessage.lowercase(Locale.ROOT).replace(Regex("""\W+"""), "")
+        if (normNew == normLast) return true
+        if (normNew.length > 20 && normLast.length > 20 && (normNew.contains(normLast) || normLast.contains(normNew))) return true
+        return false
+    }
+
+    fun answerParkingLocally(query: String, history: List<ChatMessage> = emptyList(), scanContext: ScanResult? = null): String {
+        val cleanQuery = query.trim().trim('?', '!', ' ', '.', ',').lowercase(Locale.ROOT)
+
+        // 1. GREETING INTENT
+        val isGreeting = listOf("hi", "hello", "hey", "good morning", "good afternoon", "greetings", "yo")
+            .any { cleanQuery == it || cleanQuery.startsWith("$it ") || cleanQuery.startsWith("$it,") || cleanQuery.startsWith("$it!") }
+        if (isGreeting) {
+            return "Hello! How can I help you with your parking today? Feel free to ask about nearby signs, rules, or schedules."
+        }
+
+        // 2. THANKS INTENT
+        val isThanks = listOf("thanks", "thank you", "thx", "okay", "ok", "got it", "cool", "perfect", "sounds good", "alright", "great")
+            .any { cleanQuery == it || cleanQuery.startsWith("$it ") || cleanQuery.startsWith("$it,") || cleanQuery.startsWith("$it!") }
+        if (isThanks) {
+            return "You're welcome! Let me know if you have any more questions about this parking spot or any other signage."
+        }
 
         if (scanContext != null) {
-            if (lower.contains("why") && (lower.contains("can't") || lower.contains("restrict") || lower.contains("prohibit") || lower.contains("not allow") || lower.contains("allow"))) {
+            // WHY INTENT
+            if (cleanQuery == "why" || cleanQuery.startsWith("why ") || cleanQuery.contains("why it happened") || cleanQuery.contains("why restricted") || cleanQuery.contains("why can't") || cleanQuery.contains("reason")) {
                 return when (scanContext.verdict) {
                     ScanVerdict.RESTRICTED -> {
                         val activeSigns = scanContext.detectedSigns.filter { it.isRestrictingNow }
                         if (activeSigns.isNotEmpty()) {
-                            val signDesc = activeSigns.joinToString(", ") { "${it.title} (${it.subtitle})" }
-                            "Parking is restricted because $signDesc is currently in effect at ${scanContext.locationName} based on verified scan evidence."
+                            val signDesc = activeSigns.joinToString(", ") { "${it.title} (${it.subtitle.ifBlank { it.restrictions }})" }
+                            "Parking is restricted because $signDesc is currently active at ${scanContext.locationName} based on verified sign evidence."
                         } else {
-                            "Parking is restricted at ${scanContext.locationName} based on the verified scan result: ${scanContext.explanation}"
+                            "Parking is restricted at ${scanContext.locationName} based on verified sign evidence: ${scanContext.explanation}"
                         }
                     }
-                    ScanVerdict.ALLOWED -> "Based on the verified scan for ${scanContext.locationName}, parking is ALLOWED until ${scanContext.allowedUntilTime}. Rules established: ${scanContext.parkingRules.joinToString("; ")}."
-                    ScanVerdict.AMBIGUOUS -> "The parking rule is unclear because physical signage is ambiguous, partially obscured, or insufficient. Physical verification on-site is required before leaving your vehicle."
+                    ScanVerdict.ALLOWED -> "Parking is allowed at ${scanContext.locationName} because the posted rules permit parking right now until ${scanContext.allowedUntilTime}."
+                    ScanVerdict.AMBIGUOUS -> "The parking rule is unclear because physical signage is ambiguous, partially faded, or obstructed. Physical verification on-site is required."
                 }
             }
 
-            if (lower.contains("sign") || lower.contains("which sign")) {
+            // WHICH SIGN INTENT
+            if (cleanQuery.contains("sign") || cleanQuery.contains("which sign") || cleanQuery.contains("what sign") || cleanQuery.contains("which one")) {
                 if (scanContext.detectedSigns.isNotEmpty()) {
                     val signListStr = scanContext.detectedSigns.joinToString("\n• ") { sign ->
-                        "${sign.title} (${sign.subtitle}): ${if (sign.isRestrictingNow) "ACTIVE RESTRICTION NOW" else "Inactive schedule"}"
+                        val sub = if (sign.subtitle.isNotBlank()) " (${sign.subtitle})" else ""
+                        val status = if (sign.isRestrictingNow) "ACTIVE RESTRICTION NOW" else if (sign.isUncertain) "UNCLEAR SIGNAGE" else "Inactive schedule"
+                        "${sign.title}$sub: $status"
                     }
                     return "Here are the physical signs detected at this spot:\n\n• $signListStr\n\nCurb synthesized these signs to establish the current verdict (${scanContext.verdict.displayTitle})."
                 } else {
@@ -506,11 +566,22 @@ object GeminiService {
                 }
             }
 
-            if (lower.contains("when") || lower.contains("limit") || lower.contains("after 6") || lower.contains("after") || lower.contains("time") || lower.contains("park")) {
+            // WHEN / TIME INTENT
+            if (cleanQuery.contains("when") || cleanQuery.contains("how long") || cleanQuery.contains("until") || cleanQuery.contains("time limit") || cleanQuery.contains("after 6") || cleanQuery.contains("tomorrow") || cleanQuery.contains("weekend")) {
                 return when (scanContext.verdict) {
-                    ScanVerdict.ALLOWED -> "Based on the verified scan for ${scanContext.locationName}, parking is ALLOWED until ${scanContext.allowedUntilTime} (${scanContext.timeRemaining} remaining). Established rules: ${scanContext.parkingRules.joinToString("; ")}."
-                    ScanVerdict.RESTRICTED -> "Parking is currently RESTRICTED at ${scanContext.locationName} based on the verified scan context: ${scanContext.explanation}. Please check the physical sign on-site for posted enforcement hours."
-                    ScanVerdict.AMBIGUOUS -> "The signage is unclear, so I cannot safely confirm whether parking is allowed or what time limits apply. Check the physical sign on-site for active hours, exceptions, and arrows."
+                    ScanVerdict.ALLOWED -> "Based on the verified scan for ${scanContext.locationName}, parking is ALLOWED until ${scanContext.allowedUntilTime}. Rules established: ${scanContext.parkingRules.joinToString("; ")}."
+                    ScanVerdict.RESTRICTED -> "Parking is currently RESTRICTED at ${scanContext.locationName}: ${scanContext.explanation}. Please check physical signs on-site for enforcement windows."
+                    ScanVerdict.AMBIGUOUS -> "The signage is unclear, so I cannot safely confirm time limits. Please check physical signs on-site."
+                }
+            }
+
+            // PERMIT INTENT
+            if (cleanQuery.contains("permit") || cleanQuery.contains("exemption") || cleanQuery.contains("resident") || cleanQuery.contains("area")) {
+                val permitSigns = scanContext.detectedSigns.filter { it.exceptions.contains("permit", ignoreCase = true) || it.title.contains("permit", ignoreCase = true) || it.restrictions.contains("permit", ignoreCase = true) }
+                return if (permitSigns.isNotEmpty()) {
+                    "Permit information from posted signage:\n" + permitSigns.joinToString("\n") { "• ${it.title}: ${it.exceptions.ifBlank { it.restrictions }}" }
+                } else {
+                    "No permit exemptions were detected on the posted signage for ${scanContext.locationName}."
                 }
             }
 
@@ -521,35 +592,23 @@ object GeminiService {
             }
         }
 
-        val generalDisclaimer = "General Information: Parking rules vary by city and posted signage. I can explain general concepts, but I cannot confirm rules for a specific street without posted sign evidence or an official local source."
+        val generalDisclaimer = "General Information: Parking rules vary by city and posted signage."
 
         return when {
-            lower.contains("after 6") || lower.contains("6 pm") || lower.contains("night") || lower.contains("after hours") -> {
-                "$generalDisclaimer I can explain what an after-hours rule usually means, but I cannot confirm that a specific street allows parking after 6 PM without posted signage or a verified local rule. Check posted signs on-site for active enforcement hours, evening tow-away windows, and overnight restrictions."
+            cleanQuery.contains("after 6") || cleanQuery.contains("6 pm") || cleanQuery.contains("night") || cleanQuery.contains("after hours") -> {
+                "$generalDisclaimer Check posted signs on-site for active enforcement hours, evening tow-away windows, and overnight restrictions."
             }
-            lower.contains("sunday") || lower.contains("weekend") -> {
-                "$generalDisclaimer While some municipalities relax metered time limits on Sundays or weekends, many cities enforce 24/7 restrictions, special event zones, loading zones, and red curbs. Always verify posted street signs for weekend enforcement."
+            cleanQuery.contains("sunday") || cleanQuery.contains("weekend") -> {
+                "$generalDisclaimer While some municipalities relax metered time limits on Sundays or weekends, many cities enforce 24/7 restrictions, special event zones, loading zones, and red curbs."
             }
-            lower.contains("green") || lower.contains("colored curb") || lower.contains("yellow") || lower.contains("red") || lower.contains("white") || lower.contains("blue") || lower.contains("curb color") -> {
+            cleanQuery.contains("green") || cleanQuery.contains("colored curb") || cleanQuery.contains("yellow") || cleanQuery.contains("red") || cleanQuery.contains("white") || cleanQuery.contains("blue") || cleanQuery.contains("curb color") -> {
                 "$generalDisclaimer Standard curb color designations vary by municipality, but conceptually represent:\n\n• Red: No stopping, standing, or parking at any time.\n• Green: Short-term parking during posted hours.\n• White: Passenger loading/unloading only.\n• Yellow: Commercial loading zone during posted hours.\n• Blue: Disabled persons with valid placard/plate.\n\nThese are general concepts. Local city codes and posted signs govern exact rules for any spot."
             }
-            lower.contains("street clean") || lower.contains("sweep") -> {
-                "$generalDisclaimer Street cleaning restrictions prohibit parking during specific posted time windows (e.g., for sweeping or maintenance). Vehicles parked during active sweeping hours are subject to citations or towing. Check physical street signs for exact days and times."
-            }
-            lower.contains("holiday") -> {
-                "$generalDisclaimer Some cities suspend meter enforcement or street cleaning on official city holidays, but holiday rules vary significantly by municipality and location. Safety restrictions (red zones, fire hydrants, bus stops) remain enforced. Check local city policy and posted signs."
-            }
-            lower.contains("meter") -> {
-                "$generalDisclaimer A parking meter indicates a paid parking zone with maximum time limits during active hours. Enforcement hours and rates are posted on the meter, pay station, or nearby sign plate."
-            }
-            lower.contains("tow") -> {
-                "$generalDisclaimer A tow-away zone prohibits stopping or parking during specified hours. Vehicles parked during tow-away windows are subject to immediate towing and impoundment."
-            }
-            lower.contains("arrow") -> {
-                "$generalDisclaimer Arrows on parking signs indicate the physical zone where the restriction applies (e.g., to the left or right of the post). Stacked signs on the same post interact, with restrictive rules taking precedence."
+            cleanQuery.contains("street clean") || cleanQuery.contains("sweep") -> {
+                "$generalDisclaimer Street cleaning restrictions prohibit parking during specific posted time windows. Check physical street signs for exact days and times."
             }
             else -> {
-                "$generalDisclaimer I can explain general parking concepts, but I cannot confirm the rule for a specific street without posted sign evidence or an official local source. Please scan the posted parking sign or check local city regulations."
+                "$generalDisclaimer I can explain general parking concepts, but I cannot confirm rules for a specific street without posted sign evidence or an official local source."
             }
         }
     }

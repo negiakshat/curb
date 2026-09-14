@@ -90,7 +90,7 @@ class ParkingTimerCalculatorTest {
         assertTrue(config.isUnrestricted)
         assertEquals(TimerSemanticMode.UNRESTRICTED_OR_NO_VERIFIED_LIMIT, config.mode)
         assertEquals(0, config.calculatedMinutes)
-        assertEquals("No time limit", config.formattedDuration)
+        assertEquals("No fixed time limit", config.formattedDuration)
     }
 
     @Test
