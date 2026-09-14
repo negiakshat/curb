@@ -23,63 +23,77 @@ class SessionPreferences(context: Context) {
     }
 
     var lastNotificationReadTime: Long
-        get() = prefs.getLong(KEY_LAST_NOTIFICATION_READ_TIME, 0L)
-        set(value) = prefs.edit().putLong(KEY_LAST_NOTIFICATION_READ_TIME, value).apply()
+        get() = try { prefs.getLong(KEY_LAST_NOTIFICATION_READ_TIME, 0L) } catch (_: Throwable) { 0L }
+        set(value) { try { prefs.edit().putLong(KEY_LAST_NOTIFICATION_READ_TIME, value).apply() } catch (_: Throwable) {} }
 
     var isJudgeProActive: Boolean
-        get() = prefs.getBoolean(KEY_JUDGE_PRO_ACCESS, false)
-        set(value) = prefs.edit().putBoolean(KEY_JUDGE_PRO_ACCESS, value).apply()
+        get() = try { prefs.getBoolean(KEY_JUDGE_PRO_ACCESS, false) } catch (_: Throwable) { false }
+        set(value) { try { prefs.edit().putBoolean(KEY_JUDGE_PRO_ACCESS, value).apply() } catch (_: Throwable) {} }
 
     var isOnboardingCompleted: Boolean
-        get() = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)
-        set(value) = prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
+        get() = try { prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false) } catch (_: Throwable) { false }
+        set(value) { try { prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply() } catch (_: Throwable) {} }
 
     var isPermissionsCompleted: Boolean
-        get() = prefs.getBoolean(KEY_PERMISSIONS_COMPLETED, false)
-        set(value) = prefs.edit().putBoolean(KEY_PERMISSIONS_COMPLETED, value).apply()
+        get() = try { prefs.getBoolean(KEY_PERMISSIONS_COMPLETED, false) } catch (_: Throwable) { false }
+        set(value) { try { prefs.edit().putBoolean(KEY_PERMISSIONS_COMPLETED, value).apply() } catch (_: Throwable) {} }
 
     var isLoggedIn: Boolean
-        get() = prefs.getBoolean(KEY_IS_LOGGED_IN, false)
-        set(value) = prefs.edit().putBoolean(KEY_IS_LOGGED_IN, value).apply()
+        get() = try { prefs.getBoolean(KEY_IS_LOGGED_IN, false) } catch (_: Throwable) { false }
+        set(value) { try { prefs.edit().putBoolean(KEY_IS_LOGGED_IN, value).apply() } catch (_: Throwable) {} }
 
     var isGuest: Boolean
-        get() = prefs.getBoolean(KEY_IS_GUEST, false)
-        set(value) = prefs.edit().putBoolean(KEY_IS_GUEST, value).apply()
+        get() = try { prefs.getBoolean(KEY_IS_GUEST, false) } catch (_: Throwable) { false }
+        set(value) { try { prefs.edit().putBoolean(KEY_IS_GUEST, value).apply() } catch (_: Throwable) {} }
 
     fun isOnboardingAndPermissionsCompleted(): Boolean {
-        return isOnboardingCompleted && isPermissionsCompleted && isLoggedIn
+        return try {
+            isOnboardingCompleted && isPermissionsCompleted && isLoggedIn
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     fun saveUserProfile(profile: UserProfile) {
-        prefs.edit()
-            .putString(KEY_USER_NAME, profile.name)
-            .putString(KEY_USER_GENDER, profile.gender)
-            .putString(KEY_USER_EMAIL, profile.email)
-            .putBoolean(KEY_IS_PRO, profile.isPro)
-            .putBoolean(KEY_PUSH_NOTIFICATIONS, profile.pushNotificationsEnabled)
-            .apply()
+        try {
+            prefs.edit()
+                .putString(KEY_USER_NAME, profile.name)
+                .putString(KEY_USER_GENDER, profile.gender)
+                .putString(KEY_USER_EMAIL, profile.email)
+                .putBoolean(KEY_IS_PRO, profile.isPro)
+                .putBoolean(KEY_PUSH_NOTIFICATIONS, profile.pushNotificationsEnabled)
+                .apply()
+        } catch (_: Throwable) {}
     }
 
     fun getUserProfile(): UserProfile {
-        val defaultName = if (isGuest) "Guest" else "Alex"
-        return UserProfile(
-            name = prefs.getString(KEY_USER_NAME, defaultName) ?: defaultName,
-            gender = prefs.getString(KEY_USER_GENDER, "Not specified") ?: "Not specified",
-            email = prefs.getString(KEY_USER_EMAIL, "") ?: "",
-            isPro = prefs.getBoolean(KEY_IS_PRO, false),
-            pushNotificationsEnabled = prefs.getBoolean(KEY_PUSH_NOTIFICATIONS, true)
-        )
+        return try {
+            val defaultName = if (isGuest) "Guest" else "Alex"
+            UserProfile(
+                name = prefs.getString(KEY_USER_NAME, defaultName) ?: defaultName,
+                gender = prefs.getString(KEY_USER_GENDER, "Not specified") ?: "Not specified",
+                email = prefs.getString(KEY_USER_EMAIL, "") ?: "",
+                isPro = prefs.getBoolean(KEY_IS_PRO, false),
+                pushNotificationsEnabled = prefs.getBoolean(KEY_PUSH_NOTIFICATIONS, true)
+            )
+        } catch (_: Throwable) {
+            UserProfile(name = "Alex", gender = "Not specified", email = "", isPro = false, pushNotificationsEnabled = true)
+        }
     }
 
     fun logout() {
-        prefs.edit()
-            .putBoolean(KEY_IS_LOGGED_IN, false)
-            .putBoolean(KEY_ONBOARDING_COMPLETED, false)
-            .putBoolean(KEY_IS_GUEST, false)
-            .apply()
+        try {
+            prefs.edit()
+                .putBoolean(KEY_IS_LOGGED_IN, false)
+                .putBoolean(KEY_ONBOARDING_COMPLETED, false)
+                .putBoolean(KEY_IS_GUEST, false)
+                .apply()
+        } catch (_: Throwable) {}
     }
 
     fun clearSession() {
-        prefs.edit().clear().apply()
+        try {
+            prefs.edit().clear().apply()
+        } catch (_: Throwable) {}
     }
 }

@@ -44,51 +44,71 @@ class ChatUsageManager(context: Context) {
     }
 
     private fun ensureCurrentDay() {
-        val currentDay = getCurrentDateKey()
-        val savedDay = prefs.getString(KEY_USAGE_DATE_KEY, null)
-        if (savedDay != currentDay) {
-            // New calendar day: reset daily message counter to 0
-            prefs.edit()
-                .putString(KEY_USAGE_DATE_KEY, currentDay)
-                .putInt(KEY_MESSAGES_USED_TODAY, 0)
-                .apply()
-        }
+        try {
+            val currentDay = getCurrentDateKey()
+            val savedDay = prefs.getString(KEY_USAGE_DATE_KEY, null)
+            if (savedDay != currentDay) {
+                // New calendar day: reset daily message counter to 0
+                prefs.edit()
+                    .putString(KEY_USAGE_DATE_KEY, currentDay)
+                    .putInt(KEY_MESSAGES_USED_TODAY, 0)
+                    .apply()
+            }
+        } catch (_: Throwable) {}
     }
 
     @Synchronized
     fun getUsageInfo(isPro: Boolean): ChatUsageInfo {
-        ensureCurrentDay()
-        val used = prefs.getInt(KEY_MESSAGES_USED_TODAY, 0)
-        return ChatUsageInfo(
-            messagesUsedToday = used,
-            dailyLimit = CURB_AI_FREE_DAILY_LIMIT,
-            isPro = isPro
-        )
+        return try {
+            ensureCurrentDay()
+            val used = prefs.getInt(KEY_MESSAGES_USED_TODAY, 0)
+            ChatUsageInfo(
+                messagesUsedToday = used,
+                dailyLimit = CURB_AI_FREE_DAILY_LIMIT,
+                isPro = isPro
+            )
+        } catch (_: Throwable) {
+            ChatUsageInfo(
+                messagesUsedToday = 0,
+                dailyLimit = CURB_AI_FREE_DAILY_LIMIT,
+                isPro = isPro
+            )
+        }
     }
 
     @Synchronized
     fun canSendMessage(isPro: Boolean): Boolean {
         if (isPro) return true
-        ensureCurrentDay()
-        val used = prefs.getInt(KEY_MESSAGES_USED_TODAY, 0)
-        return used < CURB_AI_FREE_DAILY_LIMIT
+        return try {
+            ensureCurrentDay()
+            val used = prefs.getInt(KEY_MESSAGES_USED_TODAY, 0)
+            used < CURB_AI_FREE_DAILY_LIMIT
+        } catch (_: Throwable) {
+            true
+        }
     }
 
     @Synchronized
     fun incrementUsage(isPro: Boolean): ChatUsageInfo {
         if (isPro) return getUsageInfo(true)
-        ensureCurrentDay()
-        val current = prefs.getInt(KEY_MESSAGES_USED_TODAY, 0)
-        val updated = (current + 1).coerceAtMost(CURB_AI_FREE_DAILY_LIMIT)
-        prefs.edit().putInt(KEY_MESSAGES_USED_TODAY, updated).apply()
-        return getUsageInfo(false)
+        return try {
+            ensureCurrentDay()
+            val current = prefs.getInt(KEY_MESSAGES_USED_TODAY, 0)
+            val updated = (current + 1).coerceAtMost(CURB_AI_FREE_DAILY_LIMIT)
+            prefs.edit().putInt(KEY_MESSAGES_USED_TODAY, updated).apply()
+            getUsageInfo(false)
+        } catch (_: Throwable) {
+            getUsageInfo(false)
+        }
     }
 
     @Synchronized
     fun resetUsage() {
-        prefs.edit()
-            .putString(KEY_USAGE_DATE_KEY, getCurrentDateKey())
-            .putInt(KEY_MESSAGES_USED_TODAY, 0)
-            .apply()
+        try {
+            prefs.edit()
+                .putString(KEY_USAGE_DATE_KEY, getCurrentDateKey())
+                .putInt(KEY_MESSAGES_USED_TODAY, 0)
+                .apply()
+        } catch (_: Throwable) {}
     }
 }

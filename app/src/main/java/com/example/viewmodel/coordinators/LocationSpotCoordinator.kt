@@ -43,19 +43,21 @@ class LocationSpotCoordinator(
     private var lastRouteFetchLng: Double? = null
 
     init {
-        if (locationService.hasLocationPermission()) {
-            refreshLocation()
-        }
+        // Defer location initialization out of startup chain so cold launch never blocks or crashes on location APIs
     }
 
     fun refreshLocation() {
         coroutineScope.launch {
-            if (!locationService.hasLocationPermission()) {
-                _userLocationState.value = UserLocationResult.PermissionRequired()
-                return@launch
+            try {
+                if (!locationService.hasLocationPermission()) {
+                    _userLocationState.value = UserLocationResult.PermissionRequired()
+                    return@launch
+                }
+                val result = locationService.fetchCurrentLocation()
+                _userLocationState.value = result
+            } catch (e: Throwable) {
+                _userLocationState.value = UserLocationResult.Unavailable("Location unavailable")
             }
-            val result = locationService.fetchCurrentLocation()
-            _userLocationState.value = result
         }
     }
 

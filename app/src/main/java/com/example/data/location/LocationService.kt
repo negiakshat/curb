@@ -269,19 +269,23 @@ class LocationService(private val context: Context) {
                         try {
                             geocoder.getFromLocation(latitude, longitude, 1, object : Geocoder.GeocodeListener {
                                 override fun onGeocode(results: MutableList<Address>) {
-                                    continuation.resume(results)
+                                    if (continuation.isActive) continuation.resume(results)
                                 }
                                 override fun onError(errorMessage: String?) {
-                                    continuation.resume(emptyList())
+                                    if (continuation.isActive) continuation.resume(emptyList())
                                 }
                             })
-                        } catch (e: Exception) {
-                            continuation.resume(emptyList())
+                        } catch (e: Throwable) {
+                            if (continuation.isActive) continuation.resume(emptyList())
                         }
                     }
                 } else {
-                    @Suppress("DEPRECATION")
-                    geocoder.getFromLocation(latitude, longitude, 1)
+                    try {
+                        @Suppress("DEPRECATION")
+                        geocoder.getFromLocation(latitude, longitude, 1)
+                    } catch (e: Throwable) {
+                        emptyList()
+                    }
                 }
 
                 val address = addresses?.firstOrNull()
@@ -330,13 +334,17 @@ class LocationService(private val context: Context) {
         }
 
     private suspend fun <T> Task<T>.awaitTask(): T? = suspendCancellableCoroutine { cont ->
-        addOnSuccessListener { result ->
-            if (cont.isActive) cont.resume(result)
-        }
-        addOnFailureListener {
-            if (cont.isActive) cont.resume(null)
-        }
-        addOnCanceledListener {
+        try {
+            addOnSuccessListener { result ->
+                if (cont.isActive) cont.resume(result)
+            }
+            addOnFailureListener {
+                if (cont.isActive) cont.resume(null)
+            }
+            addOnCanceledListener {
+                if (cont.isActive) cont.resume(null)
+            }
+        } catch (_: Throwable) {
             if (cont.isActive) cont.resume(null)
         }
     }

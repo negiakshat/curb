@@ -53,7 +53,9 @@ import com.example.viewmodel.CurbViewModel
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        com.example.notification.ParkingNotificationScheduler.createNotificationChannel(applicationContext)
+        try {
+            com.example.notification.ParkingNotificationScheduler.createNotificationChannel(applicationContext)
+        } catch (_: Throwable) {}
         enableEdgeToEdge()
         setContent {
             CurbTheme {
@@ -118,17 +120,21 @@ fun CurbApp(
         if (intent == null) return@LaunchedEffect
         val targetRoute = try {
             intent.getStringExtra(com.example.notification.ParkingNotificationScheduler.EXTRA_NAVIGATE_ROUTE)
-        } catch (_: Exception) { null }
+        } catch (_: Throwable) { null }
         val sessionId = try {
             intent.getLongExtra(com.example.notification.ParkingNotificationScheduler.EXTRA_SESSION_ID, -1L)
-        } catch (_: Exception) { -1L }
+        } catch (_: Throwable) { -1L }
         if (targetRoute == Routes.PARKING_TIMER) {
-            if (sessionId > 0) {
-                viewModel.loadSessionById(sessionId)
-            }
-            navController.navigate(Routes.PARKING_TIMER) {
-                popUpTo(Routes.HOME) { inclusive = false }
-                launchSingleTop = true
+            try {
+                if (sessionId > 0) {
+                    viewModel.loadSessionById(sessionId)
+                }
+                navController.navigate(Routes.PARKING_TIMER) {
+                    popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
+                    launchSingleTop = true
+                }
+            } catch (e: Throwable) {
+                android.util.Log.w("MainActivity", "Handled intent navigation failure: ${e.message}")
             }
         }
     }

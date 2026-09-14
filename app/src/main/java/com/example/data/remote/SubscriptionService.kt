@@ -191,16 +191,24 @@ class SubscriptionService(private val context: Context) {
 
             Log.d(TAG, "RevenueCat configured: ${Purchases.isConfigured}, key type: $keyType")
 
-            _subscriptionState.value = _subscriptionState.value.copy(isConfigured = true)
+            if (Purchases.isConfigured) {
+                _subscriptionState.value = _subscriptionState.value.copy(isConfigured = true)
 
-            // Setup real-time customer info listener
-            Purchases.sharedInstance.updatedCustomerInfoListener = UpdatedCustomerInfoListener { customerInfo ->
-                handleCustomerInfo(customerInfo)
+                // Setup real-time customer info listener
+                Purchases.sharedInstance.updatedCustomerInfoListener = UpdatedCustomerInfoListener { customerInfo ->
+                    handleCustomerInfo(customerInfo)
+                }
+
+                // Fetch initial customer info and offerings
+                refreshCustomerInfo()
+                fetchOfferings()
+            } else {
+                _subscriptionState.value = _subscriptionState.value.copy(
+                    isConfigured = false,
+                    packages = DEFAULT_PACKAGES,
+                    isLoading = false
+                )
             }
-
-            // Fetch initial customer info and offerings
-            refreshCustomerInfo()
-            fetchOfferings()
 
         } catch (e: Throwable) {
             Log.w(TAG, "RevenueCat initialization handled: ${e.message}")

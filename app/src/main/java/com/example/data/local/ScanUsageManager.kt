@@ -52,52 +52,73 @@ class ScanUsageManager(context: Context) {
     }
 
     private fun ensureCurrentMonth() {
-        val currentMonth = getCurrentMonthKey()
-        val savedMonth = prefs.getString(KEY_MONTH_KEY, null)
-        if (savedMonth != currentMonth) {
-            // New calendar month: reset free scan usage
-            prefs.edit()
-                .putString(KEY_MONTH_KEY, currentMonth)
-                .putInt(KEY_SCANS_USED, 0)
-                .apply()
-        }
+        try {
+            val currentMonth = getCurrentMonthKey()
+            val savedMonth = prefs.getString(KEY_MONTH_KEY, null)
+            if (savedMonth != currentMonth) {
+                // New calendar month: reset free scan usage
+                prefs.edit()
+                    .putString(KEY_MONTH_KEY, currentMonth)
+                    .putInt(KEY_SCANS_USED, 0)
+                    .apply()
+            }
+        } catch (_: Throwable) {}
     }
 
     @Synchronized
     fun getUsageInfo(isPro: Boolean): ScanUsageInfo {
-        ensureCurrentMonth()
-        val scansUsed = prefs.getInt(KEY_SCANS_USED, 0)
-        return ScanUsageInfo(
-            scansUsed = scansUsed,
-            monthlyLimit = MONTHLY_FREE_LIMIT,
-            currentMonthFormatted = getHumanReadableMonth(),
-            isPro = isPro
-        )
+        return try {
+            ensureCurrentMonth()
+            val scansUsed = prefs.getInt(KEY_SCANS_USED, 0)
+            ScanUsageInfo(
+                scansUsed = scansUsed,
+                monthlyLimit = MONTHLY_FREE_LIMIT,
+                currentMonthFormatted = getHumanReadableMonth(),
+                isPro = isPro
+            )
+        } catch (_: Throwable) {
+            ScanUsageInfo(
+                scansUsed = 0,
+                monthlyLimit = MONTHLY_FREE_LIMIT,
+                currentMonthFormatted = "",
+                isPro = isPro
+            )
+        }
     }
 
     @Synchronized
     fun canPerformScan(isPro: Boolean): Boolean {
         if (isPro) return true
-        ensureCurrentMonth()
-        val scansUsed = prefs.getInt(KEY_SCANS_USED, 0)
-        return scansUsed < MONTHLY_FREE_LIMIT
+        return try {
+            ensureCurrentMonth()
+            val scansUsed = prefs.getInt(KEY_SCANS_USED, 0)
+            scansUsed < MONTHLY_FREE_LIMIT
+        } catch (_: Throwable) {
+            true
+        }
     }
 
     @Synchronized
     fun consumeScan(isPro: Boolean): ScanUsageInfo {
         if (isPro) return getUsageInfo(true)
-        ensureCurrentMonth()
-        val current = prefs.getInt(KEY_SCANS_USED, 0)
-        val updated = (current + 1).coerceAtMost(MONTHLY_FREE_LIMIT)
-        prefs.edit().putInt(KEY_SCANS_USED, updated).apply()
-        return getUsageInfo(false)
+        return try {
+            ensureCurrentMonth()
+            val current = prefs.getInt(KEY_SCANS_USED, 0)
+            val updated = (current + 1).coerceAtMost(MONTHLY_FREE_LIMIT)
+            prefs.edit().putInt(KEY_SCANS_USED, updated).apply()
+            getUsageInfo(false)
+        } catch (_: Throwable) {
+            getUsageInfo(false)
+        }
     }
 
     @Synchronized
     fun resetUsage() {
-        prefs.edit()
-            .putString(KEY_MONTH_KEY, getCurrentMonthKey())
-            .putInt(KEY_SCANS_USED, 0)
-            .apply()
+        try {
+            prefs.edit()
+                .putString(KEY_MONTH_KEY, getCurrentMonthKey())
+                .putInt(KEY_SCANS_USED, 0)
+                .apply()
+        } catch (_: Throwable) {}
     }
 }
