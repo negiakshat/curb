@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 
 sealed class PromoCodeResult {
     data object Success : PromoCodeResult()
@@ -152,11 +153,23 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     val targetSession: StateFlow<ActiveParkingSession?> = _targetSession.asStateFlow()
 
     init {
-        // Initialize RevenueCat with anonymous app user ID
-        subscriptionService.initialize { isProActive ->
-            val updated = profileCoordinator.userProfile.value.copy(isPro = isProActive)
-            profileCoordinator.updateUserProfile(updated)
-            usageCoordinator.refreshUsageInfo()
+        // RevenueCat is optional and must not block the first frame. Yield once so
+        // the basic app shell can render before any billing SDK work begins.
+        viewModelScope.launch {
+            yield()
+            try {
+                subscriptionService.initialize { isProActive ->
+                    try {
+                        val updated = profileCoordinator.userProfile.value.copy(isPro = isProActive)
+                        profileCoordinator.updateUserProfile(updated)
+                        usageCoordinator.refreshUsageInfo()
+                    } catch (e: Exception) {
+                        android.util.Log.w("CurbViewModel", "RevenueCat status update skipped: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("CurbViewModel", "Optional RevenueCat startup skipped: ${e.message}")
+            }
         }
     }
 
