@@ -1,5 +1,7 @@
 package com.example.data.model
 
+import com.squareup.moshi.JsonClass
+
 enum class ScanVerdict {
     ALLOWED,
     RESTRICTED,
@@ -20,6 +22,7 @@ enum class ScanVerdict {
         }
 }
 
+@JsonClass(generateAdapter = true)
 data class SignBoundingBox(
     val id: String,
     val left: Float,
@@ -33,6 +36,7 @@ data class SignBoundingBox(
     val sourceHeight: Float = 0f
 )
 
+@JsonClass(generateAdapter = true)
 data class DetectedSign(
     val id: String,
     val title: String,

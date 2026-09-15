@@ -17,8 +17,8 @@ import com.example.data.model.ScanVerdict
 import com.example.util.ParkingTimerCalculator
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
 class CurbRepository(context: Context) {
@@ -30,42 +30,48 @@ class CurbRepository(context: Context) {
     private val noteDao = database.noteDao()
     private val parkingSpotDao = database.parkingSpotDao()
 
-    private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    private val moshi: Moshi by lazy {
+        try {
+            Moshi.Builder().build()
+        } catch (_: Throwable) {
+            Moshi.Builder().build()
+        }
+    }
     private val stringListType = Types.newParameterizedType(List::class.java, String::class.java)
-    private val stringListAdapter = moshi.adapter<List<String>>(stringListType)
+    private val stringListAdapter by lazy { moshi.adapter<List<String>>(stringListType) }
     private val signListType = Types.newParameterizedType(List::class.java, DetectedSign::class.java)
-    private val signListAdapter = moshi.adapter<List<DetectedSign>>(signListType)
+    private val signListAdapter by lazy { moshi.adapter<List<DetectedSign>>(signListType) }
 
     val allScans: Flow<List<ScanResult>> = scanDao.getAllScans().map { entities ->
         entities.map { entityToScanResult(it) }
-    }
+    }.catch { emit(emptyList()) }
 
     val activeSession: Flow<ActiveParkingSession?> = parkingSessionDao.getActiveSession().map { entity ->
         entity?.let { entityToParkingSession(it) }
-    }
+    }.catch { emit(null) }
 
     val allSessions: Flow<List<ActiveParkingSession>> = parkingSessionDao.getAllSessions().map { entities ->
         entities.map { entityToParkingSession(it) }
-    }
+    }.catch { emit(emptyList()) }
 
     val savedParkingSpot: Flow<ParkingSpot?> = parkingSpotDao.getActiveParkingSpot().map { entity ->
         entity?.let { entityToParkingSpot(it) }
-    }
+    }.catch { emit(null) }
 
     val demoSavedParkingSpot: Flow<ParkingSpot?> = parkingSpotDao.getDemoActiveParkingSpot().map { entity ->
         entity?.let { entityToParkingSpot(it) }
-    }
+    }.catch { emit(null) }
 
     val savedPlaces: Flow<List<SavedPlace>> = savedPlaceDao.getAllSavedPlaces().map { entities ->
         entities.map { entityToSavedPlace(it) }
-    }
+    }.catch { emit(emptyList()) }
 
     val allNotes: Flow<List<CurbNote>> = noteDao.getAllNotes().map { entities ->
         entities.map { entityToCurbNote(it) }
-    }
+    }.catch { emit(emptyList()) }
 
     fun getNoteFlow(targetType: String, targetId: Long): Flow<CurbNote?> {
-        return noteDao.getNoteFlow(targetType, targetId).map { it?.let { entityToCurbNote(it) } }
+        return noteDao.getNoteFlow(targetType, targetId).map { it?.let { entityToCurbNote(it) } }.catch { emit(null) }
     }
 
     suspend fun getNote(targetType: String, targetId: Long): CurbNote? {
