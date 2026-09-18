@@ -36,11 +36,18 @@ class ScanCoordinator(
     private val _isProcessingScan = MutableStateFlow(false)
     val isProcessingScan: StateFlow<Boolean> = _isProcessingScan.asStateFlow()
 
+    private val _scanError = MutableStateFlow<String?>(null)
+    val scanError: StateFlow<String?> = _scanError.asStateFlow()
+
     private val _processingStatusText = MutableStateFlow("Reading your parking sign…")
     val processingStatusText: StateFlow<String> = _processingStatusText.asStateFlow()
 
     fun setCurrentScan(scanResult: ScanResult) {
         _currentScanResult.value = scanResult
+    }
+
+    fun clearScanError() {
+        _scanError.value = null
     }
 
     fun canPerformScan(isUserPro: Boolean): Boolean {
@@ -50,6 +57,7 @@ class ScanCoordinator(
     fun resetScanState() {
         _currentScanResult.value = null
         _isProcessingScan.value = false
+        _scanError.value = null
         _processingStatusText.value = "Reading your parking sign…"
     }
 
@@ -61,7 +69,8 @@ class ScanCoordinator(
         localDetections: List<LocalSignCrop> = emptyList(),
         isUserPro: Boolean,
         onPaywallRequired: () -> Unit,
-        onComplete: () -> Unit
+        onComplete: () -> Unit,
+        onError: ((String) -> Unit)? = null
     ) {
         if (_isProcessingScan.value) return
 
@@ -72,40 +81,54 @@ class ScanCoordinator(
 
         coroutineScope.launch {
             _isProcessingScan.value = true
+            _scanError.value = null
             _processingStatusText.value = "Reading your parking sign…"
+            val totalScanStart = System.currentTimeMillis()
 
             try {
+                // Stage 1: Fast Crop Generation / Local Sign Detection
+                val stage1Start = System.currentTimeMillis()
                 val detectedCrops = if (localDetections.isNotEmpty()) {
                     Log.d("CurbPipeline", "Using pre-supplied local detections: ${localDetections.size}")
                     localDetections
                 } else if (bitmap != null) {
-                    Log.d("CurbPipeline", "Running on-device sign detection on captured bitmap ${bitmap.width}x${bitmap.height}")
-                    val detectionResult = SignDetectionService.detectAndCropSigns(
-                        application,
-                        bitmap
-                    )
-                    if (detectionResult.signs.isNotEmpty()) {
-                        detectionResult.signs
-                    } else if (detectionBoxes.isNotEmpty()) {
-                        SignDetectionService.cropSignsFromBoxes(
+                    if (detectionBoxes.isNotEmpty()) {
+                        Log.d("CurbTiming", "Attempting fast crop from live detection boxes: ${detectionBoxes.size}")
+                        val liveCrops = SignDetectionService.cropSignsFromBoxes(
                             application,
                             bitmap,
                             detectionBoxes
                         )
+                        if (liveCrops.isNotEmpty()) {
+                            Log.d("CurbTiming", "Successfully extracted ${liveCrops.size} validated crops from live boxes in ${System.currentTimeMillis() - stage1Start} ms (bypassed full OCR)")
+                            liveCrops
+                        } else {
+                            Log.d("CurbTiming", "Live boxes yielded 0 validated crops, falling back to full bitmap OCR")
+                            val detectionResult = SignDetectionService.detectAndCropSigns(
+                                application,
+                                bitmap
+                            )
+                            detectionResult.signs
+                        }
                     } else {
-                        emptyList()
+                        Log.d("CurbTiming", "No live detection boxes available, running on-device OCR on captured bitmap ${bitmap.width}x${bitmap.height}")
+                        val detectionResult = SignDetectionService.detectAndCropSigns(
+                            application,
+                            bitmap
+                        )
+                        detectionResult.signs
                     }
                 } else {
                     emptyList()
                 }
 
-                Log.d(
-                    "CurbPipeline",
-                    "Final detected crops count: ${detectedCrops.size} (files: ${detectedCrops.map { it.fileUri }})"
-                )
+                val stage1Time = System.currentTimeMillis() - stage1Start
+                Log.d("CurbTiming", "Stage 1 (Detection & Cropping) finished in $stage1Time ms. Validated crops: ${detectedCrops.size}")
 
                 _processingStatusText.value = "Reading your parking sign…"
 
+                // Stage 2: Location Resolution
+                val stage2Start = System.currentTimeMillis()
                 val (resolvedLocName, resolvedCityState, isKnown) = if (!explicitLocationName.isNullOrBlank()) {
                     Triple(explicitLocationName, explicitCityState ?: "", true)
                 } else {
@@ -127,7 +150,11 @@ class ScanCoordinator(
                         }
                     }
                 }
+                val stage2Time = System.currentTimeMillis() - stage2Start
+                Log.d("CurbTiming", "Stage 2 (Location Resolution) finished in $stage2Time ms: $resolvedLocName")
 
+                // Stage 3: Gemini / Evidence-Anchored Analysis
+                val stage3Start = System.currentTimeMillis()
                 val result = GeminiService.analyzeParkingSigns(
                     bitmap = bitmap,
                     locationName = resolvedLocName,
@@ -136,16 +163,29 @@ class ScanCoordinator(
                     localDetections = detectedCrops,
                     context = application
                 )
+                val stage3Time = System.currentTimeMillis() - stage3Start
+                Log.d("CurbTiming", "Stage 3 (Gemini & Evidence Anchoring) finished in $stage3Time ms. Verdict: ${result.verdict}")
+
+                // Stage 4: Database Save & Usage
+                val stage4Start = System.currentTimeMillis()
                 val scanId = repository.saveScan(result)
                 val savedResult = result.copy(id = scanId)
                 _currentScanResult.value = savedResult
-
                 scanUsageManager.consumeScan(isUserPro)
+                val stage4Time = System.currentTimeMillis() - stage4Start
+                Log.d("CurbTiming", "Stage 4 (DB Save & Usage) finished in $stage4Time ms. ScanId: $scanId")
+
+                val totalDuration = System.currentTimeMillis() - totalScanStart
+                Log.d("CurbTiming", "Total Scan Pipeline completed in $totalDuration ms")
+
+                onComplete()
             } catch (e: Exception) {
                 Log.e("CurbPipeline", "Error analyzing parking sign", e)
+                val errorMsg = e.message ?: "Unable to analyze parking signs. Please ensure the sign is clear and try again."
+                _scanError.value = errorMsg
+                onError?.invoke(errorMsg)
             } finally {
                 _isProcessingScan.value = false
-                onComplete()
             }
         }
     }
@@ -154,7 +194,8 @@ class ScanCoordinator(
         preset: SampleSignPreset,
         isUserPro: Boolean,
         onPaywallRequired: () -> Unit = {},
-        onComplete: () -> Unit
+        onComplete: () -> Unit,
+        onError: ((String) -> Unit)? = null
     ) {
         if (_isProcessingScan.value) return
 
@@ -165,6 +206,7 @@ class ScanCoordinator(
 
         coroutineScope.launch {
             _isProcessingScan.value = true
+            _scanError.value = null
             _processingStatusText.value = "Reading your parking sign…"
             try {
                 delay(1000)
@@ -203,11 +245,14 @@ class ScanCoordinator(
                 _currentScanResult.value = finalResult
 
                 scanUsageManager.consumeScan(isUserPro)
+                onComplete()
             } catch (e: Exception) {
                 Log.e("CurbPipeline", "Error processing preset sign", e)
+                val errorMsg = e.message ?: "Failed to process preset sign."
+                _scanError.value = errorMsg
+                onError?.invoke(errorMsg)
             } finally {
                 _isProcessingScan.value = false
-                onComplete()
             }
         }
     }

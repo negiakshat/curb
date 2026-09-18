@@ -199,7 +199,7 @@ object GeminiService {
                         } else null
                     } else null
 
-                    val b64 = cropBmp?.toOptimizedBase64(maxDimension = 1024, quality = 85)
+                    val b64 = cropBmp?.toOptimizedBase64(maxDimension = 800, quality = 80)
                     if (!b64.isNullOrBlank()) {
                         partsArray.put(JSONObject().apply {
                             put("inlineData", JSONObject().apply {
@@ -210,9 +210,9 @@ object GeminiService {
                     }
                 }
 
-                // 2. Add full captured photo context (scaled safely to 1280px max to optimize payload size)
-                if (bitmap != null && !bitmap.isRecycled) {
-                    val fullB64 = bitmap.toOptimizedBase64(maxDimension = 1280, quality = 80)
+                // 2. Add full captured photo context only when multiple signs exist and contextual relationship is genuinely useful
+                if (validDetections.size > 1 && bitmap != null && !bitmap.isRecycled) {
+                    val fullB64 = bitmap.toOptimizedBase64(maxDimension = 960, quality = 70)
                     if (!fullB64.isNullOrBlank()) {
                         partsArray.put(JSONObject().apply {
                             put("inlineData", JSONObject().apply {
@@ -223,7 +223,7 @@ object GeminiService {
                     }
                 }
 
-                android.util.Log.d("CurbTiming", "Image payload encoding completed in ${System.currentTimeMillis() - encodeStartTime} ms")
+                android.util.Log.d("CurbTiming", "Image payload encoding completed in ${System.currentTimeMillis() - encodeStartTime} ms (crops=${validDetections.size}, fullContext=${validDetections.size > 1})")
 
                 val geminiRequestStart = System.currentTimeMillis()
                 android.util.Log.d("CurbTiming", "Gemini API request started")
@@ -236,6 +236,10 @@ object GeminiService {
                         put(contentObj)
                     }
                     put("contents", contentsArray)
+                    put("generationConfig", JSONObject().apply {
+                        put("responseMimeType", "application/json")
+                        put("temperature", 0.1)
+                    })
                 }
 
                 val request = Request.Builder()
@@ -248,6 +252,7 @@ object GeminiService {
                 android.util.Log.d("CurbTiming", "Gemini API request completed in ${geminiDuration} ms with HTTP ${response.code}")
                 val responseString = response.body?.string() ?: ""
                 if (response.isSuccessful && responseString.isNotEmpty()) {
+                    val parseStartTime = System.currentTimeMillis()
                     val rootJson = JSONObject(responseString)
                     val candidates = rootJson.optJSONArray("candidates")
                     val firstCandidate = candidates?.optJSONObject(0)
@@ -333,6 +338,9 @@ object GeminiService {
                         paymentInfo = parsed.optString("paymentInfo", ""),
                         vehicleApplicability = parsed.optString("vehicleApplicability", "")
                     )
+
+                    val parseDuration = System.currentTimeMillis() - parseStartTime
+                    android.util.Log.d("CurbTiming", "Gemini response parsing completed in ${parseDuration} ms")
 
                     val totalTime = System.currentTimeMillis() - totalScanStartTime
                     android.util.Log.d("CurbTiming", "Total scan analysis completed via Gemini in $totalTime ms")

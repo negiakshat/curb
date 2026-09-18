@@ -37,7 +37,8 @@ data class LocalSignCrop(
     val ocrText: String,
     val fileUri: String,
     val bitmap: Bitmap,
-    val isDemo: Boolean = false
+    val isDemo: Boolean = false,
+    val ocrQuality: com.example.util.OcrQuality = com.example.util.OcrQuality.CLEAR
 )
 
 data class LocalDetectionResult(
@@ -64,7 +65,8 @@ data class PhysicallyValidatedSignCandidate(
     val id: String,
     val ocrCandidate: OcrCandidateBox,
     val paddedCropRect: Rect,
-    val isUncertain: Boolean = false
+    val isUncertain: Boolean = false,
+    val ocrQuality: com.example.util.OcrQuality = com.example.util.OcrQuality.CLEAR
 )
 
 data class InternalSignDetection(
@@ -206,14 +208,16 @@ object SignDetectionService {
             val cropBottom = (rect.bottom + padY).coerceIn(cropTop + 1, bmpHeight)
 
             val cleanText = candidate.text.trim()
-            val isSparseText = cleanText.length <= 6 || !SignCandidateValidator.containsExplicitParkingRule(cleanText)
+            val quality = (validation as? CandidateValidation.Valid)?.quality ?: com.example.util.OcrQuality.CLEAR
+            val isSparseText = cleanText.length <= 6 || quality == com.example.util.OcrQuality.WEAK || !SignCandidateValidator.containsExplicitParkingRule(cleanText)
 
             validatedCandidates.add(
                 PhysicallyValidatedSignCandidate(
                     id = "sign_${validatedCandidates.size + 1}",
                     ocrCandidate = candidate,
                     paddedCropRect = Rect(cropLeft, cropTop, cropRight, cropBottom),
-                    isUncertain = isSparseText
+                    isUncertain = isSparseText,
+                    ocrQuality = quality
                 )
             )
         }
@@ -260,7 +264,8 @@ object SignDetectionService {
                                 normalizedBox = normalizedBox,
                                 ocrText = candidate.ocrCandidate.text,
                                 fileUri = cropFile.absolutePath,
-                                bitmap = croppedBmp
+                                bitmap = croppedBmp,
+                                ocrQuality = candidate.ocrQuality
                             )
                         )
                     }
@@ -327,6 +332,7 @@ object SignDetectionService {
                 return@forEachIndexed
             }
 
+            val quality = (validation as? CandidateValidation.Valid)?.quality ?: com.example.util.OcrQuality.CLEAR
             val signId = "sign_${crops.size + 1}"
             val padX = ((rawRight - rawLeft) * 0.15f).toInt().coerceAtLeast(14)
             val padY = ((rawBottom - rawTop) * 0.15f).toInt().coerceAtLeast(14)
@@ -362,7 +368,8 @@ object SignDetectionService {
                                     ),
                                     ocrText = box.ocrText,
                                     fileUri = cropFile.absolutePath,
-                                    bitmap = croppedBmp
+                                    bitmap = croppedBmp,
+                                    ocrQuality = quality
                                 )
                             )
                         }

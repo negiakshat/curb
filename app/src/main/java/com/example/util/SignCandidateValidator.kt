@@ -2,8 +2,16 @@ package com.example.util
 
 import java.util.Locale
 
+enum class OcrQuality {
+    CLEAR,
+    PARTIAL,
+    WEAK
+}
+
 sealed class CandidateValidation {
-    object Valid : CandidateValidation()
+    open class Valid(val quality: OcrQuality = OcrQuality.CLEAR) : CandidateValidation() {
+        companion object : Valid(OcrQuality.CLEAR)
+    }
     data class Invalid(val reason: String) : CandidateValidation()
 
     val isValid: Boolean get() = this is Valid
@@ -17,7 +25,7 @@ object SignCandidateValidator {
     private val HASH_TOKEN_REGEX = Regex("""(?i)\b[a-f0-9]{16,}\b|\b[a-zA-Z0-9_-]{24,}\b""")
     private val UNIX_TIMESTAMP_REGEX = Regex("""\b1[6-9]\d{11,}\b|:\d{10,}:?""")
     private val FILE_PATH_REGEX = Regex("""(?i)\b(IMG_\d+|DCIM|\.jpe?g|\.png|\.json|file://|crop_live_|crop_\d+)\b""")
-    private val CODE_FRAGMENT_REGEX = Regex("""(?i)(\{"|"\s*:|function\s*\(|var\s+|let\s+|const\s+|</?[a-z]+>)""")
+    private val CODE_FRAGMENT_REGEX = Regex("""(?i)(\{"|"\s*:|function\b|var\s+|let\s+|const\s+|</?[a-z]+>)""")
 
     // Parking domain vocabulary keywords
     private val PARKING_KEYWORDS = setOf(
@@ -85,7 +93,7 @@ object SignCandidateValidator {
 
         // 7. Check if string has any meaningful parking language or schedule patterns
         if (containsExplicitParkingRule(text)) {
-            return CandidateValidation.Valid
+            return CandidateValidation.Valid(OcrQuality.CLEAR)
         }
 
         // If string is a short sign symbol, hour designation, or permit/zone pattern, accept
@@ -93,7 +101,7 @@ object SignCandidateValidator {
             Regex("""(?i)^(P|\d{1,2}\s*(H|HR|HRS|M|MIN|MINS)|[P]\s*\d{1,2}\s*(H|HR|HRS|M|MIN|MINS)?|\d{1,2}\s*-\s*\d{1,2}|ZONE\s*[A-Z0-9]+|PERMIT\s*[A-Z0-9]+|NO\s*PARKING|NO\s*STOPPING|TOW\s*AWAY)$""")
         )
         if (isShortSignSymbol) {
-            return CandidateValidation.Valid
+            return CandidateValidation.Valid(OcrQuality.CLEAR)
         }
 
         // If string has words, check if any word is a parking keyword
@@ -103,12 +111,26 @@ object SignCandidateValidator {
 
         val hasKeyword = uppercaseWords.any { word -> PARKING_KEYWORDS.contains(word) }
         if (hasKeyword) {
-            return CandidateValidation.Valid
+            return CandidateValidation.Valid(OcrQuality.PARTIAL)
         }
 
         // If string is short (e.g. "PARK", "STOP") or has valid parking words, accept
         if (uppercaseWords.size <= 2 && uppercaseWords.any { it.length >= 2 && ("PARK".contains(it) || "STOP".contains(it) || "TOW".contains(it) || "METER".contains(it) || it == "NO" || it == "HR" || it == "P") }) {
-            return CandidateValidation.Valid
+            return CandidateValidation.Valid(OcrQuality.PARTIAL)
+        }
+
+        // 8. Weak OCR candidate check:
+        // A physically grounded sign with imperfect OCR (small text, blurry, symbols, P-symbol, sparse words, numbers/times)
+        // Must contain legitimate alphanumeric characters, not machine garbage or symbols
+        val hasAlphanumeric = text.any { it.isLetterOrDigit() }
+        val hasLetters = text.any { it.isLetter() }
+        val isNonGarbageText = hasAlphanumeric && hasLetters && text.length in 1..250
+
+        if (isNonGarbageText) {
+            val containsDigitsOrShortTokens = text.any { it.isDigit() } || uppercaseWords.any { it.length in 1..5 }
+            if (containsDigitsOrShortTokens) {
+                return CandidateValidation.Valid(OcrQuality.WEAK)
+            }
         }
 
         return CandidateValidation.Invalid("No recognizable parking sign vocabulary or schedule detected")
@@ -185,7 +207,8 @@ object SignCandidateValidator {
             return CandidateValidation.Invalid("Implausible sign aspect ratio (${String.format(Locale.US, "%.2f", aspect)})")
         }
 
-        return CandidateValidation.Valid
+        val quality = (ocrValidation as? CandidateValidation.Valid)?.quality ?: OcrQuality.CLEAR
+        return CandidateValidation.Valid(quality)
     }
 
     fun containsExplicitParkingRule(text: String): Boolean {

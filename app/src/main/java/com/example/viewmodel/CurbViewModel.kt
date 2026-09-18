@@ -132,6 +132,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     val currentScanResult: StateFlow<ScanResult?> = scanCoordinator.currentScanResult
     val isProcessingScan: StateFlow<Boolean> = scanCoordinator.isProcessingScan
+    val scanError: StateFlow<String?> = scanCoordinator.scanError
     val processingStatusText: StateFlow<String> = scanCoordinator.processingStatusText
 
     val chatMessages: StateFlow<List<ChatMessage>> = chatCoordinator.chatMessages
@@ -288,6 +289,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     // Scan Methods
     fun setCurrentScan(scanResult: ScanResult) = scanCoordinator.setCurrentScan(scanResult)
+    fun clearScanError() = scanCoordinator.clearScanError()
 
     fun processCapturedImage(
         bitmap: Bitmap?,
@@ -296,7 +298,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         detectionBoxes: List<SignBoundingBox> = emptyList(),
         localDetections: List<LocalSignCrop> = emptyList(),
         onPaywallRequired: () -> Unit,
-        onComplete: () -> Unit
+        onComplete: () -> Unit,
+        onError: ((String) -> Unit)? = null
     ) {
         scanCoordinator.processCapturedImage(
             bitmap = bitmap,
@@ -309,14 +312,16 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             onComplete = {
                 usageCoordinator.refreshUsageInfo()
                 onComplete()
-            }
+            },
+            onError = onError
         )
     }
 
     fun processPresetSign(
         preset: SampleSignPreset,
         onPaywallRequired: () -> Unit = {},
-        onComplete: () -> Unit
+        onComplete: () -> Unit,
+        onError: ((String) -> Unit)? = null
     ) {
         scanCoordinator.processPresetSign(
             preset = preset,
@@ -325,7 +330,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
             onComplete = {
                 usageCoordinator.refreshUsageInfo()
                 onComplete()
-            }
+            },
+            onError = onError
         )
     }
 

@@ -65,6 +65,7 @@ fun CurbNavGraph(
     val allNotes by viewModel.allNotes.collectAsStateWithLifecycle()
     val currentScanResult by viewModel.currentScanResult.collectAsStateWithLifecycle()
     val isProcessingScan by viewModel.isProcessingScan.collectAsStateWithLifecycle()
+    val scanError by viewModel.scanError.collectAsStateWithLifecycle()
     val processingStatusText by viewModel.processingStatusText.collectAsStateWithLifecycle()
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val isChatLoading by viewModel.isChatLoading.collectAsStateWithLifecycle()
@@ -137,11 +138,12 @@ fun CurbNavGraph(
 
         // 05. HOME
         composable(Routes.HOME) {
+            val effectiveSpotForHome = if (activeSession?.isDemo == true) demoSavedParkingSpot else savedParkingSpot
             HomeScreen(
                 userProfile = userProfile,
                 isPro = isUserPro,
                 activeSession = activeSession,
-                savedParkingSpot = savedParkingSpot,
+                savedParkingSpot = effectiveSpotForHome,
                 recentScans = recentScans,
                 usageInfo = scanUsageInfo,
                 userLocationResult = userLocationState,
@@ -149,10 +151,14 @@ fun CurbNavGraph(
                     navController.navigate(Routes.SCAN)
                 },
                 onParkingTimerClicked = {
-                    navController.navigate(Routes.PARKING_TIMER)
+                    navController.navigate(Routes.PARKING_TIMER) {
+                        launchSingleTop = true
+                    }
                 },
                 onFindMyCarClicked = {
-                    navController.navigate(Routes.FIND_MY_CAR)
+                    navController.navigate(Routes.FIND_MY_CAR) {
+                        launchSingleTop = true
+                    }
                 },
                 onSavedPlacesClicked = {
                     navController.navigate(Routes.SAVED_PLACES)
@@ -203,6 +209,8 @@ fun CurbNavGraph(
             ScanScreen(
                 isProcessing = isProcessingScan,
                 processingStatusText = processingStatusText,
+                scanError = scanError,
+                onClearScanError = { viewModel.clearScanError() },
                 usageInfo = scanUsageInfo,
                 isPro = isUserPro,
                 onCaptureImage = { bitmap, boxes ->
@@ -219,6 +227,9 @@ fun CurbNavGraph(
                         },
                         onComplete = {
                             navController.navigate(Routes.SCAN_OUTPUT)
+                        },
+                        onError = { err ->
+                            Toast.makeText(context, err, Toast.LENGTH_LONG).show()
                         }
                     )
                 },
@@ -235,6 +246,9 @@ fun CurbNavGraph(
                         },
                         onComplete = {
                             navController.navigate(Routes.SCAN_OUTPUT)
+                        },
+                        onError = { err ->
+                            Toast.makeText(context, err, Toast.LENGTH_LONG).show()
                         }
                     )
                 },
@@ -627,7 +641,9 @@ fun CurbNavGraph(
                     }
                 },
                 onNavigateToFindMyCar = {
-                    navController.navigate(Routes.FIND_MY_CAR)
+                    navController.navigate(Routes.FIND_MY_CAR) {
+                        launchSingleTop = true
+                    }
                 },
                 onStartQuickTimer = { minutes, limitText ->
                     val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
@@ -663,8 +679,9 @@ fun CurbNavGraph(
 
         // 22. FIND MY CAR
         composable(Routes.FIND_MY_CAR) {
+            val effectiveSpotForFind = if (activeSession?.isDemo == true) demoSavedParkingSpot else savedParkingSpot
             FindMyCarScreen(
-                savedParkingSpot = savedParkingSpot,
+                savedParkingSpot = effectiveSpotForFind,
                 userLocationState = userLocationState,
                 walkingRoute = walkingRoute,
                 onNavigateBack = {
@@ -688,7 +705,6 @@ fun CurbNavGraph(
                 },
                 onNavigateToParkingTimer = {
                     navController.navigate(Routes.PARKING_TIMER) {
-                        popUpTo(Routes.HOME) { inclusive = false }
                         launchSingleTop = true
                     }
                 }

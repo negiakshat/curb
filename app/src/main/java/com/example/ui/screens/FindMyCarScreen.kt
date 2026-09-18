@@ -1,12 +1,13 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -25,14 +26,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CompassCalibration
 import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,6 +65,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -74,7 +78,6 @@ import com.example.ui.components.CurbPrimaryButton
 import com.example.ui.theme.BentoBorder
 import com.example.ui.theme.BentoPrimaryDark
 import com.example.ui.theme.BentoSand
-import com.example.ui.theme.RadiusCard
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -87,9 +90,9 @@ import java.util.Date
 import java.util.Locale
 
 private val MapCardBg = Color(0xFFFFFFFF)
-private val MapTextDark = Color(0xFF1E293B)
+private val MapTextDark = Color(0xFF0F172A)
 private val MapTextMuted = Color(0xFF64748B)
-private val MapAccentGreen = Color(0xFF34A853)
+private val MapAccentGreen = Color(0xFF16A34A)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -152,25 +155,14 @@ fun FindMyCarScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            text = "Find My Car",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = MapTextDark,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                        if (savedParkingSpot != null) {
-                            Text(
-                                text = "Saved Parking Spot",
-                                fontSize = 12.sp,
-                                color = MapTextMuted,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                        }
-                    }
+                    Text(
+                        text = "Find My Car",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = MapTextDark,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 },
                 navigationIcon = {
                     IconButton(
@@ -367,7 +359,7 @@ fun FindMyCarScreen(
                         if (currentRoute != null && currentRoute.points.size >= 2) {
                             val polyline = Polyline(mapView).apply {
                                 setPoints(currentRoute.points)
-                                outlinePaint.color = android.graphics.Color.parseColor("#1A73E8") // High-contrast Google Blue
+                                outlinePaint.color = android.graphics.Color.parseColor("#2563EB") // High-contrast Blue
                                 outlinePaint.strokeWidth = 14f
                                 outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
                                 outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
@@ -376,7 +368,7 @@ fun FindMyCarScreen(
                             mapView.overlays.add(polyline)
                         }
 
-                        // 1. CAR MARKER (Fixed at saved parking coordinates from Task 1)
+                        // 1. CAR MARKER (Fixed at saved parking coordinates)
                         val carPoint = GeoPoint(savedParkingSpot.latitude, savedParkingSpot.longitude)
                         val carMarker = Marker(mapView).apply {
                             position = carPoint
@@ -410,7 +402,7 @@ fun FindMyCarScreen(
                 // LIVE TRACKING BADGE OVERLAY
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.White.copy(alpha = 0.94f),
+                    color = Color.White.copy(alpha = 0.95f),
                     border = BorderStroke(1.dp, BentoBorder),
                     shadowElevation = 4.dp,
                     modifier = Modifier
@@ -439,62 +431,370 @@ fun FindMyCarScreen(
                     }
                 }
 
-                // FLOATING MAP CONTROLS (Center on Car / Center on Me)
+                // BOTTOM CONTAINER: FLOATING CONTROLS + BOTTOM INFORMATION CARD
+                // Stacked together to guarantee floating controls sit directly above the card with zero overlap on any screen!
                 Column(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 220.dp, end = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp)
+                        .navigationBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Surface(
-                        onClick = {
-                            mapViewRef?.controller?.animateTo(
-                                GeoPoint(savedParkingSpot.latitude, savedParkingSpot.longitude)
-                            )
-                        },
-                        shape = CircleShape,
-                        color = MapCardBg,
-                        border = BorderStroke(1.dp, BentoBorder),
-                        shadowElevation = 6.dp,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("floating_center_car_button")
+                    // FLOATING MAP CONTROLS (Center on Car / Center on Me)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.DirectionsCar,
-                                contentDescription = "Center on Car",
-                                tint = BentoPrimaryDark,
-                                modifier = Modifier.size(22.dp)
-                            )
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Surface(
+                                onClick = {
+                                    mapViewRef?.controller?.animateTo(
+                                        GeoPoint(savedParkingSpot.latitude, savedParkingSpot.longitude)
+                                    )
+                                },
+                                shape = CircleShape,
+                                color = MapCardBg,
+                                border = BorderStroke(1.dp, BentoBorder),
+                                shadowElevation = 6.dp,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("floating_center_car_button")
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.DirectionsCar,
+                                        contentDescription = "Center on Car",
+                                        tint = BentoPrimaryDark,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                onClick = {
+                                    if (successUserLoc != null) {
+                                        mapViewRef?.controller?.animateTo(
+                                            GeoPoint(successUserLoc.latitude, successUserLoc.longitude)
+                                        )
+                                    } else {
+                                        onStartLiveTracking()
+                                    }
+                                },
+                                shape = CircleShape,
+                                color = MapCardBg,
+                                border = BorderStroke(1.dp, BentoBorder),
+                                shadowElevation = 6.dp,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("floating_center_me_button")
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.MyLocation,
+                                        contentDescription = "Center on Me",
+                                        tint = Color(0xFF2563EB),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
                         }
                     }
 
+                    // BOTTOM INFO OVERLAY PANEL
                     Surface(
-                        onClick = {
-                            if (successUserLoc != null) {
-                                mapViewRef?.controller?.animateTo(
-                                    GeoPoint(successUserLoc.latitude, successUserLoc.longitude)
-                                )
-                            } else {
-                                onStartLiveTracking()
-                            }
-                        },
-                        shape = CircleShape,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("find_my_car_info_card"),
+                        shape = RoundedCornerShape(28.dp),
                         color = MapCardBg,
                         border = BorderStroke(1.dp, BentoBorder),
-                        shadowElevation = 6.dp,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("floating_center_me_button")
+                        shadowElevation = 8.dp
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.MyLocation,
-                                contentDescription = "Center on Me",
-                                tint = Color(0xFF1A73E8),
-                                modifier = Modifier.size(22.dp)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp)
+                        ) {
+                            // Header: Prominent ETA / Status title
+                            val headerTitle = remember(distanceAndWalk) {
+                                if (distanceAndWalk.second != null) {
+                                    "YOUR CAR IS ${distanceAndWalk.second?.uppercase()?.replace(" WALK", " AWAY")}"
+                                } else if (distanceAndWalk.first == "You're at your car") {
+                                    "YOU ARE AT YOUR CAR"
+                                } else {
+                                    "YOUR PARKED CAR"
+                                }
+                            }
+
+                            Text(
+                                text = headerTitle,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = BentoPrimaryDark,
+                                letterSpacing = 0.5.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Location Name & Saved Time
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(BentoSand),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DirectionsCar,
+                                        contentDescription = "Car",
+                                        tint = BentoPrimaryDark,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (savedParkingSpot.locationName.isNotBlank()) savedParkingSpot.locationName else "Saved Parking Spot",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MapTextDark,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    val savedTimeStr = remember(savedParkingSpot.timestamp) {
+                                        val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
+                                        "Saved at ${sdf.format(Date(savedParkingSpot.timestamp))}"
+                                    }
+                                    Text(
+                                        text = savedTimeStr,
+                                        fontSize = 12.sp,
+                                        color = MapTextMuted,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            // Distance Badge & Walking status
+                            if (distanceAndWalk.first != null) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (distanceAndWalk.second == null) Color(0xFFDCFCE7) else Color(0xFFEFF6FF),
+                                    border = BorderStroke(1.dp, if (distanceAndWalk.second == null) Color(0xFFBBF7D0) else Color(0xFFDBEAFE))
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (distanceAndWalk.second == null) Icons.Default.CheckCircle else Icons.Default.CompassCalibration,
+                                                    contentDescription = null,
+                                                    tint = if (distanceAndWalk.second == null) Color(0xFF166534) else Color(0xFF2563EB),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    text = distanceAndWalk.first ?: "",
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (distanceAndWalk.second == null) Color(0xFF166534) else Color(0xFF1E40AF)
+                                                )
+                                            }
+
+                                            distanceAndWalk.second?.let { walkStr ->
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.AutoMirrored.Filled.DirectionsWalk,
+                                                        contentDescription = "Walking directions",
+                                                        tint = Color(0xFF2563EB),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Text(
+                                                        text = walkStr,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = Color(0xFF1E40AF)
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        if (distanceAndWalk.third) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "Straight-line distance (approximate route)",
+                                                fontSize = 11.sp,
+                                                color = Color(0xFF1E40AF).copy(alpha = 0.85f)
+                                            )
+                                        }
+                                    }
+                                }
+                            } else if (savedParkingSpot != null && userLocationState == null) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                        color = BentoPrimaryDark
+                                    )
+                                    Text(
+                                        text = "Locating your position...",
+                                        fontSize = 12.sp,
+                                        color = MapTextMuted
+                                    )
+                                }
+                            } else if (userLocationState is UserLocationResult.PermissionRequired) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = "Location permission is needed to calculate distance to your car.",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+                            } else if (userLocationState is UserLocationResult.Unavailable) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = userLocationState.message,
+                                    fontSize = 12.sp,
+                                    color = MapTextMuted,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // PRIMARY CTA: GET DIRECTIONS
+                            CurbPrimaryButton(
+                                text = "GET DIRECTIONS",
+                                onClick = {
+                                    try {
+                                        val geoUri = Uri.parse("geo:${savedParkingSpot.latitude},${savedParkingSpot.longitude}?q=${savedParkingSpot.latitude},${savedParkingSpot.longitude}(Car+Location)")
+                                        val intent = Intent(Intent.ACTION_VIEW, geoUri).apply {
+                                            setPackage("com.google.android.apps.maps")
+                                        }
+                                        if (intent.resolveActivity(context.packageManager) != null) {
+                                            context.startActivity(intent)
+                                        } else {
+                                            val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://maps.google.com/?q=${savedParkingSpot.latitude},${savedParkingSpot.longitude}"))
+                                            context.startActivity(fallbackIntent)
+                                        }
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Opening directions...", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                leadingIcon = Icons.Default.Navigation,
+                                backgroundColor = BentoPrimaryDark,
+                                testTag = "find_my_car_directions_button"
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // SECONDARY ACTIONS ROW: SHARE LOCATION & PARKING TIMER
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        try {
+                                            val locationName = if (savedParkingSpot.locationName.isNotBlank()) savedParkingSpot.locationName else "Saved Spot"
+                                            val shareText = "Here is my parked car location ($locationName): https://maps.google.com/?q=${savedParkingSpot.latitude},${savedParkingSpot.longitude}"
+                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                            }
+                                            context.startActivity(Intent.createChooser(shareIntent, "Share Car Location"))
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Unable to share location", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                        .testTag("find_my_car_share_button"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, BentoBorder),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MapTextDark
+                                    )
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Share,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MapTextDark
+                                        )
+                                        Text(
+                                            text = "SHARE",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                    }
+                                }
+
+                                OutlinedButton(
+                                    onClick = onNavigateToParkingTimer,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                        .testTag("find_my_car_timer_button"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, BentoBorder),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MapTextDark
+                                    )
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AccessTime,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MapTextDark
+                                        )
+                                        Text(
+                                            text = "TIMER",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -505,184 +805,7 @@ fun FindMyCarScreen(
                         mapViewRef?.onDetach()
                     }
                 }
-
-                // BOTTOM INFO OVERLAY PANEL
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp)
-                        .navigationBarsPadding()
-                        .testTag("find_my_car_info_card"),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MapCardBg,
-                    border = BorderStroke(1.dp, BentoBorder),
-                    shadowElevation = 8.dp
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp)
-                    ) {
-                        // Header row with Car Icon & Saved Location
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(BentoPrimaryDark),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DirectionsCar,
-                                    contentDescription = "Car",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (savedParkingSpot.locationName.isNotBlank()) savedParkingSpot.locationName else "Saved Parking Spot",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MapTextDark
-                                )
-                                val savedTimeStr = remember(savedParkingSpot.timestamp) {
-                                    val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
-                                    "Saved at ${sdf.format(Date(savedParkingSpot.timestamp))}"
-                                }
-                                Text(
-                                    text = savedTimeStr,
-                                    fontSize = 12.sp,
-                                    color = MapTextMuted
-                                )
-                            }
-                        }
-
-                        // Distance badge row
-                        if (distanceAndWalk.first != null) {
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (distanceAndWalk.second == null) Color(0xFFE6F4EA) else Color(0xFFE8F0FE),
-                                border = BorderStroke(1.dp, if (distanceAndWalk.second == null) Color(0xFFCEEAD6) else Color(0xFFD2E3FC))
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = if (distanceAndWalk.second == null) Icons.Default.CheckCircle else Icons.Default.CompassCalibration,
-                                                contentDescription = null,
-                                                tint = if (distanceAndWalk.second == null) Color(0xFF137333) else Color(0xFF1A73E8),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Text(
-                                                text = distanceAndWalk.first ?: "",
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (distanceAndWalk.second == null) Color(0xFF137333) else Color(0xFF174EA6)
-                                            )
-                                        }
-
-                                        distanceAndWalk.second?.let { walkStr ->
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Filled.DirectionsWalk,
-                                                    contentDescription = "Walking directions",
-                                                    tint = Color(0xFF1A73E8),
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Text(
-                                                    text = walkStr,
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = Color(0xFF174EA6)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    if (distanceAndWalk.third) {
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = "Straight-line distance (approximate route)",
-                                            fontSize = 11.sp,
-                                            color = Color(0xFF174EA6).copy(alpha = 0.85f)
-                                        )
-                                    }
-                                }
-                            }
-                        } else if (savedParkingSpot != null && userLocationState == null) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = BentoPrimaryDark
-                                )
-                                Text(
-                                    text = "Locating your position...",
-                                    fontSize = 12.sp,
-                                    color = MapTextMuted
-                                )
-                            }
-                        } else if (userLocationState is UserLocationResult.PermissionRequired) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Location permission is needed to calculate distance to your car.",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            )
-                        } else if (userLocationState is UserLocationResult.Unavailable) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = userLocationState.message,
-                                fontSize = 12.sp,
-                                color = MapTextMuted,
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // Primary Action: View Active Parking Timer
-                        CurbPrimaryButton(
-                            text = "View Parking Timer",
-                            onClick = onNavigateToParkingTimer,
-                            leadingIcon = Icons.Default.DirectionsCar,
-                            backgroundColor = BentoPrimaryDark,
-                            testTag = "find_my_car_timer_button"
-                        )
-                    }
-                }
             }
         }
     }
-}
-
-private fun carGeoPointToGeoPoint(lat: Double, lng: Double): GeoPoint {
-    return GeoPoint(lat, lng)
 }
