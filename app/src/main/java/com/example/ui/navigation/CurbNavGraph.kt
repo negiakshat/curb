@@ -300,10 +300,15 @@ fun CurbNavGraph(
                         allowedUntilTime = allowedUntil,
                         timerBasis = basis,
                         parkingRuleSummary = rules
-                    )
-                    Toast.makeText(context, "Parking session started!", Toast.LENGTH_SHORT).show()
-                    navController.navigate(Routes.PARKING_TIMER) {
-                        popUpTo(Routes.HOME) { inclusive = false }
+                    ) { sessionId ->
+                        if (sessionId > 0) {
+                            Toast.makeText(context, "Parking session started!", Toast.LENGTH_SHORT).show()
+                            navController.navigate(Routes.PARKING_TIMER) {
+                                popUpTo(Routes.HOME) { inclusive = false }
+                            }
+                        } else {
+                            Toast.makeText(context, "Couldn't start the parking timer. Please scan a valid parking sign first.", Toast.LENGTH_LONG).show()
+                        }
                     }
                 },
                 onAskCurb = {
@@ -360,10 +365,15 @@ fun CurbNavGraph(
                         allowedUntilTime = allowedUntil,
                         timerBasis = basis,
                         parkingRuleSummary = rules
-                    )
-                    Toast.makeText(context, "Parking session started!", Toast.LENGTH_SHORT).show()
-                    navController.navigate(Routes.PARKING_TIMER) {
-                        popUpTo(Routes.HOME) { inclusive = false }
+                    ) { sessionId ->
+                        if (sessionId > 0) {
+                            Toast.makeText(context, "Parking session started!", Toast.LENGTH_SHORT).show()
+                            navController.navigate(Routes.PARKING_TIMER) {
+                                popUpTo(Routes.HOME) { inclusive = false }
+                            }
+                        } else {
+                            Toast.makeText(context, "Couldn't start the parking timer. Please scan a valid parking sign first.", Toast.LENGTH_LONG).show()
+                        }
                     }
                 },
                 onReportIssue = {
@@ -650,11 +660,14 @@ fun CurbNavGraph(
                     val allowedTime = sdf.format(Date(System.currentTimeMillis() + (minutes * 60 * 1000L)))
                     viewModel.startParkingSession(
                         durationMinutes = minutes,
-                        allowedUntilTime = allowedTime,
-                        locationName = "Mission Street",
-                        notes = "Metered parking • Space #42"
-                    )
-                    Toast.makeText(context, "Timer started for $minutes minutes", Toast.LENGTH_SHORT).show()
+                        allowedUntilTime = allowedTime
+                    ) { sessionId ->
+                        if (sessionId > 0) {
+                            Toast.makeText(context, "Timer started for $minutes minutes", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Couldn't start the parking timer. Please scan a valid parking sign first.", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 },
                 onEndSession = { id ->
                     viewModel.endActiveParkingSession(id)

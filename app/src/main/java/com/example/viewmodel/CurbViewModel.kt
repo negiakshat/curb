@@ -347,6 +347,10 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Parking Session Methods (delegating to CurbRepository)
+    /**
+     * Starts a parking session via the repository and reports the result.
+     * @param onResult Called with the new session ID (>0 = success, -1 = failure).
+     */
     fun startParkingSession(
         scanResultId: Long = 0,
         locationName: String = "Parked Spot",
@@ -356,20 +360,27 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         timerBasis: String = "",
         parkingRuleSummary: String = "",
         scanResult: ScanResult? = null,
-        maxAllowedEndTimeMillis: Long? = null
+        maxAllowedEndTimeMillis: Long? = null,
+        onResult: (Long) -> Unit = {}
     ) {
         viewModelScope.launch {
-            repository.startParkingSession(
-                scanResultId = scanResultId,
-                locationName = locationName,
-                durationMinutes = durationMinutes,
-                allowedUntilTime = allowedUntilTime,
-                notes = notes,
-                timerBasis = timerBasis,
-                parkingRuleSummary = parkingRuleSummary,
-                scanResult = scanResult,
-                maxAllowedEndTimeMillis = maxAllowedEndTimeMillis
-            )
+            try {
+                val sessionId = repository.startParkingSession(
+                    scanResultId = scanResultId,
+                    locationName = locationName,
+                    durationMinutes = durationMinutes,
+                    allowedUntilTime = allowedUntilTime,
+                    notes = notes,
+                    timerBasis = timerBasis,
+                    parkingRuleSummary = parkingRuleSummary,
+                    scanResult = scanResult,
+                    maxAllowedEndTimeMillis = maxAllowedEndTimeMillis
+                )
+                onResult(sessionId)
+            } catch (e: Exception) {
+                android.util.Log.e("CurbViewModel", "Failed to start parking session: ${e.message}")
+                onResult(-1L)
+            }
         }
     }
 
