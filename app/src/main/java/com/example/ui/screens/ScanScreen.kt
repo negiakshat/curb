@@ -16,6 +16,10 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -76,6 +80,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -368,10 +373,35 @@ fun ScanScreen(
                     )
                 }
 
-                // Large Shutter Button with tactile lock ring
+                // Large Shutter Button with animated detection feedback
+                val isSignDetected = liveDetectedBoxes.isNotEmpty()
+
+                val ringColor by animateColorAsState(
+                    targetValue = if (isSignDetected) CurbSuccess else CurbBlack,
+                    animationSpec = spring(),
+                    label = "shutterRingColor"
+                )
+                val shutterScale by animateFloatAsState(
+                    targetValue = if (isSignDetected) 1.06f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = 0.55f,
+                        stiffness = 300f
+                    ),
+                    label = "shutterScale"
+                )
+                val ringStrokeDp by animateDpAsState(
+                    targetValue = if (isSignDetected) 4.dp else 3.dp,
+                    animationSpec = spring(),
+                    label = "shutterRingStroke"
+                )
+
                 Box(
                     modifier = Modifier
                         .size(80.dp)
+                        .graphicsLayer {
+                            scaleX = shutterScale
+                            scaleY = shutterScale
+                        }
                         .clip(CircleShape)
                         .background(CurbWhite)
                         .clickable {
@@ -427,10 +457,7 @@ fun ScanScreen(
                         modifier = Modifier
                             .size(68.dp)
                             .border(
-                                BorderStroke(
-                                    3.dp,
-                                    if (liveDetectedBoxes.isNotEmpty()) Color.White else CurbBlack
-                                ),
+                                BorderStroke(ringStrokeDp, ringColor),
                                 CircleShape
                             )
                     )
