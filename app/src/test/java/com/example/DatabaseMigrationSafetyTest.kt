@@ -24,199 +24,145 @@ import org.robolectric.annotation.Config
 class DatabaseMigrationSafetyTest {
 
     private lateinit var context: Context
-    private val dbName = "test_curb_migration.db"
 
     @Before
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
-        context.deleteDatabase(dbName)
     }
 
     @Test
-    fun `migrate from version 1 to current version 7 preserves data and safety defaults`() = runBlocking {
-        val helperFactory = FrameworkSQLiteOpenHelperFactory()
-        val configuration = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
-            .name(dbName)
-            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
-                override fun onCreate(db: SupportSQLiteDatabase) {
-                    db.execSQL(
-                        """
-                        CREATE TABLE scan_results (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                            timestamp INTEGER NOT NULL,
-                            locationName TEXT NOT NULL,
-                            cityState TEXT NOT NULL,
-                            verdict TEXT NOT NULL,
-                            statusChipText TEXT NOT NULL,
-                            allowedUntilTime TEXT NOT NULL,
-                            timeRemaining TEXT NOT NULL,
-                            parkingRulesJson TEXT NOT NULL,
-                            explanation TEXT NOT NULL,
-                            detectedSignsJson TEXT NOT NULL,
-                            zoneType TEXT NOT NULL,
-                            paymentInfo TEXT NOT NULL,
-                            vehicleApplicability TEXT NOT NULL
+    fun testMigrateFromV1ToV7PreservesData() {
+        runBlocking {
+            val helperFactory = FrameworkSQLiteOpenHelperFactory()
+            val dbName = "test_curb_migration.db"
+            context.deleteDatabase(dbName)
+            val configuration = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(dbName)
+                .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        db.execSQL(
+                            """
+                            CREATE TABLE scan_results (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                timestamp INTEGER NOT NULL,
+                                locationName TEXT NOT NULL,
+                                cityState TEXT NOT NULL,
+                                verdict TEXT NOT NULL,
+                                statusChipText TEXT NOT NULL,
+                                allowedUntilTime TEXT NOT NULL,
+                                timeRemaining TEXT NOT NULL,
+                                parkingRulesJson TEXT NOT NULL,
+                                explanation TEXT NOT NULL,
+                                detectedSignsJson TEXT NOT NULL,
+                                zoneType TEXT NOT NULL,
+                                paymentInfo TEXT NOT NULL,
+                                vehicleApplicability TEXT NOT NULL
+                            )
+                            """.trimIndent()
                         )
-                        """.trimIndent()
-                    )
-                    db.execSQL(
-                        """
-                        CREATE TABLE parking_sessions (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                            scanResultId INTEGER NOT NULL DEFAULT 0,
-                            locationName TEXT NOT NULL,
-                            startTime INTEGER NOT NULL,
-                            endTime INTEGER NOT NULL,
-                            allowedUntilTime TEXT NOT NULL,
-                            reminderMinutesBefore INTEGER NOT NULL DEFAULT 15,
-                            notes TEXT NOT NULL DEFAULT '',
-                            timerBasis TEXT NOT NULL DEFAULT '',
-                            parkingRuleSummary TEXT NOT NULL DEFAULT '',
-                            isActive INTEGER NOT NULL DEFAULT 1
+                        db.execSQL(
+                            """
+                            CREATE TABLE parking_sessions (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                scanResultId INTEGER NOT NULL DEFAULT 0,
+                                locationName TEXT NOT NULL,
+                                startTime INTEGER NOT NULL,
+                                endTime INTEGER NOT NULL,
+                                allowedUntilTime TEXT NOT NULL,
+                                reminderMinutesBefore INTEGER NOT NULL DEFAULT 15,
+                                notes TEXT NOT NULL DEFAULT '',
+                                timerBasis TEXT NOT NULL DEFAULT '',
+                                parkingRuleSummary TEXT NOT NULL DEFAULT '',
+                                isActive INTEGER NOT NULL DEFAULT 1
+                            )
+                            """.trimIndent()
                         )
-                        """.trimIndent()
-                    )
 
-                    // Insert real scan 1 with valid RESTRICTED verdict
-                    db.execSQL(
-                        """
-                        INSERT INTO scan_results (
-                            timestamp, locationName, cityState, verdict, statusChipText,
-                            allowedUntilTime, timeRemaining, parkingRulesJson, explanation,
-                            detectedSignsJson, zoneType, paymentInfo, vehicleApplicability
-                        ) VALUES (
-                            1000, 'Main St', 'San Francisco, CA', 'RESTRICTED', 'No Parking',
-                            '18:00', '0m', '[]', 'No parking allowed', '[]', 'Zone A', 'None', 'All'
+                        // Insert real scan 1 with valid RESTRICTED verdict
+                        db.execSQL(
+                            """
+                            INSERT INTO scan_results (
+                                timestamp, locationName, cityState, verdict, statusChipText,
+                                allowedUntilTime, timeRemaining, parkingRulesJson, explanation,
+                                detectedSignsJson, zoneType, paymentInfo, vehicleApplicability
+                            ) VALUES (
+                                1000, 'Main St', 'San Francisco, CA', 'RESTRICTED', 'No Parking',
+                                '18:00', '0m', '[]', 'No parking allowed', '[]', 'Zone A', 'None', 'All'
+                            )
+                            """.trimIndent()
                         )
-                        """.trimIndent()
-                    )
 
-                    // Insert real scan 2 with invalid legacy verdict to verify safety normalization
-                    db.execSQL(
-                        """
-                        INSERT INTO scan_results (
-                            timestamp, locationName, cityState, verdict, statusChipText,
-                            allowedUntilTime, timeRemaining, parkingRulesJson, explanation,
-                            detectedSignsJson, zoneType, paymentInfo, vehicleApplicability
-                        ) VALUES (
-                            2000, 'Broadway', 'San Francisco, CA', 'INVALID_CORRUPT_STATUS', 'Unknown',
-                            '12:00', '1h', '[]', 'Corrupt row', '[]', 'Zone B', 'None', 'All'
+                        // Insert real scan 2 with invalid legacy verdict to verify safety normalization
+                        db.execSQL(
+                            """
+                            INSERT INTO scan_results (
+                                timestamp, locationName, cityState, verdict, statusChipText,
+                                allowedUntilTime, timeRemaining, parkingRulesJson, explanation,
+                                detectedSignsJson, zoneType, paymentInfo, vehicleApplicability
+                            ) VALUES (
+                                2000, 'Broadway', 'San Francisco, CA', 'INVALID_CORRUPT_STATUS', 'Unknown',
+                                '12:00', '1h', '[]', 'Corrupt row', '[]', 'Zone B', 'None', 'All'
+                            )
+                            """.trimIndent()
                         )
-                        """.trimIndent()
-                    )
 
-                    // Insert real session
-                    db.execSQL(
-                        """
-                        INSERT INTO parking_sessions (
-                            scanResultId, locationName, startTime, endTime, allowedUntilTime
-                        ) VALUES (
-                            1, 'Main St', 1000, 5000, '18:00'
+                        // Insert real session
+                        db.execSQL(
+                            """
+                            INSERT INTO parking_sessions (
+                                scanResultId, locationName, startTime, endTime, allowedUntilTime
+                            ) VALUES (
+                                1, 'Main St', 1000, 5000, '18:00'
+                            )
+                            """.trimIndent()
                         )
-                        """.trimIndent()
-                    )
-                }
+                    }
 
-                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
-            })
-            .build()
+                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+                })
+                .build()
 
-        val oldDb = helperFactory.create(configuration).writableDatabase
-        oldDb.close()
+            val oldDb = helperFactory.create(configuration).writableDatabase
+            oldDb.close()
 
-        // Open database via Room applying all migrations (1..7) without destructive fallback
-        val migratedDb = Room.databaseBuilder(context, CurbDatabase::class.java, dbName)
-            .addMigrations(
-                CurbDatabase.MIGRATION_1_2,
-                CurbDatabase.MIGRATION_2_3,
-                CurbDatabase.MIGRATION_3_4,
-                CurbDatabase.MIGRATION_4_5,
-                CurbDatabase.MIGRATION_5_6,
-                CurbDatabase.MIGRATION_6_7
-            )
-            .allowMainThreadQueries()
-            .build()
+            // Open database via Room applying all migrations (1..7) without destructive fallback
+            val migratedDb = Room.databaseBuilder(context, CurbDatabase::class.java, dbName)
+                .addMigrations(
+                    CurbDatabase.MIGRATION_1_2,
+                    CurbDatabase.MIGRATION_2_3,
+                    CurbDatabase.MIGRATION_3_4,
+                    CurbDatabase.MIGRATION_4_5,
+                    CurbDatabase.MIGRATION_5_6,
+                    CurbDatabase.MIGRATION_6_7
+                )
+                .allowMainThreadQueries()
+                .build()
 
-        val scans = migratedDb.scanDao().getAllScans().first()
-        assertEquals(2, scans.size)
+            val scans = migratedDb.scanDao().getAllScans().first()
+            assertEquals(2, scans.size)
 
-        val scan1 = scans.find { it.id == 1L }
-        assertNotNull(scan1)
-        assertEquals("Main St", scan1?.locationName)
-        assertEquals("RESTRICTED", scan1?.verdict)
-        assertNull(scan1?.imageUri)
-        assertFalse(scan1?.isDemo ?: true)
+            val scan1 = scans.find { it.id == 1L }
+            assertNotNull(scan1)
+            assertEquals("Main St", scan1?.locationName)
+            assertEquals("RESTRICTED", scan1?.verdict)
+            assertNull(scan1?.imageUri)
+            assertFalse(scan1?.isDemo ?: true)
 
-        val scan2 = scans.find { it.id == 2L }
-        assertNotNull(scan2)
-        assertEquals("Broadway", scan2?.locationName)
-        assertEquals("AMBIGUOUS", scan2?.verdict) // Normalized to AMBIGUOUS, NOT ALLOWED
+            val scan2 = scans.find { it.id == 2L }
+            assertNotNull(scan2)
+            assertEquals("Broadway", scan2?.locationName)
+            assertEquals("AMBIGUOUS", scan2?.verdict) // Normalized to AMBIGUOUS, NOT ALLOWED
 
-        val session = migratedDb.parkingSessionDao().getSessionById(1L)
-        assertNotNull(session)
-        assertEquals("Main St", session?.locationName)
-        assertEquals("TIMED_LIMIT", session?.timerMode)
-        assertNull(session?.maxAllowedEndTimeMillis)
-        assertFalse(session?.isDemo ?: true)
+            val session = migratedDb.parkingSessionDao().getSessionById(1L)
+            assertNotNull(session)
+            assertEquals("Main St", session?.locationName)
+            assertEquals("TIMED_LIMIT", session?.timerMode)
+            assertNull(session?.maxAllowedEndTimeMillis)
+            assertFalse(session?.isDemo ?: true)
 
-        migratedDb.close()
-    }
-
-    @Test
-    fun `fresh database has current Room schema without database defaults`() {
-        val freshDb = Room.inMemoryDatabaseBuilder(context, CurbDatabase::class.java)
-            .allowMainThreadQueries()
-            .build()
-        val db = freshDb.openHelper.writableDatabase
-
-        assertNull(columnDefault(db, "scan_results", "imageUri"))
-        assertNull(columnDefault(db, "scan_results", "isDemo"))
-        assertNull(columnDefault(db, "parking_sessions", "timerMode"))
-        assertNull(columnDefault(db, "parking_sessions", "isDemo"))
-        assertNull(columnDefault(db, "parking_spots", "locationName"))
-        assertNull(columnDefault(db, "parking_spots", "isActive"))
-        assertNull(columnDefault(db, "parking_spots", "isDemo"))
-        assertEquals(listOf("targetType", "targetId"), uniqueIndexColumns(db, "curb_notes"))
-        freshDb.close()
-    }
-
-    @Test
-    fun `each explicit migration applies sequentially without destructive fallback`() {
-        val helperFactory = FrameworkSQLiteOpenHelperFactory()
-        val stepDbName = "test_curb_stepwise.db"
-        context.deleteDatabase(stepDbName)
-        val configuration = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
-            .name(stepDbName)
-            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
-                override fun onCreate(db: SupportSQLiteDatabase) = createVersion1Schema(db)
-                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
-            })
-            .build()
-        val helper = helperFactory.create(configuration)
-        val db = helper.writableDatabase
-
-        CurbDatabase.MIGRATION_1_2.migrate(db)
-        assertNull(columnDefault(db, "scan_results", "imageUri"))
-        assertNull(columnDefault(db, "scan_results", "isDemo"))
-
-        CurbDatabase.MIGRATION_2_3.migrate(db)
-        assertNull(columnDefault(db, "parking_sessions", "timerMode"))
-        assertNull(columnDefault(db, "parking_sessions", "isDemo"))
-
-        CurbDatabase.MIGRATION_3_4.migrate(db)
-        assertTrue(tableExists(db, "saved_places"))
-
-        CurbDatabase.MIGRATION_4_5.migrate(db)
-        assertEquals(listOf("targetType", "targetId"), uniqueIndexColumns(db, "curb_notes"))
-
-        CurbDatabase.MIGRATION_5_6.migrate(db)
-        assertNull(columnDefault(db, "parking_spots", "locationName"))
-        assertNull(columnDefault(db, "parking_spots", "isActive"))
-
-        CurbDatabase.MIGRATION_6_7.migrate(db)
-        assertNull(columnDefault(db, "parking_spots", "isDemo"))
-        helper.close()
-        context.deleteDatabase(stepDbName)
+            migratedDb.close()
+            context.deleteDatabase(dbName)
+        }
     }
 
     private fun createVersion1Schema(db: SupportSQLiteDatabase) {
@@ -257,6 +203,146 @@ class DatabaseMigrationSafetyTest {
             )
             """.trimIndent()
         )
+    }
+
+    @Test
+    fun testFreshDatabaseHasCurrentSchema() {
+        val freshDb = Room.inMemoryDatabaseBuilder(context, CurbDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val db = freshDb.openHelper.writableDatabase
+
+        assertNull(columnDefault(db, "scan_results", "imageUri"))
+        assertNull(columnDefault(db, "scan_results", "isDemo"))
+        assertNull(columnDefault(db, "parking_sessions", "timerMode"))
+        assertNull(columnDefault(db, "parking_sessions", "isDemo"))
+        assertNull(columnDefault(db, "parking_spots", "locationName"))
+        assertNull(columnDefault(db, "parking_spots", "isActive"))
+        assertNull(columnDefault(db, "parking_spots", "isDemo"))
+        assertEquals(listOf("targetType", "targetId"), uniqueIndexColumns(db, "curb_notes"))
+        freshDb.close()
+    }
+
+    @Test
+    fun testExplicitMigrationsApplySequentially() {
+        val helperFactory = FrameworkSQLiteOpenHelperFactory()
+        val stepDbName = "test_curb_stepwise.db"
+        context.deleteDatabase(stepDbName)
+        val configuration = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(stepDbName)
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
+                override fun onCreate(db: SupportSQLiteDatabase) = createVersion1Schema(db)
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            })
+            .build()
+        val helper = helperFactory.create(configuration)
+        val db = helper.writableDatabase
+
+        CurbDatabase.MIGRATION_1_2.migrate(db)
+        assertNull(columnDefault(db, "scan_results", "imageUri"))
+        assertNull(columnDefault(db, "scan_results", "isDemo"))
+
+        CurbDatabase.MIGRATION_2_3.migrate(db)
+        assertNull(columnDefault(db, "parking_sessions", "timerMode"))
+        assertNull(columnDefault(db, "parking_sessions", "isDemo"))
+
+        CurbDatabase.MIGRATION_3_4.migrate(db)
+        assertTrue(tableExists(db, "saved_places"))
+
+        CurbDatabase.MIGRATION_4_5.migrate(db)
+        assertEquals(listOf("targetType", "targetId"), uniqueIndexColumns(db, "curb_notes"))
+
+        CurbDatabase.MIGRATION_5_6.migrate(db)
+        assertNull(columnDefault(db, "parking_spots", "locationName"))
+        assertNull(columnDefault(db, "parking_spots", "isActive"))
+
+        CurbDatabase.MIGRATION_6_7.migrate(db)
+        assertNull(columnDefault(db, "parking_spots", "isDemo"))
+        helper.close()
+        context.deleteDatabase(stepDbName)
+    }
+
+    @Test
+    fun testMigrateFromV1WithPartialSchema() {
+        runBlocking {
+            val helperFactory = FrameworkSQLiteOpenHelperFactory()
+            val partialDbName = "test_curb_partial.db"
+            context.deleteDatabase(partialDbName)
+            val configuration = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(partialDbName)
+                .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        // Create v1 schema PLUS imageUri and isDemo columns manually (the crash scenario)
+                        db.execSQL(
+                            """
+                            CREATE TABLE scan_results (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                timestamp INTEGER NOT NULL,
+                                locationName TEXT NOT NULL,
+                                cityState TEXT NOT NULL,
+                                verdict TEXT NOT NULL,
+                                statusChipText TEXT NOT NULL,
+                                allowedUntilTime TEXT NOT NULL,
+                                timeRemaining TEXT NOT NULL,
+                                parkingRulesJson TEXT NOT NULL,
+                                explanation TEXT NOT NULL,
+                                detectedSignsJson TEXT NOT NULL,
+                                zoneType TEXT NOT NULL,
+                                paymentInfo TEXT NOT NULL,
+                                vehicleApplicability TEXT NOT NULL,
+                                imageUri TEXT,
+                                isDemo INTEGER NOT NULL DEFAULT 0
+                            )
+                            """.trimIndent()
+                        )
+                        db.execSQL(
+                            """
+                            CREATE TABLE parking_sessions (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                scanResultId INTEGER NOT NULL DEFAULT 0,
+                                locationName TEXT NOT NULL,
+                                startTime INTEGER NOT NULL,
+                                endTime INTEGER NOT NULL,
+                                allowedUntilTime TEXT NOT NULL
+                            )
+                            """.trimIndent()
+                        )
+                        // Insert data with imageUri and isDemo to ensure they're preserved
+                        db.execSQL(
+                            """
+                            INSERT INTO scan_results (
+                                timestamp, locationName, cityState, verdict, statusChipText,
+                                allowedUntilTime, timeRemaining, parkingRulesJson, explanation,
+                                detectedSignsJson, zoneType, paymentInfo, vehicleApplicability,
+                                imageUri, isDemo
+                            ) VALUES (
+                                1000, 'Main St', 'San Francisco, CA', 'ALLOWED', 'Parking OK',
+                                '20:00', '2h', '[]', 'All good', '[]', 'Zone A', 'None', 'All',
+                                'content://media/external/images/media/1', 1
+                            )
+                            """.trimIndent()
+                        )
+                    }
+                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+                })
+                .build()
+
+            val helper = helperFactory.create(configuration)
+            val db = helper.writableDatabase
+
+            // This should not crash even though imageUri and isDemo already exist
+            CurbDatabase.MIGRATION_1_2.migrate(db)
+
+            // Verify imageUri and isDemo were preserved through the rebuild
+            db.query("SELECT imageUri, isDemo FROM scan_results WHERE id = 1").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("content://media/external/images/media/1", cursor.getString(0))
+                assertEquals(1, cursor.getInt(1))
+            }
+
+            helper.close()
+            context.deleteDatabase(partialDbName)
+        }
     }
 
     private fun tableExists(db: SupportSQLiteDatabase, table: String): Boolean {

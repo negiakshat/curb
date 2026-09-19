@@ -31,8 +31,8 @@ abstract class CurbDatabase : RoomDatabase() {
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE scan_results ADD COLUMN imageUri TEXT")
-                db.execSQL("ALTER TABLE scan_results ADD COLUMN isDemo INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "scan_results", "imageUri", "TEXT")
+                addColumnIfNotExists(db, "scan_results", "isDemo", "INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("UPDATE scan_results SET verdict = 'AMBIGUOUS' WHERE verdict NOT IN ('ALLOWED', 'RESTRICTED', 'AMBIGUOUS')")
                 rebuildScanResults(db)
             }
@@ -40,9 +40,9 @@ abstract class CurbDatabase : RoomDatabase() {
 
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE parking_sessions ADD COLUMN maxAllowedEndTimeMillis INTEGER")
-                db.execSQL("ALTER TABLE parking_sessions ADD COLUMN timerMode TEXT NOT NULL DEFAULT 'TIMED_LIMIT'")
-                db.execSQL("ALTER TABLE parking_sessions ADD COLUMN isDemo INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "parking_sessions", "maxAllowedEndTimeMillis", "INTEGER")
+                addColumnIfNotExists(db, "parking_sessions", "timerMode", "TEXT NOT NULL DEFAULT 'TIMED_LIMIT'")
+                addColumnIfNotExists(db, "parking_sessions", "isDemo", "INTEGER NOT NULL DEFAULT 0")
                 rebuildParkingSessions(db)
             }
         }
@@ -105,7 +105,7 @@ abstract class CurbDatabase : RoomDatabase() {
 
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE parking_spots ADD COLUMN isDemo INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "parking_spots", "isDemo", "INTEGER NOT NULL DEFAULT 0")
                 rebuildParkingSpots(db)
             }
         }
@@ -129,6 +129,23 @@ abstract class CurbDatabase : RoomDatabase() {
                 INSTANCE = instance
                 instance
             }
+        }
+
+        private fun addColumnIfNotExists(
+            db: SupportSQLiteDatabase,
+            table: String,
+            column: String,
+            definition: String
+        ) {
+            db.query("PRAGMA table_info(`$table`)").use { cursor ->
+                val nameIndex = cursor.getColumnIndexOrThrow("name")
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(nameIndex) == column) {
+                        return
+                    }
+                }
+            }
+            db.execSQL("ALTER TABLE `$table` ADD COLUMN $column $definition")
         }
 
         private fun rebuildScanResults(db: SupportSQLiteDatabase) {
