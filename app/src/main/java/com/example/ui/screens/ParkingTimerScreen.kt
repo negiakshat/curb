@@ -127,6 +127,7 @@ fun ParkingTimerScreen(
     onSaveParkingSpot: () -> Unit = {},
     onNavigateToFindMyCar: () -> Unit = {},
     onStartQuickTimer: (Int, String) -> Unit,
+    canStartQuickTimer: Boolean = false,
     onEndSession: (Long) -> Unit,
     onExtendSession: (Long, Int, Long) -> Unit,
     onUpdateReminder: (Long, Int) -> Unit,
@@ -786,7 +787,11 @@ fun ParkingTimerScreen(
                         Spacer(modifier = Modifier.height(4.dp))
 
                         Text(
-                            text = "Select your parking duration below to start an interactive timer with smart street notifications.",
+                            text = if (canStartQuickTimer) {
+                                "Select your parking duration below to start an interactive timer with smart street notifications."
+                            } else {
+                                "Scan a parking sign first."
+                            },
                             fontSize = 13.sp,
                             color = TimerTextMuted,
                             textAlign = TextAlign.Center,
@@ -813,12 +818,14 @@ fun ParkingTimerScreen(
                             QuickPresetPill(
                                 label = "30m",
                                 minutes = 30,
+                                enabled = canStartQuickTimer,
                                 onClick = { onStartQuickTimer(30, "30m limit") },
                                 modifier = Modifier.weight(1f)
                             )
                             QuickPresetPill(
                                 label = "1h",
                                 minutes = 60,
+                                enabled = canStartQuickTimer,
                                 onClick = { onStartQuickTimer(60, "1h limit") },
                                 modifier = Modifier.weight(1f)
                             )
@@ -826,12 +833,14 @@ fun ParkingTimerScreen(
                                 label = "2h 15m",
                                 minutes = 135,
                                 isPrimary = true,
+                                enabled = canStartQuickTimer,
                                 onClick = { onStartQuickTimer(135, "2h 30m limit") },
                                 modifier = Modifier.weight(1.3f)
                             )
                             QuickPresetPill(
                                 label = "4h",
                                 minutes = 240,
+                                enabled = canStartQuickTimer,
                                 onClick = { onStartQuickTimer(240, "4h limit") },
                                 modifier = Modifier.weight(1f)
                             )
@@ -877,7 +886,8 @@ fun ParkingTimerScreen(
                     onClick = { onStartQuickTimer(135, "2h 30m limit") },
                     leadingIcon = Icons.Default.Add,
                     backgroundColor = BentoPrimaryDark,
-                    testTag = "start_quick_session_button"
+                    testTag = "start_quick_session_button",
+                    enabled = canStartQuickTimer
                 )
             }
         }
@@ -1316,16 +1326,28 @@ private fun QuickPresetPill(
     label: String,
     minutes: Int,
     isPrimary: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() },
+            .clickable(enabled = enabled) { onClick() },
         shape = RoundedCornerShape(16.dp),
-        color = if (isPrimary) BentoPeach else BentoCanvas,
-        border = BorderStroke(1.dp, if (isPrimary) BentoPrimary else BentoBorder)
+        color = when {
+            !enabled -> BentoCanvas.copy(alpha = 0.5f)
+            isPrimary -> BentoPeach
+            else -> BentoCanvas
+        },
+        border = BorderStroke(
+            1.dp,
+            when {
+                !enabled -> BentoBorder.copy(alpha = 0.4f)
+                isPrimary -> BentoPrimary
+                else -> BentoBorder
+            }
+        )
     ) {
         Column(
             modifier = Modifier
@@ -1337,7 +1359,11 @@ private fun QuickPresetPill(
                 text = label,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isPrimary) BentoPrimaryDark else TimerTextDark
+                color = when {
+                    !enabled -> TimerTextMuted.copy(alpha = 0.5f)
+                    isPrimary -> BentoPrimaryDark
+                    else -> TimerTextDark
+                }
             )
         }
     }

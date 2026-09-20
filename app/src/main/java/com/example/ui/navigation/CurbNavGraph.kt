@@ -35,6 +35,8 @@ import com.example.ui.screens.SplashScreen
 import com.example.ui.screens.TermsOfServiceScreen
 import com.example.ui.screens.WelcomeScreen
 import com.example.ui.screens.YouScreen
+import com.example.util.ParkingAuthority
+import com.example.util.ParkingTimerCalculator
 import com.example.viewmodel.CurbViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -635,6 +637,10 @@ fun CurbNavGraph(
         // 21. PARKING TIMER
         composable(Routes.PARKING_TIMER) {
             val effectiveSpotForTimer = if (activeSession?.isDemo == true) demoSavedParkingSpot else savedParkingSpot
+            // Quick-start requires the same authorization the repository enforces: a valid scan
+            // result with timer authority and a verified time limit.
+            val canQuickStart = ParkingAuthority.canAuthorizeTimer(currentScanResult) &&
+                    ParkingTimerCalculator.calculateConfig(currentScanResult).canStart
             ParkingTimerScreen(
                 activeSession = activeSession,
                 targetSession = targetSession,
@@ -660,7 +666,8 @@ fun CurbNavGraph(
                     val allowedTime = sdf.format(Date(System.currentTimeMillis() + (minutes * 60 * 1000L)))
                     viewModel.startParkingSession(
                         durationMinutes = minutes,
-                        allowedUntilTime = allowedTime
+                        allowedUntilTime = allowedTime,
+                        scanResult = currentScanResult
                     ) { sessionId ->
                         if (sessionId > 0) {
                             Toast.makeText(context, "Timer started for $minutes minutes", Toast.LENGTH_SHORT).show()
@@ -669,6 +676,7 @@ fun CurbNavGraph(
                         }
                     }
                 },
+                canStartQuickTimer = canQuickStart,
                 onEndSession = { id ->
                     viewModel.endActiveParkingSession(id)
                     Toast.makeText(context, "Parking session ended", Toast.LENGTH_SHORT).show()
