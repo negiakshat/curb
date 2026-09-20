@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -301,81 +302,97 @@ fun AskCurbScreen(
 
         // MAIN CONTENT AREA: MINIMAL CHAT-FIRST / QUESTION-FIRST LANDING OR CHAT MESSAGES
         if (!hasUserMessages) {
-            // MINIMAL QUESTION-FIRST EMPTY STATE CENTERED IN AVAILABLE CONVERSATION AREA
-            Box(
+            // QUESTION-FIRST EMPTY STATE: TOP-ANCHORED, COMPACT VISUAL HIERARCHY (NO LARGE BLANK VOID)
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp),
-                contentAlignment = Alignment.Center
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(
+                // AI IDENTITY MARK (reuses existing CurbLogo symbol)
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
+                        .padding(top = 24.dp)
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(BentoSand)
+                        .border(1.dp, BentoBorder, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "Curb AI",
+                        tint = BentoPrimaryDark,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                // HEADLINE + SUBLINE (M3 TYPE HIERARCHY)
+                Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = if (scanResult != null) "How can I help with this spot?" else "How can I help with parking?",
+                        text = "Ask Curb AI is ready",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = CurbOnSurface,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = if (scanResult != null) {
-                            "Loaded scan for ${scanResult.locationName} (${scanResult.verdict.displayTitle})."
+                            "Ask about parking, signs, or rules at ${scanResult.locationName} (${scanResult.verdict.displayTitle})."
                         } else {
-                            "Ask a question or select a suggestion below."
+                            "Ask about parking, signs, or rules — or pick a suggestion below."
                         },
                         fontSize = 13.sp,
+                        lineHeight = 18.sp,
                         color = CurbOnSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
+                }
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                // SUGGESTED QUESTIONS (FILLED-TONE CHIPS, WRAPPED IN FLOW)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Suggested questions",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = CurbOnSurfaceVariant,
+                        letterSpacing = 0.5.sp
+                    )
 
-                    // OPTIONAL COMPACT SUGGESTION CHIPS
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.Center
                     ) {
-                        Text(
-                            text = "Suggested questions",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = CurbOnSurfaceVariant,
-                            letterSpacing = 0.5.sp
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            suggestedQuestions.forEach { question ->
-                                Surface(
-                                    shape = RoundedCornerShape(20.dp),
-                                    color = CurbSurface,
-                                    border = BorderStroke(1.dp, BentoBorder),
-                                    modifier = Modifier
-                                        .padding(horizontal = 4.dp)
-                                        .clip(RoundedCornerShape(20.dp))
-                                        .clickable(enabled = !isLoading) { onSendMessage(question) }
-                                        .testTag("suggested_prompt_$question")
-                                ) {
-                                    Text(
-                                        text = question,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = BentoPrimaryDark,
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                                    )
-                                }
+                        suggestedQuestions.forEach { question ->
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = CurbSurface,
+                                border = BorderStroke(1.dp, BentoBorder),
+                                modifier = Modifier
+                                    .padding(horizontal = 4.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .clickable(enabled = !isLoading) { onSendMessage(question) }
+                                    .testTag("suggested_prompt_$question")
+                            ) {
+                                Text(
+                                    text = question,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = BentoPrimaryDark,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                )
                             }
                         }
                     }
