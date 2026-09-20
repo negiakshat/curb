@@ -1121,12 +1121,12 @@ fun ParkingTimerScreen(
                     Column(modifier = Modifier.padding(16.dp)) {
                         val activeRuleStr = effectiveSession?.parkingRuleSummary?.ifBlank { null }
                             ?: effectiveSession?.notes?.ifBlank { null }
-                            ?: "2 HR PARKING"
+                            ?: "No parking rule recorded for this session."
                         RuleItem("ACTIVE REGULATION", activeRuleStr)
                         Spacer(modifier = Modifier.height(10.dp))
                         RuleItem("NOTIFICATIONS", "Smart push notifications will alert you prior to restriction enforcement.")
                         Spacer(modifier = Modifier.height(10.dp))
-                        RuleItem("HOLIDAY EXCEPTIONS", "Free parking on Sundays and major City Holidays unless posted otherwise.")
+                        RuleItem("HOLIDAY EXCEPTIONS", "No additional holiday exception detected.")
                     }
                 }
 
@@ -1210,13 +1210,15 @@ fun ParkingTimerScreen(
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Spot GPS: 37.7879° N, 122.4075° W",
+                                text = savedParkingSpot?.let { spot ->
+                                    "Spot GPS: " + String.format(Locale.US, "%.5f°, %.5f°", spot.latitude, spot.longitude)
+                                } ?: "Location unavailable",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TimerTextDark
                             )
                             Text(
-                                text = "2 min walk from current location",
+                                text = "Walking distance unavailable",
                                 fontSize = 11.sp,
                                 color = TimerTextMuted
                             )
