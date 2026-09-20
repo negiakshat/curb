@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CurbNoteEntity::class,
         ParkingSpotEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class CurbDatabase : RoomDatabase() {
@@ -43,6 +43,7 @@ abstract class CurbDatabase : RoomDatabase() {
                 addColumnIfNotExists(db, "parking_sessions", "maxAllowedEndTimeMillis", "INTEGER")
                 addColumnIfNotExists(db, "parking_sessions", "timerMode", "TEXT NOT NULL DEFAULT 'TIMED_LIMIT'")
                 addColumnIfNotExists(db, "parking_sessions", "isDemo", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "parking_sessions", "timerBasis", "TEXT NOT NULL DEFAULT ''")
                 rebuildParkingSessions(db)
             }
         }
@@ -110,6 +111,13 @@ abstract class CurbDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "parking_sessions", "timerBasis", "TEXT NOT NULL DEFAULT ''")
+                rebuildParkingSessions(db)
+            }
+        }
+
         fun getDatabase(context: Context): CurbDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -123,7 +131,8 @@ abstract class CurbDatabase : RoomDatabase() {
                         MIGRATION_3_4,
                         MIGRATION_4_5,
                         MIGRATION_5_6,
-                        MIGRATION_6_7
+                        MIGRATION_6_7,
+                        MIGRATION_7_8
                     )
                     .build()
                 INSTANCE = instance

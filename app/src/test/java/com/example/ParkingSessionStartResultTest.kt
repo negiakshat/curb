@@ -1,12 +1,19 @@
 package com.example
 
 import android.app.Application
+import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
 import com.example.data.repository.CurbRepository
 import com.example.viewmodel.CurbViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -16,21 +23,30 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLooper
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class ParkingSessionStartResultTest {
 
     private lateinit var app: Application
     private lateinit var repository: CurbRepository
+    private val testDispatcher = UnconfinedTestDispatcher()
 
     @Before
     fun setup() {
+        Dispatchers.setMain(testDispatcher)
         app = ApplicationProvider.getApplicationContext()
         repository = CurbRepository(app)
         runBlocking {
             repository.clearAllData()
         }
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     // --- Repository-level result verification ---
@@ -104,43 +120,47 @@ class ParkingSessionStartResultTest {
     // --- ViewModel callback verification ---
 
     @Test
-    fun `ViewModel callback receives negative ID when repository rejects session`() {
+    fun `ViewModel callback receives negative ID when repository rejects session`() = runBlocking {
         val viewModel = CurbViewModel(app)
-        var resultId: Long? = null
+        val deferredId = kotlinx.coroutines.CompletableDeferred<Long>()
 
         viewModel.startParkingSession(
             durationMinutes = 30,
-            onResult = { id -> resultId = id }
+            onResult = { id -> deferredId.complete(id) }
         )
-        shadowOf(org.robolectric.shadows.ShadowLooper.getMainLooper()).idle()
+        shadowOf(Looper.getMainLooper()).idle()
 
-        assertTrue("Expected negative callback ID, got $resultId", resultId != null && resultId!! < 0)
+        val resultId = kotlinx.coroutines.withTimeout(5000) { deferredId.await() }
+        assertTrue("Expected negative callback ID, got $resultId", resultId < 0)
     }
 
     @Test
-    fun `ViewModel callback receives positive ID when repository creates session`() {
+    fun `ViewModel callback receives positive ID when repository creates session`() = runBlocking {
         val validScan = ScanResult(
             verdict = ScanVerdict.ALLOWED,
             statusChipText = "Updated just now",
             allowedUntilTime = "1 Hour Parking",
             timeRemaining = "1h 00m remaining",
             parkingRules = listOf("1 Hour Parking 9 AM - 5 PM"),
-            explanation = "1 hour limit"
+            explanation = "1 hour limit",
+            isDemo = true
         )
-        val scanId = runBlocking { repository.saveScan(validScan) }
+        val scanId = repository.saveScan(validScan)
 
         val viewModel = CurbViewModel(app)
-        var resultId: Long? = null
+        val deferredId = kotlinx.coroutines.CompletableDeferred<Long>()
 
         viewModel.startParkingSession(
             scanResultId = scanId,
+            scanResult = validScan,
             locationName = "1 Hour Spot",
             durationMinutes = 60,
-            onResult = { id -> resultId = id }
+            onResult = { id -> deferredId.complete(id) }
         )
-        shadowOf(org.robolectric.shadows.ShadowLooper.getMainLooper()).idle()
+        shadowOf(Looper.getMainLooper()).idle()
 
-        assertTrue("Expected positive callback ID, got $resultId", resultId != null && resultId!! > 0)
+        val resultId = kotlinx.coroutines.withTimeout(5000) { deferredId.await() }
+        assertTrue("Expected positive callback ID, got $resultId", resultId > 0)
     }
 
     @Test
@@ -150,7 +170,7 @@ class ParkingSessionStartResultTest {
         viewModel.startParkingSession(
             durationMinutes = 30
         )
-        shadowOf(org.robolectric.shadows.ShadowLooper.getMainLooper()).idle()
+        shadowOf(Looper.getMainLooper()).idle()
         // No crash = pass. Default lambda {} should handle the result silently.
     }
 }

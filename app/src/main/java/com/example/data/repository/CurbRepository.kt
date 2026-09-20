@@ -126,7 +126,7 @@ class CurbRepository(context: Context) {
         parkingRuleSummary: String = "",
         scanResult: ScanResult? = null,
         maxAllowedEndTimeMillis: Long? = null
-    ): Long {
+    ): Long = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val now = System.currentTimeMillis()
 
         // 1. Resolve target scan result
@@ -143,17 +143,17 @@ class CurbRepository(context: Context) {
         if (targetScan != null) {
             // Must have timer authority based on verified physical sign evidence or demo preset
             if (!com.example.util.ParkingAuthority.canAuthorizeTimer(targetScan)) {
-                return -1L // Reject scans without verified physical sign evidence!
+                return@withContext -1L // Reject scans without verified physical sign evidence!
             }
 
             // Must be ALLOWED verdict
             if (targetScan.verdict != ScanVerdict.ALLOWED) {
-                return -1L // Reject AMBIGUOUS or RESTRICTED scans
+                return@withContext -1L // Reject AMBIGUOUS or RESTRICTED scans
             }
 
             val timerConfig = ParkingTimerCalculator.calculateConfig(targetScan, now)
             if (!timerConfig.canStart) {
-                return -1L // Reject if timer creation is unauthorized or lacks explicit verified limit
+                return@withContext -1L // Reject if timer creation is unauthorized or lacks explicit verified limit
             }
 
             canonicalMaxEndTime = timerConfig.maxAllowedEndTimeMillis
@@ -163,14 +163,14 @@ class CurbRepository(context: Context) {
             if (finalAllowedUntil.isBlank()) finalAllowedUntil = timerConfig.allowedUntilTimeFormatted
         } else {
             // No scan result provided -> Real timer session cannot be started without verified sign evidence!
-            return -1L
+            return@withContext -1L
         }
 
         // Determine requested end time
         val requestedEndTime = if (durationMinutes > 0) {
             now + (durationMinutes * 60 * 1000L)
         } else {
-            canonicalMaxEndTime ?: return -1L
+            canonicalMaxEndTime ?: return@withContext -1L
         }
 
         // Clamp effective end time to canonical max authority
@@ -181,7 +181,7 @@ class CurbRepository(context: Context) {
         }
 
         if (effectiveEndTime <= now) {
-            return -1L
+            return@withContext -1L
         }
 
         val sdf = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
@@ -223,7 +223,7 @@ class CurbRepository(context: Context) {
             val insertedSession = entity.copy(id = id)
             com.example.notification.ParkingNotificationScheduler.scheduleSessionNotifications(appContext, insertedSession)
         }
-        return id
+        id
     }
 
     suspend fun endActiveSession(id: Long) {

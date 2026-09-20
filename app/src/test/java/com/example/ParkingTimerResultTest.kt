@@ -35,7 +35,7 @@ class ParkingTimerResultTest {
     private lateinit var application: Application
     private lateinit var repository: CurbRepository
     private lateinit var viewModel: CurbViewModel
-    private val testDispatcher = kotlinx.coroutines.test.StandardTestDispatcher()
+    private val testDispatcher = UnconfinedTestDispatcher()
 
     @Before
     fun setUp() {

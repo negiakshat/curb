@@ -125,7 +125,7 @@ class DatabaseMigrationSafetyTest {
             val oldDb = helperFactory.create(configuration).writableDatabase
             oldDb.close()
 
-            // Open database via Room applying all migrations (1..7) without destructive fallback
+            // Open database via Room applying all migrations (1..8) without destructive fallback
             val migratedDb = Room.databaseBuilder(context, CurbDatabase::class.java, dbName)
                 .addMigrations(
                     CurbDatabase.MIGRATION_1_2,
@@ -133,7 +133,8 @@ class DatabaseMigrationSafetyTest {
                     CurbDatabase.MIGRATION_3_4,
                     CurbDatabase.MIGRATION_4_5,
                     CurbDatabase.MIGRATION_5_6,
-                    CurbDatabase.MIGRATION_6_7
+                    CurbDatabase.MIGRATION_6_7,
+                    CurbDatabase.MIGRATION_7_8
                 )
                 .allowMainThreadQueries()
                 .build()
@@ -258,6 +259,9 @@ class DatabaseMigrationSafetyTest {
 
         CurbDatabase.MIGRATION_6_7.migrate(db)
         assertNull(columnDefault(db, "parking_spots", "isDemo"))
+
+        CurbDatabase.MIGRATION_7_8.migrate(db)
+        assertNull(columnDefault(db, "parking_sessions", "timerBasis"))
         helper.close()
         context.deleteDatabase(stepDbName)
     }
