@@ -1,0 +1,481 @@
+Initialized native services in: /opt/gradle/.gradle/native
+Initialized jansi services in: /opt/gradle/.gradle/native
+The client will now receive all logging from the daemon (pid: 570). The daemon log file: /opt/gradle/.gradle/daemon/9.3.1/daemon-570.out.log
+Starting 22nd build in daemon [uptime: 38 mins 53.966 secs, performance: 98%, GC rate: 0.00/s, heap usage: 0% of 4 GiB]
+Using 4 worker leases.
+Operational build model parameters: {requiresToolingModels=false, parallelProjectExecution=true, configureOnDemand=false, configurationCache=true, configurationCacheParallelStore=false, configurationCacheParallelLoad=true, isolatedProjects=false, parallelProjectConfiguration=false, intermediateModelCache=false, parallelToolingApiActions=true, invalidateCoupledProjects=false, modelAsProjectDependency=false, resilientModelBuilding=false}
+Encryption key source: default Gradle keystore (pkcs12)
+Reusing configuration cache.
+Watching the file system is configured to be enabled if available
+Unable to list file systems to check whether they can be watched. Disabling watching. Reason: Could not query file systems: could not open mount file (errno 2: No such file or directory)
+File system watching is inactive
+Using local directory build cache for the root build (location = /opt/gradle/.gradle/caches/build-cache-1, remove unused entries = after 7 days).
+Tasks to be executed: [task ':app:preBuild', task ':app:preDebugBuild', task ':app:generateDebugBuildConfig', task ':app:generateDebugResources', task ':app:packageDebugResources', task ':app:processDebugNavigationResources', task ':app:parseDebugLocalResources', task ':app:generateDebugRFile', task ':app:kspDebugKotlin', task ':app:compileDebugKotlin', task ':app:javaPreCompileDebug', task ':app:compileDebugJavaWithJavac', task ':app:checkDebugAarMetadata', task ':app:mapDebugSourceSetPaths', task ':app:compileDebugNavigationResources', task ':app:mergeDebugResources', task ':app:createDebugCompatibleScreenManifests', task ':app:extractDeepLinksDebug', task ':app:processDebugMainManifest', task ':app:processDebugManifest', task ':app:processDebugManifestForPackage', task ':app:processDebugResources', task ':app:bundleDebugClassesToRuntimeJar', task ':app:bundleDebugClassesToCompileJar', task ':app:kspDebugUnitTestKotlin', task ':app:preDebugUnitTestBuild', task ':app:compileDebugUnitTestKotlin', task ':app:javaPreCompileDebugUnitTest', task ':app:compileDebugUnitTestJavaWithJavac', task ':app:generateDebugAssets', task ':app:mergeDebugAssets', task ':app:packageDebugUnitTestForUnitTest', task ':app:processDebugUnitTestManifest', task ':app:generateDebugUnitTestConfig', task ':app:processDebugJavaRes', task ':app:processDebugUnitTestJavaRes', task ':app:testDebugUnitTest', task ':app:finalizeTestRoborazziDebug']
+Tasks that were excluded: []
+Resolve mutations for :app:preBuild (Thread[#987,included builds,5,main]) started.
+Resolve mutations for :app:generateDebugAssets (Thread[#989,Execution worker Thread 2,5,main]) started.
+:app:preBuild (Thread[#987,included builds,5,main]) started.
+:app:generateDebugAssets (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:generateDebugAssets UP-TO-DATE
+Skipping task ':app:generateDebugAssets' as it has no actions.
+
+> Task :app:preBuild UP-TO-DATE
+Skipping task ':app:preBuild' as it has no actions.
+Resolve mutations for :app:preDebugBuild (Thread[#987,included builds,5,main]) started.
+Resolve mutations for :app:preDebugUnitTestBuild (Thread[#988,Execution worker,5,main]) started.
+Build 3bcd595a-df23-4407-90b3-3e585759168e is started
+:app:preDebugUnitTestBuild (Thread[#988,Execution worker,5,main]) started.
+:app:preDebugBuild (Thread[#987,included builds,5,main]) started.
+
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+Skipping task ':app:preDebugUnitTestBuild' as it has no actions.
+
+> Task :app:preDebugBuild UP-TO-DATE
+Skipping task ':app:preDebugBuild' as it has no actions.
+Resolve mutations for :app:generateDebugBuildConfig (Thread[#987,included builds,5,main]) started.
+Resolve mutations for :app:processDebugNavigationResources (Thread[#988,Execution worker,5,main]) started.
+Resolve mutations for :app:javaPreCompileDebug (Thread[#989,Execution worker Thread 2,5,main]) started.
+Resolve mutations for :app:generateDebugResources (Thread[#990,Execution worker Thread 3,5,main]) started.
+:app:javaPreCompileDebug (Thread[#989,Execution worker Thread 2,5,main]) started.
+:app:processDebugNavigationResources (Thread[#988,Execution worker,5,main]) started.
+:app:generateDebugResources (Thread[#990,Execution worker Thread 3,5,main]) started.
+:app:generateDebugBuildConfig (Thread[#987,included builds,5,main]) started.
+
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+Build cache key for task ':app:generateDebugBuildConfig' is fe81073804955634f39c48a7b0f6af35
+Skipping task ':app:generateDebugBuildConfig' as it is up-to-date.
+Resolve mutations for :app:kspDebugKotlin (Thread[#987,included builds,5,main]) started.
+
+> Task :app:generateDebugResources UP-TO-DATE
+Build cache key for task ':app:generateDebugResources' is 761e3186d0f219e38d883e46ed6b9e35
+Skipping task ':app:generateDebugResources' as it is up-to-date.
+:app:kspDebugKotlin (Thread[#987,included builds,5,main]) started.
+Resolve mutations for :app:packageDebugResources (Thread[#990,Execution worker Thread 3,5,main]) started.
+:app:packageDebugResources (Thread[#990,Execution worker Thread 3,5,main]) started.
+
+> Task :app:javaPreCompileDebug UP-TO-DATE
+Build cache key for task ':app:javaPreCompileDebug' is 753e7b21613f9857de172e77c8955e1b
+Skipping task ':app:javaPreCompileDebug' as it is up-to-date.
+Resolve mutations for :app:checkDebugAarMetadata (Thread[#989,Execution worker Thread 2,5,main]) started.
+:app:checkDebugAarMetadata (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:packageDebugResources UP-TO-DATE
+Build cache key for task ':app:packageDebugResources' is 7a0f1575bddc984778566c4152739aff
+Skipping task ':app:packageDebugResources' as it is up-to-date.
+Resolve mutations for :app:mapDebugSourceSetPaths (Thread[#990,Execution worker Thread 3,5,main]) started.
+:app:mapDebugSourceSetPaths (Thread[#990,Execution worker Thread 3,5,main]) started.
+
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+Caching disabled for task ':app:mapDebugSourceSetPaths' because:
+  Caching has been disabled for the task
+Skipping task ':app:mapDebugSourceSetPaths' as it is up-to-date.
+Resolve mutations for :app:mergeDebugResources (Thread[#990,Execution worker Thread 3,5,main]) started.
+:app:mergeDebugResources (Thread[#990,Execution worker Thread 3,5,main]) started.
+
+> Task :app:kspDebugKotlin UP-TO-DATE
+Build cache key for task ':app:kspDebugKotlin' is 7cff172cef78d47d84ab7e09a072a92e
+Skipping task ':app:kspDebugKotlin' as it is up-to-date.
+Resolve mutations for :app:createDebugCompatibleScreenManifests (Thread[#987,included builds,5,main]) started.
+:app:createDebugCompatibleScreenManifests (Thread[#987,included builds,5,main]) started.
+
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+Caching disabled for task ':app:createDebugCompatibleScreenManifests' because:
+  Caching has been disabled for the task
+Skipping task ':app:createDebugCompatibleScreenManifests' as it is up-to-date.
+Resolve mutations for :app:extractDeepLinksDebug (Thread[#987,included builds,5,main]) started.
+:app:extractDeepLinksDebug (Thread[#987,included builds,5,main]) started.
+
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+Build cache key for task ':app:extractDeepLinksDebug' is 7fac792d686ce9d4f3d6cfcd83cad1c2
+Skipping task ':app:extractDeepLinksDebug' as it is up-to-date.
+Resolve mutations for :app:processDebugMainManifest (Thread[#987,included builds,5,main]) started.
+:app:processDebugMainManifest (Thread[#987,included builds,5,main]) started.
+
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+Caching disabled for task ':app:checkDebugAarMetadata' because:
+  Caching has been disabled for the task
+Skipping task ':app:checkDebugAarMetadata' as it is up-to-date.
+Resolve mutations for :app:javaPreCompileDebugUnitTest (Thread[#989,Execution worker Thread 2,5,main]) started.
+:app:javaPreCompileDebugUnitTest (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:mergeDebugResources UP-TO-DATE
+Build cache key for task ':app:mergeDebugResources' is d48755b8b8a349487f7fe1a4520e7288
+Skipping task ':app:mergeDebugResources' as it is up-to-date.
+Resolve mutations for :app:mergeDebugAssets (Thread[#990,Execution worker Thread 3,5,main]) started.
+:app:mergeDebugAssets (Thread[#990,Execution worker Thread 3,5,main]) started.
+
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+Build cache key for task ':app:javaPreCompileDebugUnitTest' is 167ed18edfa6bb129ca31d8c86b6c6c6
+Skipping task ':app:javaPreCompileDebugUnitTest' as it is up-to-date.
+work action resolve navigation.json (project :app) (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:processDebugMainManifest UP-TO-DATE
+Build cache key for task ':app:processDebugMainManifest' is 62f18ac757a340338ebef0f2e6031d28
+Skipping task ':app:processDebugMainManifest' as it is up-to-date.
+Resolve mutations for :app:processDebugManifest (Thread[#987,included builds,5,main]) started.
+Resolve mutations for :app:processDebugUnitTestManifest (Thread[#989,Execution worker Thread 2,5,main]) started.
+:app:processDebugManifest (Thread[#987,included builds,5,main]) started.
+:app:processDebugUnitTestManifest (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:processDebugManifest UP-TO-DATE
+Build cache key for task ':app:processDebugManifest' is 452f6ca82540e0fe338e43f49c3ae3ab
+Skipping task ':app:processDebugManifest' as it is up-to-date.
+Resolve mutations for :app:processDebugManifestForPackage (Thread[#987,included builds,5,main]) started.
+:app:processDebugManifestForPackage (Thread[#987,included builds,5,main]) started.
+
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+Build cache key for task ':app:processDebugManifestForPackage' is f3a397112336ab23d4f659312e77b4b7
+Skipping task ':app:processDebugManifestForPackage' as it is up-to-date.
+
+> Task :app:mergeDebugAssets UP-TO-DATE
+Caching disabled for task ':app:mergeDebugAssets' because:
+  Simple merging task
+Skipping task ':app:mergeDebugAssets' as it is up-to-date.
+
+> Task :app:processDebugUnitTestManifest UP-TO-DATE
+Caching disabled for task ':app:processDebugUnitTestManifest' because:
+  Caching has been disabled for the task
+Skipping task ':app:processDebugUnitTestManifest' as it is up-to-date.
+
+> Task :app:processDebugNavigationResources UP-TO-DATE
+Build cache key for task ':app:processDebugNavigationResources' is 5db2749b82ab5c5c31d150274a48f538
+Skipping task ':app:processDebugNavigationResources' as it is up-to-date.
+Resolve mutations for :app:parseDebugLocalResources (Thread[#988,Execution worker,5,main]) started.
+Resolve mutations for :app:compileDebugNavigationResources (Thread[#989,Execution worker Thread 2,5,main]) started.
+:app:parseDebugLocalResources (Thread[#989,Execution worker Thread 2,5,main]) started.
+:app:compileDebugNavigationResources (Thread[#987,included builds,5,main]) started.
+
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+Build cache key for task ':app:compileDebugNavigationResources' is 5b1c706523627cbb9dbe177765d14161
+Skipping task ':app:compileDebugNavigationResources' as it is up-to-date.
+
+> Task :app:parseDebugLocalResources UP-TO-DATE
+Build cache key for task ':app:parseDebugLocalResources' is dcebe5ddd22c3e0b39419013e56938b8
+Skipping task ':app:parseDebugLocalResources' as it is up-to-date.
+Resolve mutations for :app:generateDebugRFile (Thread[#989,Execution worker Thread 2,5,main]) started.
+Resolve mutations for :app:processDebugResources (Thread[#987,included builds,5,main]) started.
+:app:generateDebugRFile (Thread[#989,Execution worker Thread 2,5,main]) started.
+:app:processDebugResources (Thread[#990,Execution worker Thread 3,5,main]) started.
+
+> Task :app:generateDebugRFile UP-TO-DATE
+Build cache key for task ':app:generateDebugRFile' is dac053e8ba53a0eb4e3f0b2306f8f323
+Skipping task ':app:generateDebugRFile' as it is up-to-date.
+Resolve mutations for :app:compileDebugKotlin (Thread[#989,Execution worker Thread 2,5,main]) started.
+:app:compileDebugKotlin (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:compileDebugKotlin UP-TO-DATE
+file or directory '/app/applet/app/src/main/kotlin', not found
+file or directory '/app/applet/app/src/debug/java', not found
+file or directory '/app/applet/app/src/debug/kotlin', not found
+file or directory '/app/applet/app/src/debug/java', not found
+file or directory '/app/applet/app/src/main/kotlin', not found
+file or directory '/app/applet/app/src/debug/java', not found
+file or directory '/app/applet/app/src/debug/kotlin', not found
+file or directory '/app/applet/app/src/debug/java', not found
+file or directory '/app/applet/app/src/main/kotlin', not found
+file or directory '/app/applet/app/src/debug/java', not found
+file or directory '/app/applet/app/src/debug/kotlin', not found
+file or directory '/app/applet/app/src/debug/java', not found
+Build cache key for task ':app:compileDebugKotlin' is ce6a8f9c5ac20bfb5fc2c0c024f76f7f
+Skipping task ':app:compileDebugKotlin' as it is up-to-date.
+Resolve mutations for :app:compileDebugJavaWithJavac (Thread[#989,Execution worker Thread 2,5,main]) started.
+Resolve mutations for :app:processDebugJavaRes (Thread[#987,included builds,5,main]) started.
+:app:processDebugJavaRes (Thread[#987,included builds,5,main]) started.
+:app:compileDebugJavaWithJavac (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:processDebugJavaRes UP-TO-DATE
+file or directory '/app/applet/app/src/main/resources', not found
+file or directory '/app/applet/app/src/debug/resources', not found
+Caching disabled for task ':app:processDebugJavaRes' because:
+  Caching has been disabled for the task
+Skipping task ':app:processDebugJavaRes' as it is up-to-date.
+work action resolve out (project :app) (Thread[#987,included builds,5,main]) started.
+
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+Build cache key for task ':app:compileDebugJavaWithJavac' is 7f2d3d44616baf4136336c64f9e3c317
+Skipping task ':app:compileDebugJavaWithJavac' as it is up-to-date.
+No compile result for :app:compileDebugJavaWithJavac
+
+> Task :app:processDebugResources UP-TO-DATE
+Build cache key for task ':app:processDebugResources' is 6392620177f73b99baa4a8ce140ad424
+Skipping task ':app:processDebugResources' as it is up-to-date.
+Resolve mutations for :app:bundleDebugClassesToRuntimeJar (Thread[#990,Execution worker Thread 3,5,main]) started.
+Resolve mutations for :app:bundleDebugClassesToCompileJar (Thread[#989,Execution worker Thread 2,5,main]) started.
+Resolve mutations for :app:packageDebugUnitTestForUnitTest (Thread[#988,Execution worker,5,main]) started.
+:app:bundleDebugClassesToRuntimeJar (Thread[#990,Execution worker Thread 3,5,main]) started.
+:app:packageDebugUnitTestForUnitTest (Thread[#988,Execution worker,5,main]) started.
+:app:bundleDebugClassesToCompileJar (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:packageDebugUnitTestForUnitTest UP-TO-DATE
+Caching disabled for task ':app:packageDebugUnitTestForUnitTest' because:
+  Simple merging task
+Skipping task ':app:packageDebugUnitTestForUnitTest' as it is up-to-date.
+Resolve mutations for :app:generateDebugUnitTestConfig (Thread[#988,Execution worker,5,main]) started.
+:app:generateDebugUnitTestConfig (Thread[#988,Execution worker,5,main]) started.
+
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+Caching disabled for task ':app:bundleDebugClassesToCompileJar' because:
+  Caching has been disabled for the task
+Skipping task ':app:bundleDebugClassesToCompileJar' as it is up-to-date.
+work action resolve classes.jar (project :app) (Thread[#989,Execution worker Thread 2,5,main]) started.
+Resolve mutations for :app:kspDebugUnitTestKotlin (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:bundleDebugClassesToRuntimeJar UP-TO-DATE
+Caching disabled for task ':app:bundleDebugClassesToRuntimeJar' because:
+  Caching has been disabled for the task
+Skipping task ':app:bundleDebugClassesToRuntimeJar' as it is up-to-date.
+work action resolve classes.jar (project :app) (Thread[#990,Execution worker Thread 3,5,main]) started.
+:app:kspDebugUnitTestKotlin (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:generateDebugUnitTestConfig UP-TO-DATE
+Caching disabled for task ':app:generateDebugUnitTestConfig' because:
+  Caching has been disabled for the task
+Skipping task ':app:generateDebugUnitTestConfig' as it is up-to-date.
+
+> Task :app:kspDebugUnitTestKotlin
+Build cache key for task ':app:kspDebugUnitTestKotlin' is 90eea9c51a59c820d0596d22976c100e
+Task ':app:kspDebugUnitTestKotlin' is not up-to-date because:
+  Input property 'kspConfig.javaSourceRoots' file /app/applet/app/src/test/java/com/example/ParkingTimerResultTest.kt has changed.
+Stored cache entry for task ':app:kspDebugUnitTestKotlin' with cache key 90eea9c51a59c820d0596d22976c100e
+Resolve mutations for :app:compileDebugUnitTestKotlin (Thread[#989,Execution worker Thread 2,5,main]) started.
+:app:compileDebugUnitTestKotlin (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:compileDebugUnitTestKotlin
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+Build cache key for task ':app:compileDebugUnitTestKotlin' is a1f12523c5effb716d1296d1ff0b3e23
+Task ':app:compileDebugUnitTestKotlin' is not up-to-date because:
+  Task has failed previously.
+The input changes require a full rebuild for incremental task ':app:compileDebugUnitTestKotlin'.
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/build/generated/ksp/debugUnitTest/java', not found
+file or directory '/app/applet/app/build/generated/ksp/debugUnitTest/kotlin', not found
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/build/generated/ksp/debugUnitTest/java', not found
+file or directory '/app/applet/app/build/generated/ksp/debugUnitTest/kotlin', not found
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/build/generated/ksp/debugUnitTest/java', not found
+file or directory '/app/applet/app/build/generated/ksp/debugUnitTest/kotlin', not found
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/test/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/kotlin', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/src/testDebug/java', not found
+file or directory '/app/applet/app/build/generated/ksp/debugUnitTest/java', not found
+file or directory '/app/applet/app/build/generated/ksp/debugUnitTest/kotlin', not found
+Kotlin source files: /app/applet/app/src/test/java/com/example/CurbPersistenceAndLogoutTest.kt, /app/applet/app/src/test/java/com/example/ParkingSpotPersistenceTest.kt, /app/applet/app/src/test/java/com/example/notification/NotificationSchedulerTest.kt, /app/applet/app/src/test/java/com/example/ExampleUnitTest.kt, /app/applet/app/src/test/java/com/example/ScanResultDefaultsTest.kt, /app/applet/app/src/test/java/com/example/LocationAuthorityTest.kt, /app/applet/app/src/test/java/com/example/CurbAiAndRuleConsistencyTest.kt, /app/applet/app/src/test/java/com/example/SignCandidateValidatorTest.kt, /app/applet/app/src/test/java/com/example/SubscriptionEntitlementIntegrityTest.kt, /app/applet/app/src/test/java/com/example/ExampleRobolectricTest.kt, /app/applet/app/src/test/java/com/example/NavigationHierarchyTest.kt, /app/applet/app/src/test/java/com/example/MonetizationPresentationIntegrityTest.kt, /app/applet/app/src/test/java/com/example/VisionQualityHardeningTest.kt, /app/applet/app/src/test/java/com/example/ParkingTimerCalculatorTest.kt, /app/applet/app/src/test/java/com/example/ChatUsageManagerTest.kt, /app/applet/app/src/test/java/com/example/SemanticConsistencyTest.kt, /app/applet/app/src/test/java/com/example/DemoIsolationTest.kt, /app/applet/app/src/test/java/com/example/DatabaseMigrationSafetyTest.kt, /app/applet/app/src/test/java/com/example/UsageQuotaIntegrityTest.kt, /app/applet/app/src/test/java/com/example/SignDetectionPipelineTest.kt, /app/applet/app/src/test/java/com/example/AccountInformationArchitectureTest.kt, /app/applet/app/src/test/java/com/example/TimerAuthorityTest.kt, /app/applet/app/src/test/java/com/example/EvidenceAnchoringTest.kt, /app/applet/app/src/test/java/com/example/ViewModelDecompositionTest.kt, /app/applet/app/src/test/java/com/example/GreetingScreenshotTest.kt, /app/applet/app/src/test/java/com/example/NavigationArchitectureTest.kt, /app/applet/app/src/test/java/com/example/ParkingTimerResultTest.kt
+Java source files: 
+Script source files: 
+Script file extensions: 
+Using Kotlin/JVM incremental compilation
+[KOTLIN] Kotlin compilation 'jdkHome' argument: /usr/lib/jvm/temurin-21-jdk-amd64
+Finished executing kotlin compiler using IN_PROCESS strategy
+Stored cache entry for task ':app:compileDebugUnitTestKotlin' with cache key a1f12523c5effb716d1296d1ff0b3e23
+Resolve mutations for :app:compileDebugUnitTestJavaWithJavac (Thread[#989,Execution worker Thread 2,5,main]) started.
+Resolve mutations for :app:processDebugUnitTestJavaRes (Thread[#988,Execution worker,5,main]) started.
+:app:processDebugUnitTestJavaRes (Thread[#988,Execution worker,5,main]) started.
+:app:compileDebugUnitTestJavaWithJavac (Thread[#989,Execution worker Thread 2,5,main]) started.
+
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+Skipping task ':app:compileDebugUnitTestJavaWithJavac' as it has no source files and no previous output files.
+
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+file or directory '/app/applet/app/src/test/resources', not found
+file or directory '/app/applet/app/src/testDebug/resources', not found
+Caching disabled for task ':app:processDebugUnitTestJavaRes' because:
+  Caching has been disabled for the task
+Skipping task ':app:processDebugUnitTestJavaRes' as it is up-to-date.
+Resolve mutations for :app:testDebugUnitTest (Thread[#988,Execution worker,5,main]) started.
+:app:testDebugUnitTest (Thread[#988,Execution worker,5,main]) started.
+Gradle Test Executor 17 started executing tests.
+
+> Task :app:testDebugUnitTest
+Build cache key for task ':app:testDebugUnitTest' is d4892d60864788db07476a162972805e
+Task ':app:testDebugUnitTest' is not up-to-date because:
+  Task has failed previously.
+file or directory '/app/applet/app/build/generated/ksp/debugUnitTest/resources', not found
+file or directory '/app/applet/app/build/generated/ksp/debugUnitTest/classes', not found
+file or directory '/app/applet/app/build/intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes', not found
+Starting process 'Gradle Test Executor 17'. Working directory: /app/applet/app Command: /usr/lib/jvm/temurin-21-jdk-amd64/bin/java -Djava.awt.headless=true -Djava.library.path=/usr/java/packages/lib:/usr/lib64:/lib64:/lib:/usr/lib:/app/applet/app/src/testDebug/jniLibs:/app/applet/app/src/test/jniLibs -Dorg.gradle.internal.worker.tmpdir=/app/applet/app/build/tmp/testDebugUnitTest/work --add-opens=java.base/java.io=ALL-UNNAMED @/opt/gradle/.gradle/.tmp/gradle-worker-classpath16520761425902542158txt -Xmx512m -Dfile.encoding=UTF-8 -Duser.country=US -Duser.language=en -Duser.variant -ea worker.org.gradle.process.internal.worker.GradleWorkerMain 'Gradle Test Executor 17'
+Successfully started process 'Gradle Test Executor 17'
+
+ParkingTimerResultTest > viewModel startParkingSession propagates failure result STANDARD_OUT
+    Saved restricted scan ID: 1
+    VM failure callback received session ID: -1
+    Captured failure ID: -1
+
+ParkingTimerResultTest > repository startParkingSession success with valid signs STANDARD_OUT
+    Saved scan ID: 2
+    Started session ID: 1
+
+ParkingTimerResultTest > viewModel startParkingSession propagates success result STANDARD_OUT
+    Saved scan ID: 3
+    TEST FAILED WITH: kotlinx.coroutines.TimeoutCancellationException: Timed out after 5s of _virtual_ (kotlinx.coroutines.test) time. To use the real time, wrap 'withTimeout' in 'withContext(Dispatchers.Default.limitedParallelism(1))'
+
+ParkingTimerResultTest > viewModel startParkingSession propagates success result STANDARD_ERROR
+    kotlinx.coroutines.TimeoutCancellationException: Timed out after 5s of _virtual_ (kotlinx.coroutines.test) time. To use the real time, wrap 'withTimeout' in 'withContext(Dispatchers.Default.limitedParallelism(1))'
+    	at kotlinx.coroutines.TimeoutKt.TimeoutCancellationException(Timeout.kt:189)
+    	at kotlinx.coroutines.TimeoutCoroutine.run(Timeout.kt:157)
+    	at kotlinx.coroutines.test.TestDispatcher.processEvent$kotlinx_coroutines_test(TestDispatcher.kt:24)
+    	at kotlinx.coroutines.test.TestCoroutineScheduler.tryRunNextTaskUnless$kotlinx_coroutines_test(TestCoroutineScheduler.kt:99)
+    	at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt$runTest$2$1$workRunner$1.invokeSuspend(TestBuilders.kt:326)
+    	at _COROUTINE._BOUNDARY._(CoroutineDebugging.kt:42)
+    	at com.example.ParkingTimerResultTest$viewModel startParkingSession propagates success result$1$capturedId$1.invokeSuspend(ParkingTimerResultTest.kt:128)
+    	at com.example.ParkingTimerResultTest$viewModel startParkingSession propagates success result$1.invokeSuspend(ParkingTimerResultTest.kt:128)
+    	at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt$runTest$2$1$1.invokeSuspend(TestBuilders.kt:317)
+    Caused by: kotlinx.coroutines.TimeoutCancellationException: Timed out after 5s of _virtual_ (kotlinx.coroutines.test) time. To use the real time, wrap 'withTimeout' in 'withContext(Dispatchers.Default.limitedParallelism(1))'
+    	at kotlinx.coroutines.TimeoutKt.TimeoutCancellationException(Timeout.kt:189)
+    	at kotlinx.coroutines.TimeoutCoroutine.run(Timeout.kt:157)
+    	at kotlinx.coroutines.test.TestDispatcher.processEvent$kotlinx_coroutines_test(TestDispatcher.kt:24)
+    	at kotlinx.coroutines.test.TestCoroutineScheduler.tryRunNextTaskUnless$kotlinx_coroutines_test(TestCoroutineScheduler.kt:99)
+    	at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt$runTest$2$1$workRunner$1.invokeSuspend(TestBuilders.kt:326)
+    	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+    	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+    	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+    	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+    	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+    	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+    	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+    	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+    	at kotlinx.coroutines.test.TestBuildersJvmKt.createTestResult(TestBuildersJvm.kt:10)
+
+ParkingTimerResultTest > viewModel startParkingSession propagates success result STANDARD_OUT
+    VM callback received session ID: 2
+
+ParkingTimerResultTest > viewModel startParkingSession propagates success result STANDARD_ERROR
+    	at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt.runTest-8Mi8wO0(TestBuilders.kt:309)
+    	at kotlinx.coroutines.test.TestBuildersKt.runTest-8Mi8wO0(Unknown Source)
+    	at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt.runTest-8Mi8wO0(TestBuilders.kt:167)
+    	at kotlinx.coroutines.test.TestBuildersKt.runTest-8Mi8wO0(Unknown Source)
+    	at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt.runTest-8Mi8wO0$default(TestBuilders.kt:159)
+    	at kotlinx.coroutines.test.TestBuildersKt.runTest-8Mi8wO0$default(Unknown Source)
+    	at com.example.ParkingTimerResultTest.viewModel startParkingSession propagates success result(ParkingTimerResultTest.kt:94)
+    	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+    	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+    	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+    	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+    	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+    	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+    	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+    	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+    	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+    	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+    	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+    	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+    	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+    	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+    	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+    	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+    	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+    	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+    	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+    	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+    	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+    	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+    	at java.base/java.lang.Thread.run(Thread.java:1583)
+
+Gradle Test Executor 17 finished executing tests.
+
+> Task :app:testDebugUnitTest FAILED
+
+ParkingTimerResultTest > viewModel startParkingSession propagates success result FAILED
+    kotlinx.coroutines.TimeoutCancellationException: Timed out after 5s of _virtual_ (kotlinx.coroutines.test) time. To use the real time, wrap 'withTimeout' in 'withContext(Dispatchers.Default.limitedParallelism(1))'
+        at kotlinx.coroutines.TimeoutKt.TimeoutCancellationException(Timeout.kt:189)
+        at kotlinx.coroutines.TimeoutCoroutine.run(Timeout.kt:157)
+        at kotlinx.coroutines.test.TestDispatcher.processEvent$kotlinx_coroutines_test(TestDispatcher.kt:24)
+        at kotlinx.coroutines.test.TestCoroutineScheduler.tryRunNextTaskUnless$kotlinx_coroutines_test(TestCoroutineScheduler.kt:99)
+        at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt$runTest$2$1$workRunner$1.invokeSuspend(TestBuilders.kt:326)
+        at _COROUTINE._BOUNDARY._(CoroutineDebugging.kt:42)
+        at com.example.ParkingTimerResultTest$viewModel startParkingSession propagates success result$1$capturedId$1.invokeSuspend(ParkingTimerResultTest.kt:128)
+        at com.example.ParkingTimerResultTest$viewModel startParkingSession propagates success result$1.invokeSuspend(ParkingTimerResultTest.kt:128)
+        at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt$runTest$2$1$1.invokeSuspend(TestBuilders.kt:317)
+
+        Caused by:
+        kotlinx.coroutines.TimeoutCancellationException: Timed out after 5s of _virtual_ (kotlinx.coroutines.test) time. To use the real time, wrap 'withTimeout' in 'withContext(Dispatchers.Default.limitedParallelism(1))'
+            at kotlinx.coroutines.TimeoutKt.TimeoutCancellationException(Timeout.kt:189)
+            at kotlinx.coroutines.TimeoutCoroutine.run(Timeout.kt:157)
+            at kotlinx.coroutines.test.TestDispatcher.processEvent$kotlinx_coroutines_test(TestDispatcher.kt:24)
+            at kotlinx.coroutines.test.TestCoroutineScheduler.tryRunNextTaskUnless$kotlinx_coroutines_test(TestCoroutineScheduler.kt:99)
+            at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt$runTest$2$1$workRunner$1.invokeSuspend(TestBuilders.kt:326)
+            at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+            at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+            at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+            at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+            at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+            at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+            at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+            at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+            at kotlinx.coroutines.test.TestBuildersJvmKt.createTestResult(TestBuildersJvm.kt:10)
+            at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt.runTest-8Mi8wO0(TestBuilders.kt:309)
+            at kotlinx.coroutines.test.TestBuildersKt.runTest-8Mi8wO0(Unknown Source)
+            at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt.runTest-8Mi8wO0(TestBuilders.kt:167)
+            at kotlinx.coroutines.test.TestBuildersKt.runTest-8Mi8wO0(Unknown Source)
+            at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt.runTest-8Mi8wO0$default(TestBuilders.kt:159)
+            at kotlinx.coroutines.test.TestBuildersKt.runTest-8Mi8wO0$default(Unknown Source)
+            at com.example.ParkingTimerResultTest.viewModel startParkingSession propagates success result(ParkingTimerResultTest.kt:94)
+
+3 tests completed, 1 failed
+Generating HTML test report...
+Finished generating test html results (0.021 secs) into: /app/applet/app/build/reports/tests/testDebugUnitTest
+Finished generating test XML results (0.005 secs) into: /app/applet/app/build/test-results/testDebugUnitTest
+Resolve mutations for :app:finalizeTestRoborazziDebug (Thread[#988,Execution worker,5,main]) started.
+:app:finalizeTestRoborazziDebug (Thread[#988,Execution worker,5,main]) started.
+
+> Task :app:finalizeTestRoborazziDebug SKIPPED
+Roborazzi: roborazziTestFinalizer.onlyIf doesRoborazziRun false
+Skipping task ':app:finalizeTestRoborazziDebug' as task onlyIf 'Task satisfies onlyIf spec' is false.
+Build 3bcd595a-df23-4407-90b3-3e585759168e is closed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///app/applet/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 27s
+32 actionable tasks: 3 executed, 29 up-to-date
+Configuration cache entry reused.
