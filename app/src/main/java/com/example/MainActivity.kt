@@ -165,7 +165,8 @@ fun CurbApp(
         Routes.SCAN,
         Routes.ASK_CURB,
         Routes.FIND_MY_CAR,
-        Routes.YOU
+        Routes.YOU,
+        Routes.ACTIVITY
     )) && !isImeVisible
 
     Scaffold(

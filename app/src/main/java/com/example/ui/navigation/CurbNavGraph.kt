@@ -426,6 +426,13 @@ fun CurbNavGraph(
                 },
                 onUpgradeToPro = {
                     navController.navigate(Routes.CURB_PRO_PAYWALL)
+                },
+                onBack = {
+                    if (!navController.popBackStack()) {
+                        navController.navigate(Routes.HOME) {
+                            popUpTo(Routes.HOME) { inclusive = true }
+                        }
+                    }
                 }
             )
         }

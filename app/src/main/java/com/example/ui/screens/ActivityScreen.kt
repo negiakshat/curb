@@ -19,18 +19,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -46,16 +45,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
-import com.example.ui.components.CurbCard
+import com.example.ui.components.CurbEmptyState
 import com.example.ui.components.CurbProFeatureBottomSheet
 import com.example.ui.components.CurbSegmentedStatusBar
-import com.example.ui.theme.BentoBeige
+import com.example.ui.components.CurbVerdictBadge
 import com.example.ui.theme.BentoBorder
-import com.example.ui.theme.BentoBorderStrong
 import com.example.ui.theme.BentoCanvas
 import com.example.ui.theme.BentoPeach
 import com.example.ui.theme.BentoPrimary
@@ -64,16 +63,13 @@ import com.example.ui.theme.BentoSand
 import com.example.ui.theme.BentoTextPrimary
 import com.example.ui.theme.BentoTextSecondary
 import com.example.ui.theme.BentoWhite
-import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbError
-import com.example.ui.theme.CurbOnSurface
-import com.example.ui.theme.CurbOnSurfaceVariant
 import com.example.ui.theme.CurbSuccess
-import com.example.ui.theme.CurbSurface
 import com.example.ui.theme.CurbWarning
 import com.example.ui.theme.RadiusCard
 import com.example.ui.theme.RadiusChip
 import com.example.ui.theme.RadiusHero
+import com.example.ui.theme.RadiusNested
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -83,7 +79,8 @@ fun ActivityScreen(
     scans: List<ScanResult>,
     isPro: Boolean = false,
     onScanClicked: (ScanResult) -> Unit,
-    onUpgradeToPro: () -> Unit = {}
+    onUpgradeToPro: () -> Unit = {},
+    onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var showExportProSheet by remember { mutableStateOf(false) }
@@ -101,29 +98,60 @@ fun ActivityScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(CurbBackground)
+            .background(BentoCanvas)
             .statusBarsPadding()
             .testTag("activity_screen"),
-        contentPadding = PaddingValues(bottom = 100.dp)
+        contentPadding = PaddingValues(bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // TOP HEADING & EXPORT ACTION
+        // TOP HEADER & EXPORT ACTION
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Activity",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = BentoTextPrimary
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("activity_back_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = BentoTextPrimary
+                            )
+                        }
+
+                        Column {
+                            Text(
+                                text = "Activity",
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BentoTextPrimary,
+                                letterSpacing = (-0.5).sp
+                            )
+                            Text(
+                                text = "Parking history & scan analytics",
+                                fontSize = 12.sp,
+                                color = BentoTextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
 
                     // EXPORT ACTION BUTTON
                     Surface(
@@ -142,7 +170,7 @@ fun ActivityScreen(
                             .testTag("activity_export_button")
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
@@ -161,26 +189,102 @@ fun ActivityScreen(
                         }
                     }
                 }
+            }
+        }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // COMPACT ANALYTICS BANNER
-                CurbCard(
-                    cornerRadius = RadiusCard,
-                    backgroundColor = BentoWhite,
-                    borderColor = BentoBorder
+        // BENTO ANALYTICS DASHBOARD CARD
+        item {
+            Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(RadiusHero)),
+                    shape = RoundedCornerShape(RadiusHero),
+                    colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                    border = BorderStroke(1.dp, BentoBorder),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
-                        Text(
-                            text = "${scans.size} Scans | $clearRate% Clear Rate | $ambiguousCount Ambiguous",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = BentoTextPrimary
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Bento Metric Tile 1: Total Scans
+                            Card(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(RadiusCard),
+                                colors = CardDefaults.cardColors(containerColor = BentoSand),
+                                border = BorderStroke(1.dp, BentoBorder),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = "TOTAL SCANS",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BentoTextSecondary,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "${scans.size}",
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BentoPrimaryDark
+                                    )
+                                }
+                            }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                            // Bento Metric Tile 2: Clear Rate
+                            Card(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(RadiusCard),
+                                colors = CardDefaults.cardColors(containerColor = BentoPeach.copy(alpha = 0.4f)),
+                                border = BorderStroke(1.dp, BentoBorder),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = "CLEAR RATE",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BentoTextSecondary,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "$clearRate%",
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BentoPrimaryDark
+                                    )
+                                }
+                            }
+                        }
 
-                        // Thin segmented verdict bar (Green / Red / Amber)
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "VERDICT BREAKDOWN",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BentoTextSecondary,
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                text = "$allowedCount allowed • $restrictedCount restricted • $ambiguousCount unclear",
+                                fontSize = 10.sp,
+                                color = BentoTextSecondary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
                         CurbSegmentedStatusBar(
                             allowedCount = allowedCount.coerceAtLeast(if (scans.isEmpty()) 1 else 0),
                             restrictedCount = restrictedCount,
@@ -188,142 +292,144 @@ fun ActivityScreen(
                         )
                     }
                 }
+            }
+        }
 
-                Spacer(modifier = Modifier.height(24.dp))
+        // HISTORY SECTION HEADER
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "History",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BentoTextPrimary,
+                    letterSpacing = (-0.3).sp
+                )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "History",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = BentoTextPrimary
-                    )
-
-                    if (!isPro && scans.size > 5) {
-                        Surface(
-                            shape = RoundedCornerShape(RadiusChip),
-                            color = BentoSand,
-                            border = BorderStroke(1.dp, BentoBorder)
-                        ) {
-                            Text(
-                                text = "Showing 5 of ${scans.size} (Free)",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = BentoTextSecondary,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
+                if (!isPro && scans.size > 5) {
+                    Surface(
+                        shape = RoundedCornerShape(RadiusChip),
+                        color = BentoSand,
+                        border = BorderStroke(1.dp, BentoBorder)
+                    ) {
+                        Text(
+                            text = "Showing 5 of ${scans.size} (Free)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = BentoTextSecondary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
                     }
                 }
             }
         }
 
-        if (scans.isEmpty()) {
-            item {
-                Box(
+        // HISTORY BENTO CONTAINER CARD
+        item {
+            Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 20.dp)
+                        .clip(RoundedCornerShape(RadiusHero)),
+                    shape = RoundedCornerShape(RadiusHero),
+                    colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                    border = BorderStroke(1.dp, BentoBorder),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
-                    com.example.ui.components.CurbEmptyState(
-                        title = "No scans yet",
-                        subtitle = "Your parking scans will appear here."
-                    )
-                }
-            }
-        } else {
-            // ACCESSIBLE SCANS (Full list for Pro, top 5 for Free)
-            items(accessibleScans) { scan ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 5.dp)
-                ) {
-                    RecentScanCard(
-                        scan = scan,
-                        onClick = { onScanClicked(scan) }
-                    )
-                }
-            }
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        if (scans.isEmpty()) {
+                            CurbEmptyState(
+                                title = "No scans yet",
+                                subtitle = "Your parking scans will appear here."
+                            )
+                        } else {
+                            accessibleScans.forEachIndexed { index, scan ->
+                                ActivityScanRowItem(
+                                    scan = scan,
+                                    onClick = { onScanClicked(scan) }
+                                )
+                                if (index < accessibleScans.lastIndex || (!isPro && lockedScansCount > 0)) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(vertical = 10.dp),
+                                        color = BentoBorder.copy(alpha = 0.6f),
+                                        thickness = 1.dp
+                                    )
+                                }
+                            }
 
-            // LOCKED HISTORY CARD FOR FREE USERS
-            if (!isPro && lockedScansCount > 0) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 12.dp)
-                    ) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(RadiusCard))
-                                .clickable { showHistoryProSheet = true }
-                                .testTag("locked_scan_history_card"),
-                            shape = RoundedCornerShape(RadiusCard),
-                            colors = CardDefaults.cardColors(containerColor = BentoSand),
-                            border = BorderStroke(1.dp, BentoBorder)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(18.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                Box(
+                            // LOCKED HISTORY TILE INSIDE BENTO SURFACE FOR FREE USERS
+                            if (!isPro && lockedScansCount > 0) {
+                                Card(
                                     modifier = Modifier
-                                        .size(46.dp)
-                                        .background(BentoPeach.copy(alpha = 0.3f), CircleShape),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(RadiusCard))
+                                        .clickable { showHistoryProSheet = true }
+                                        .testTag("locked_scan_history_card"),
+                                    shape = RoundedCornerShape(RadiusCard),
+                                    colors = CardDefaults.cardColors(containerColor = BentoSand),
+                                    border = BorderStroke(1.dp, BentoBorder),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = "Locked",
-                                        tint = BentoPrimaryDark,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-
-                                Column(modifier = Modifier.weight(1f)) {
                                     Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(14.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
-                                        Text(
-                                            text = "Older scan history ($lockedScansCount hidden)",
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = BentoTextPrimary
-                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .background(BentoPeach.copy(alpha = 0.4f), CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Lock,
+                                                contentDescription = "Locked",
+                                                tint = BentoPrimaryDark,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Older scan history ($lockedScansCount hidden)",
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = BentoTextPrimary
+                                            )
+
+                                            Spacer(modifier = Modifier.height(2.dp))
+
+                                            Text(
+                                                text = "Unlock your complete parking history with Curb Pro.",
+                                                fontSize = 12.sp,
+                                                lineHeight = 16.sp,
+                                                color = BentoTextSecondary
+                                            )
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(RadiusChip),
+                                            color = BentoPrimaryDark
+                                        ) {
+                                            Text(
+                                                text = "UNLOCK",
+                                                color = BentoWhite,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.6.sp,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                            )
+                                        }
                                     }
-
-                                    Spacer(modifier = Modifier.height(3.dp))
-
-                                    Text(
-                                        text = "Unlock your complete parking history with Curb Pro.",
-                                        fontSize = 13.sp,
-                                        lineHeight = 18.sp,
-                                        color = BentoTextSecondary
-                                    )
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(RadiusChip),
-                                    color = BentoPrimaryDark
-                                ) {
-                                    Text(
-                                        text = "UNLOCK",
-                                        color = BentoWhite,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.6.sp,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                    )
                                 }
                             }
                         }
@@ -356,6 +462,89 @@ fun ActivityScreen(
     }
 }
 
+@Composable
+private fun ActivityScanRowItem(
+    scan: ScanResult,
+    onClick: () -> Unit
+) {
+    val dateStr = remember(scan.timestamp) {
+        val now = System.currentTimeMillis()
+        val diff = now - scan.timestamp
+        when {
+            diff < 24 * 60 * 60 * 1000L -> "Today • " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(scan.timestamp))
+            diff < 48 * 60 * 60 * 1000L -> "Yesterday • " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(scan.timestamp))
+            else -> SimpleDateFormat("MMM d • h:mm a", Locale.getDefault()).format(Date(scan.timestamp))
+        }
+    }
+
+    val (statusColor, statusText) = when (scan.verdict) {
+        ScanVerdict.ALLOWED -> Pair(CurbSuccess, "Parking allowed")
+        ScanVerdict.RESTRICTED -> Pair(CurbError, "Parking restricted")
+        ScanVerdict.AMBIGUOUS -> Pair(CurbWarning, "Rule unclear")
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(RadiusNested))
+            .clickable { onClick() }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(statusColor, CircleShape)
+            )
+
+            Column {
+                Text(
+                    text = scan.locationName,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BentoTextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = statusText,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = statusColor
+                    )
+                    Text(
+                        text = "•",
+                        fontSize = 11.sp,
+                        color = BentoTextSecondary
+                    )
+                    Text(
+                        text = dateStr,
+                        fontSize = 11.sp,
+                        color = BentoTextSecondary
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        CurbVerdictBadge(verdict = scan.verdict)
+    }
+}
+
 private fun exportScansAsReport(context: Context, scans: List<ScanResult>) {
     val builder = StringBuilder()
     builder.append("CURB PARKING HISTORY REPORT\n")
@@ -384,3 +573,4 @@ private fun exportScansAsReport(context: Context, scans: List<ScanResult>) {
     }
     context.startActivity(Intent.createChooser(intent, "Export Parking History"))
 }
+
