@@ -40,16 +40,11 @@ import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,7 +53,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
@@ -75,8 +69,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -89,32 +81,29 @@ import com.example.data.model.ActiveParkingSession
 import com.example.data.model.ParkingSpot
 import com.example.ui.components.CurbPrimaryButton
 import com.example.ui.components.CurbSecondaryButton
-import com.example.ui.theme.RadiusCard
-import com.example.ui.theme.RadiusChip
-import com.example.ui.theme.RadiusHero
+import com.example.ui.theme.BentoBeige
 import com.example.ui.theme.BentoBorder
 import com.example.ui.theme.BentoCanvas
 import com.example.ui.theme.BentoPeach
 import com.example.ui.theme.BentoPrimary
 import com.example.ui.theme.BentoPrimaryDark
 import com.example.ui.theme.BentoSand
+import com.example.ui.theme.BentoTextDark
+import com.example.ui.theme.BentoTextPrimary
+import com.example.ui.theme.BentoTextSecondary
 import com.example.ui.theme.BentoWhite
 import com.example.ui.theme.CurbError
 import com.example.ui.theme.CurbErrorContainer
+import com.example.ui.theme.CurbSuccess
+import com.example.ui.theme.CurbSuccessContainer
+import com.example.ui.theme.RadiusCard
+import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusHero
+import com.example.ui.theme.RadiusNested
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-// Vibrant Theme Palette matching Curb design identity
-private val TimerTrackGreen = Color(0xFFE2F6EA)
-private val TimerProgressGreen = Color(0xFF1DB954)
-private val TimerTextDark = Color(0xFF121212)
-private val TimerTextMuted = Color(0xFF757575)
-private val TimerCardBg = Color(0xFFFFFFFF)
-private val TimerBannerBg = Color(0xFFEDF7F1)
-private val TimerBannerGreen = Color(0xFF1B873F)
-private val TimerDividerColor = Color(0xFFF1F1F1)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -193,7 +182,7 @@ fun ParkingTimerScreen(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(TimerCardBg)
+                    .background(BentoWhite)
                     .border(1.dp, BentoBorder, CircleShape)
                     .clickable { onBack() }
                     .testTag("timer_back_button"),
@@ -202,18 +191,18 @@ fun ParkingTimerScreen(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = TimerTextDark,
+                    tint = BentoTextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
 
             Text(
                 text = "Parking Timer",
-                fontSize = 19.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = TimerTextDark,
+                color = BentoTextPrimary,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis
             )
 
             // Circular More Menu Button
@@ -221,7 +210,7 @@ fun ParkingTimerScreen(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(TimerCardBg)
+                    .background(BentoWhite)
                     .border(1.dp, BentoBorder, CircleShape)
                     .clickable { showMoreMenu = true }
                     .testTag("timer_more_menu_button"),
@@ -230,7 +219,7 @@ fun ParkingTimerScreen(
                 Icon(
                     imageVector = Icons.Default.MoreHoriz,
                     contentDescription = "More options",
-                    tint = TimerTextDark,
+                    tint = BentoTextPrimary,
                     modifier = Modifier.size(22.dp)
                 )
 
@@ -239,24 +228,24 @@ fun ParkingTimerScreen(
                     onDismissRequest = { showMoreMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Set Custom Reminder") },
-                        leadingIcon = { Icon(Icons.Default.NotificationsNone, null) },
+                        text = { Text("Set Custom Reminder", color = BentoTextPrimary) },
+                        leadingIcon = { Icon(Icons.Default.NotificationsNone, null, tint = BentoTextSecondary) },
                         onClick = {
                             showMoreMenu = false
                             showReminderSheet = true
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("View Parking Rules") },
-                        leadingIcon = { Icon(Icons.Default.Info, null) },
+                        text = { Text("View Parking Rules", color = BentoTextPrimary) },
+                        leadingIcon = { Icon(Icons.Default.Info, null, tint = BentoTextSecondary) },
                         onClick = {
                             showMoreMenu = false
                             showRulesSheet = true
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Share Parking Details") },
-                        leadingIcon = { Icon(Icons.Default.Share, null) },
+                        text = { Text("Share Parking Details", color = BentoTextPrimary) },
+                        leadingIcon = { Icon(Icons.Default.Share, null, tint = BentoTextSecondary) },
                         onClick = {
                             showMoreMenu = false
                             Toast.makeText(
@@ -346,7 +335,7 @@ fun ParkingTimerScreen(
                         .clip(RoundedCornerShape(RadiusHero))
                         .testTag("timer_hero_card"),
                     shape = RoundedCornerShape(RadiusHero),
-                    colors = CardDefaults.cardColors(containerColor = TimerCardBg),
+                    colors = CardDefaults.cardColors(containerColor = BentoWhite),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
@@ -367,20 +356,20 @@ fun ParkingTimerScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(RadiusChip))
-                                    .background(if (isExpired) CurbErrorContainer else TimerBannerBg)
+                                    .background(if (isExpired) CurbErrorContainer else CurbSuccessContainer)
                                     .padding(horizontal = 12.dp, vertical = 6.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .size(8.dp)
                                         .clip(CircleShape)
-                                        .background(if (isExpired) CurbError else TimerBannerGreen)
+                                        .background(if (isExpired) CurbError else CurbSuccess)
                                 )
                                 Text(
                                     text = if (isExpired) "SESSION EXPIRED" else "ACTIVE PARKING",
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isExpired) CurbError else TimerBannerGreen,
+                                    color = if (isExpired) CurbError else CurbSuccess,
                                     letterSpacing = 0.5.sp
                                 )
                             }
@@ -389,7 +378,7 @@ fun ParkingTimerScreen(
                                 text = semanticModeLabel,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TimerTextMuted,
+                                color = BentoTextSecondary,
                                 letterSpacing = 0.5.sp
                             )
                         }
@@ -401,7 +390,7 @@ fun ParkingTimerScreen(
                             text = remainingText,
                             fontSize = 38.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isExpired) CurbError else TimerTextDark,
+                            color = if (isExpired) CurbError else BentoTextPrimary,
                             letterSpacing = (-0.5).sp
                         )
 
@@ -415,14 +404,14 @@ fun ParkingTimerScreen(
                             Icon(
                                 imageVector = Icons.Default.AccessTime,
                                 contentDescription = null,
-                                tint = if (isExpired) CurbError else TimerTextMuted,
+                                tint = if (isExpired) CurbError else BentoTextSecondary,
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
                                 text = if (isExpired) "Expired at $expiryTimeStr" else "Expires at $expiryTimeStr",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (isExpired) CurbError else TimerTextDark
+                                color = if (isExpired) CurbError else BentoTextPrimary
                             )
                         }
 
@@ -444,15 +433,15 @@ fun ParkingTimerScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(28.dp)
+                                        .size(32.dp)
                                         .clip(CircleShape)
-                                        .background(TimerBannerBg),
+                                        .background(BentoSand),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Info,
                                         contentDescription = null,
-                                        tint = TimerBannerGreen,
+                                        tint = BentoPrimaryDark,
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
@@ -462,7 +451,7 @@ fun ParkingTimerScreen(
                                         text = "VERIFIED PARKING RULE",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = TimerTextMuted,
+                                        color = BentoTextSecondary,
                                         letterSpacing = 0.5.sp
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
@@ -470,7 +459,7 @@ fun ParkingTimerScreen(
                                         text = ruleText,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = TimerTextDark,
+                                        color = BentoTextPrimary,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -489,7 +478,7 @@ fun ParkingTimerScreen(
                         .clip(RoundedCornerShape(RadiusCard))
                         .testTag(if (savedParkingSpot != null) "saved_parking_spot_card" else "timer_location_bar"),
                     shape = RoundedCornerShape(RadiusCard),
-                    colors = CardDefaults.cardColors(containerColor = TimerCardBg),
+                    colors = CardDefaults.cardColors(containerColor = BentoWhite),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
@@ -507,14 +496,13 @@ fun ParkingTimerScreen(
                                 modifier = Modifier
                                     .size(40.dp)
                                     .clip(CircleShape)
-                                    .background(if (savedParkingSpot != null) Color(0xFFE6F4EA) else BentoCanvas)
-                                    .border(1.dp, if (savedParkingSpot != null) Color(0xFFCEEAD6) else BentoBorder, CircleShape),
+                                    .background(if (savedParkingSpot != null) CurbSuccessContainer else BentoSand),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = if (savedParkingSpot != null) Icons.Default.CheckCircle else Icons.Default.Place,
                                     contentDescription = null,
-                                    tint = if (savedParkingSpot != null) Color(0xFF137333) else TimerTextDark,
+                                    tint = if (savedParkingSpot != null) CurbSuccess else BentoPrimaryDark,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -524,7 +512,7 @@ fun ParkingTimerScreen(
                                     text = effectiveSession.locationName,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = TimerTextDark,
+                                    color = BentoTextPrimary,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -532,7 +520,7 @@ fun ParkingTimerScreen(
                                 Text(
                                     text = if (savedParkingSpot != null) "Parking spot saved" else "Spot location recorded",
                                     fontSize = 12.sp,
-                                    color = if (savedParkingSpot != null) Color(0xFF137333) else TimerTextMuted,
+                                    color = if (savedParkingSpot != null) CurbSuccess else BentoTextSecondary,
                                     fontWeight = if (savedParkingSpot != null) FontWeight.SemiBold else FontWeight.Normal
                                 )
                             }
@@ -600,7 +588,7 @@ fun ParkingTimerScreen(
                         .clip(RoundedCornerShape(RadiusCard))
                         .testTag("timer_details_card"),
                     shape = RoundedCornerShape(RadiusCard),
-                    colors = CardDefaults.cardColors(containerColor = TimerCardBg),
+                    colors = CardDefaults.cardColors(containerColor = BentoWhite),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
@@ -621,14 +609,14 @@ fun ParkingTimerScreen(
                                 Text(
                                     text = "Today",
                                     fontSize = 13.sp,
-                                    color = TimerTextMuted
+                                    color = BentoTextSecondary
                                 )
                             }
                         )
 
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            color = TimerDividerColor,
+                            color = BentoBorder,
                             thickness = 1.dp
                         )
 
@@ -649,7 +637,7 @@ fun ParkingTimerScreen(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                     contentDescription = "Edit reminder",
-                                    tint = TimerTextMuted,
+                                    tint = BentoTextSecondary,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -657,7 +645,7 @@ fun ParkingTimerScreen(
 
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            color = TimerDividerColor,
+                            color = BentoBorder,
                             thickness = 1.dp
                         )
 
@@ -672,7 +660,7 @@ fun ParkingTimerScreen(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                     contentDescription = "View rules",
-                                    tint = TimerTextMuted,
+                                    tint = BentoTextSecondary,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -680,7 +668,7 @@ fun ParkingTimerScreen(
                     }
                 }
 
-                // Notification Alert Banner
+                // Smart Notification Alert Banner
                 AnimatedVisibility(
                     visible = isNotificationBannerVisible,
                     enter = fadeIn(),
@@ -689,7 +677,8 @@ fun ParkingTimerScreen(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(RadiusCard),
-                        color = TimerBannerBg
+                        color = BentoSand,
+                        border = BorderStroke(1.dp, BentoBorder)
                     ) {
                         Row(
                             modifier = Modifier
@@ -706,7 +695,7 @@ fun ParkingTimerScreen(
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = null,
-                                    tint = TimerBannerGreen,
+                                    tint = CurbSuccess,
                                     modifier = Modifier.size(20.dp)
                                 )
 
@@ -715,13 +704,13 @@ fun ParkingTimerScreen(
                                         text = "Smart push alerts enabled",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = TimerTextDark
+                                        color = BentoTextPrimary
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = "We'll notify you before your parking limit expires.",
                                         fontSize = 12.sp,
-                                        color = TimerTextMuted
+                                        color = BentoTextSecondary
                                     )
                                 }
                             }
@@ -733,7 +722,7 @@ fun ParkingTimerScreen(
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Dismiss notification banner",
-                                    tint = TimerTextMuted,
+                                    tint = BentoTextSecondary,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -750,7 +739,7 @@ fun ParkingTimerScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(RadiusHero)),
                     shape = RoundedCornerShape(RadiusHero),
-                    colors = CardDefaults.cardColors(containerColor = TimerCardBg),
+                    colors = CardDefaults.cardColors(containerColor = BentoWhite),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
@@ -770,7 +759,7 @@ fun ParkingTimerScreen(
                             Icon(
                                 imageVector = Icons.Default.LocalParking,
                                 contentDescription = null,
-                                tint = BentoPrimary,
+                                tint = BentoPrimaryDark,
                                 modifier = Modifier.size(32.dp)
                             )
                         }
@@ -781,19 +770,19 @@ fun ParkingTimerScreen(
                             text = "No Active Parking Session",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TimerTextDark
+                            color = BentoTextPrimary
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
 
                         Text(
                             text = if (canStartQuickTimer) {
-                                "Select your parking duration below to start an interactive timer with smart street notifications."
+                                "Your car is currently free of timer drama. Choose a duration below to start your parking session."
                             } else {
                                 "Scan a parking sign first."
                             },
                             fontSize = 13.sp,
-                            color = TimerTextMuted,
+                            color = BentoTextSecondary,
                             textAlign = TextAlign.Center,
                             lineHeight = 18.sp
                         )
@@ -804,46 +793,57 @@ fun ParkingTimerScreen(
                             text = "QUICK DURATION PRESETS",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TimerTextMuted,
+                            color = BentoTextSecondary,
                             letterSpacing = 0.5.sp,
                             modifier = Modifier.align(Alignment.Start)
                         )
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                        Row(
+                        // 2x2 Bento Duration Grid
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            QuickPresetPill(
-                                label = "30m",
-                                minutes = 30,
-                                enabled = canStartQuickTimer,
-                                onClick = { onStartQuickTimer(30, "30m limit") },
-                                modifier = Modifier.weight(1f)
-                            )
-                            QuickPresetPill(
-                                label = "1h",
-                                minutes = 60,
-                                enabled = canStartQuickTimer,
-                                onClick = { onStartQuickTimer(60, "1h limit") },
-                                modifier = Modifier.weight(1f)
-                            )
-                            QuickPresetPill(
-                                label = "2h 15m",
-                                minutes = 135,
-                                isPrimary = true,
-                                enabled = canStartQuickTimer,
-                                onClick = { onStartQuickTimer(135, "2h 30m limit") },
-                                modifier = Modifier.weight(1.3f)
-                            )
-                            QuickPresetPill(
-                                label = "4h",
-                                minutes = 240,
-                                enabled = canStartQuickTimer,
-                                onClick = { onStartQuickTimer(240, "4h limit") },
-                                modifier = Modifier.weight(1f)
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                QuickPresetTile(
+                                    label = "30 MIN",
+                                    minutes = 30,
+                                    enabled = canStartQuickTimer,
+                                    onClick = { onStartQuickTimer(30, "30m limit") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                QuickPresetTile(
+                                    label = "1 HOUR",
+                                    minutes = 60,
+                                    enabled = canStartQuickTimer,
+                                    onClick = { onStartQuickTimer(60, "1h limit") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                QuickPresetTile(
+                                    label = "2H 15M",
+                                    minutes = 135,
+                                    isPrimary = true,
+                                    enabled = canStartQuickTimer,
+                                    onClick = { onStartQuickTimer(135, "2h 30m limit") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                QuickPresetTile(
+                                    label = "4 HOURS",
+                                    minutes = 240,
+                                    enabled = canStartQuickTimer,
+                                    onClick = { onStartQuickTimer(240, "4h limit") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 }
@@ -853,7 +853,7 @@ fun ParkingTimerScreen(
         }
 
         // ==========================================
-        // 7. PRIMARY STICKY ACTIONS
+        // STICKY BOTTOM ACTIONS
         // ==========================================
         Row(
             modifier = Modifier
@@ -906,8 +906,8 @@ fun ParkingTimerScreen(
         ModalBottomSheet(
             onDismissRequest = { showAddTimeSheet = false },
             sheetState = sheetState,
-            containerColor = TimerCardBg,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            containerColor = BentoWhite,
+            shape = RoundedCornerShape(topStart = RadiusHero, topEnd = RadiusHero)
         ) {
             Column(
                 modifier = Modifier
@@ -920,21 +920,21 @@ fun ParkingTimerScreen(
                     text = "Extend Parking Time",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TimerTextDark
+                    color = BentoTextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 if (maxExtensionMillis <= 0L) {
                     Text(
                         text = "This session has reached the maximum authorized time limit for this spot. Extension is not permitted.",
                         fontSize = 13.sp,
-                        color = TimerTextMuted,
+                        color = BentoTextSecondary,
                         textAlign = TextAlign.Center
                     )
                 } else {
                     Text(
                         text = "Choose how many minutes to add to your current session.",
                         fontSize = 13.sp,
-                        color = TimerTextMuted,
+                        color = BentoTextSecondary,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -992,8 +992,8 @@ fun ParkingTimerScreen(
         ModalBottomSheet(
             onDismissRequest = { showReminderSheet = false },
             sheetState = sheetState,
-            containerColor = TimerCardBg,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            containerColor = BentoWhite,
+            shape = RoundedCornerShape(topStart = RadiusHero, topEnd = RadiusHero)
         ) {
             Column(
                 modifier = Modifier
@@ -1005,13 +1005,13 @@ fun ParkingTimerScreen(
                     text = "Notification Reminder",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TimerTextDark
+                    color = BentoTextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Receive a push alert before your parking limit expires.",
                     fontSize = 13.sp,
-                    color = TimerTextMuted
+                    color = BentoTextSecondary
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1028,7 +1028,7 @@ fun ParkingTimerScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(RadiusCard))
                             .clickable {
                                 selectedReminderMinutes = mins
                                 onUpdateReminder(effectiveSession.id, mins)
@@ -1047,7 +1047,7 @@ fun ParkingTimerScreen(
                             text = label,
                             fontSize = 15.sp,
                             fontWeight = if (selectedReminderMinutes == mins) FontWeight.Bold else FontWeight.Normal,
-                            color = TimerTextDark
+                            color = BentoTextPrimary
                         )
                         RadioButton(
                             selected = selectedReminderMinutes == mins,
@@ -1056,10 +1056,10 @@ fun ParkingTimerScreen(
                                 onUpdateReminder(effectiveSession.id, mins)
                                 showReminderSheet = false
                             },
-                            colors = RadioButtonDefaults.colors(selectedColor = TimerProgressGreen)
+                            colors = RadioButtonDefaults.colors(selectedColor = BentoPrimary)
                         )
                     }
-                    HorizontalDivider(color = TimerDividerColor)
+                    HorizontalDivider(color = BentoBorder)
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -1075,8 +1075,8 @@ fun ParkingTimerScreen(
         ModalBottomSheet(
             onDismissRequest = { showRulesSheet = false },
             sheetState = sheetState,
-            containerColor = TimerCardBg,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            containerColor = BentoWhite,
+            shape = RoundedCornerShape(topStart = RadiusHero, topEnd = RadiusHero)
         ) {
             Column(
                 modifier = Modifier
@@ -1092,13 +1092,13 @@ fun ParkingTimerScreen(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(TimerBannerBg),
+                            .background(BentoSand),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = null,
-                            tint = TimerBannerGreen,
+                            tint = BentoPrimaryDark,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -1107,14 +1107,14 @@ fun ParkingTimerScreen(
                         text = "Active Parking Rules",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TimerTextDark
+                        color = BentoTextPrimary
                     )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(RadiusCard),
                     color = BentoCanvas,
                     border = BorderStroke(1.dp, BentoBorder)
                 ) {
@@ -1135,7 +1135,7 @@ fun ParkingTimerScreen(
                 CurbPrimaryButton(
                     text = "Got it",
                     onClick = { showRulesSheet = false },
-                    backgroundColor = TimerTextDark,
+                    backgroundColor = BentoPrimaryDark,
                     contentColor = BentoWhite,
                     testTag = "rules_sheet_got_it_button"
                 )
@@ -1153,8 +1153,8 @@ fun ParkingTimerScreen(
         ModalBottomSheet(
             onDismissRequest = { showMapSheet = false },
             sheetState = sheetState,
-            containerColor = TimerCardBg,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            containerColor = BentoWhite,
+            shape = RoundedCornerShape(topStart = RadiusHero, topEnd = RadiusHero)
         ) {
             Column(
                 modifier = Modifier
@@ -1167,24 +1167,24 @@ fun ParkingTimerScreen(
                     text = "Parked Location",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TimerTextDark
+                    color = BentoTextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = if (effectiveSession.notes.isNotBlank()) "${effectiveSession.locationName} • ${effectiveSession.notes}" else effectiveSession.locationName,
                     fontSize = 13.sp,
-                    color = TimerTextMuted,
+                    color = BentoTextSecondary,
                     textAlign = TextAlign.Center
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // Simulated Map Card
+                // Map Placeholder Card
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(180.dp),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(RadiusCard),
                     color = BentoSand,
                     border = BorderStroke(1.dp, BentoBorder)
                 ) {
@@ -1197,14 +1197,13 @@ fun ParkingTimerScreen(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .clip(CircleShape)
-                                    .background(TimerProgressGreen)
-                                    .border(2.dp, TimerCardBg, CircleShape),
+                                    .background(BentoPrimaryDark),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Place,
                                     contentDescription = null,
-                                    tint = TimerCardBg,
+                                    tint = BentoWhite,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -1215,12 +1214,12 @@ fun ParkingTimerScreen(
                                 } ?: "Location unavailable",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TimerTextDark
+                                color = BentoTextPrimary
                             )
                             Text(
                                 text = "Walking distance unavailable",
                                 fontSize = 11.sp,
-                                color = TimerTextMuted
+                                color = BentoTextSecondary
                             )
                         }
                     }
@@ -1249,7 +1248,7 @@ fun ParkingTimerScreen(
                             showMapSheet = false
                         },
                         leadingIcon = Icons.Default.Directions,
-                        backgroundColor = TimerTextDark,
+                        backgroundColor = BentoPrimaryDark,
                         contentColor = BentoWhite,
                         modifier = Modifier.weight(1f),
                         testTag = "navigate_walking_button"
@@ -1268,7 +1267,7 @@ fun ParkingTimerScreen(
 
 @Composable
 private fun TimerDetailRow(
-    icon: ImageVector,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtitle: String,
     isClickable: Boolean = false,
@@ -1298,7 +1297,7 @@ private fun TimerDetailRow(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = TimerTextDark,
+                    tint = BentoTextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -1308,13 +1307,13 @@ private fun TimerDetailRow(
                     text = title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TimerTextDark
+                    color = BentoTextPrimary
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     fontSize = 13.sp,
-                    color = TimerTextMuted
+                    color = BentoTextSecondary
                 )
             }
         }
@@ -1324,7 +1323,7 @@ private fun TimerDetailRow(
 }
 
 @Composable
-private fun QuickPresetPill(
+private fun QuickPresetTile(
     label: String,
     minutes: Int,
     isPrimary: Boolean = false,
@@ -1334,9 +1333,9 @@ private fun QuickPresetPill(
 ) {
     Surface(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(RadiusNested))
             .clickable(enabled = enabled) { onClick() },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(RadiusNested),
         color = when {
             !enabled -> BentoCanvas.copy(alpha = 0.5f)
             isPrimary -> BentoPeach
@@ -1354,7 +1353,7 @@ private fun QuickPresetPill(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
+                .padding(vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -1362,9 +1361,9 @@ private fun QuickPresetPill(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = when {
-                    !enabled -> TimerTextMuted.copy(alpha = 0.5f)
+                    !enabled -> BentoTextSecondary.copy(alpha = 0.5f)
                     isPrimary -> BentoPrimaryDark
-                    else -> TimerTextDark
+                    else -> BentoTextPrimary
                 }
             )
         }
@@ -1382,9 +1381,9 @@ private fun AddTimeOptionButton(
     Surface(
         modifier = modifier
             .height(52.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(RadiusNested))
             .clickable(enabled = enabled) { onClick() },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(RadiusNested),
         color = if (enabled) BentoCanvas else BentoCanvas.copy(alpha = 0.5f),
         border = BorderStroke(1.dp, if (enabled) BentoBorder else BentoBorder.copy(alpha = 0.4f))
     ) {
@@ -1396,7 +1395,7 @@ private fun AddTimeOptionButton(
                 text = text,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (enabled) TimerTextDark else TimerTextMuted.copy(alpha = 0.5f)
+                color = if (enabled) BentoTextPrimary else BentoTextSecondary.copy(alpha = 0.5f)
             )
         }
     }
@@ -1416,9 +1415,8 @@ private fun RuleItem(title: String, description: String) {
         Text(
             text = description,
             fontSize = 13.sp,
-            color = TimerTextDark,
+            color = BentoTextPrimary,
             lineHeight = 18.sp
         )
     }
 }
-

@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +32,8 @@ import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,31 +46,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserProfile
-import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbSectionHeader
 import com.example.ui.components.CurbSettingsDivider
 import com.example.ui.components.CurbSettingsRow
 import com.example.ui.theme.BentoBorder
+import com.example.ui.theme.BentoCanvas
+import com.example.ui.theme.BentoPeach
 import com.example.ui.theme.BentoPrimary
+import com.example.ui.theme.BentoPrimaryDark
 import com.example.ui.theme.BentoSand
 import com.example.ui.theme.BentoTextDark
-import com.example.ui.theme.CurbBackground
-import com.example.ui.theme.CurbBlack
+import com.example.ui.theme.BentoTextPrimary
+import com.example.ui.theme.BentoTextSecondary
+import com.example.ui.theme.BentoWhite
 import com.example.ui.theme.CurbError
-import com.example.ui.theme.CurbOnSurface
-import com.example.ui.theme.CurbOnSurfaceVariant
-import com.example.ui.theme.CurbSurface
-import com.example.ui.theme.CurbSurfaceVariant
-import com.example.ui.theme.CurbWhite
 import com.example.ui.theme.RadiusCard
-import com.example.ui.theme.RadiusSmall
+import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusHero
 import java.util.Locale
 
 @Composable
@@ -89,38 +90,49 @@ fun YouScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(CurbBackground)
+            .background(BentoCanvas)
             .statusBarsPadding()
             .testTag("you_screen"),
-        contentPadding = PaddingValues(bottom = 100.dp)
+        contentPadding = PaddingValues(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 100.dp)
     ) {
         item {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // PAGE TITLE
-                Text(
-                    text = "You",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface
-                )
+                // PAGE HEADER
+                Column {
+                    Text(
+                        text = "You",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BentoTextPrimary,
+                        lineHeight = 32.sp
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Your Curb profile, preferences & account.",
+                        fontSize = 12.sp,
+                        color = BentoTextSecondary,
+                        lineHeight = 16.sp
+                    )
+                }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // 1. PROFILE HEADER CARD
-                CurbCard(
-                    cornerRadius = RadiusCard,
-                    backgroundColor = CurbSurface,
-                    borderColor = BentoBorder
+                // 1. PROFILE HERO TILE
+                Card(
+                    shape = RoundedCornerShape(RadiusHero),
+                    colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                    border = BorderStroke(1.dp, BentoBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onAccountInfoClicked)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -130,22 +142,20 @@ fun YouScreen(
                             // Avatar container
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(50.dp)
                                     .clip(CircleShape)
-                                    .background(CurbBlack),
+                                    .background(BentoPrimaryDark),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = userProfile.name.take(1).uppercase(Locale.ROOT),
-                                    color = CurbWhite,
-                                    fontSize = 18.sp,
+                                    color = BentoWhite,
+                                    fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
 
-                            Column(
-                                verticalArrangement = Arrangement.Center
-                            ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -154,39 +164,25 @@ fun YouScreen(
                                         text = userProfile.name,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = CurbOnSurface
+                                        color = BentoTextPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
 
-                                    if (isPro) {
-                                        Surface(
-                                            shape = RoundedCornerShape(RadiusSmall),
-                                            color = BentoPrimary
-                                        ) {
-                                            Text(
-                                                text = "PRO",
-                                                color = CurbWhite,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    } else {
-                                        Surface(
-                                            shape = RoundedCornerShape(RadiusSmall),
-                                            color = BentoSand
-                                        ) {
-                                            Text(
-                                                text = "FREE",
-                                                color = BentoTextDark,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
+                                    Surface(
+                                        shape = RoundedCornerShape(RadiusChip),
+                                        color = if (isPro) BentoPeach else BentoSand
+                                    ) {
+                                        Text(
+                                            text = if (isPro) "PRO" else "FREE",
+                                            color = if (isPro) BentoPrimaryDark else BentoTextDark,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
                                     }
                                 }
-
-                                Spacer(modifier = Modifier.height(2.dp))
 
                                 val subtitleText = if (userProfile.email.isNotBlank()) {
                                     userProfile.email
@@ -197,127 +193,137 @@ fun YouScreen(
                                 Text(
                                     text = subtitleText,
                                     fontSize = 12.sp,
-                                    color = CurbOnSurfaceVariant
+                                    color = BentoTextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
+
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = BentoTextSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // 2. CURB PRO BANNER CARD
+                // 2. PRO HERO BANNER
                 CurbProBanner(
                     isPro = isPro,
                     onClick = onPaymentSubscriptionClicked
                 )
 
-                Spacer(modifier = Modifier.height(18.dp))
-
                 // 3. ACCOUNT SECTION
-                CurbSectionHeader(title = "ACCOUNT")
-                Spacer(modifier = Modifier.height(6.dp))
-                CurbCard(
-                    cornerRadius = RadiusCard,
-                    backgroundColor = CurbSurface
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 2.dp)) {
-                        CurbSettingsRow(
-                            icon = Icons.Default.PersonOutline,
-                            title = "Account Information",
-                            subtitle = "Name, email & profile details",
-                            onClick = onAccountInfoClicked,
-                            testTag = "setting_account_info"
-                        )
-                        CurbSettingsDivider()
-                        CurbSettingsRow(
-                            icon = Icons.Default.CreditCard,
-                            title = "Payment & Subscription",
-                            subtitle = if (isPro) "Curb Pro active • Manage plan & quotas" else "Upgrade to Pro • View plans & promo codes",
-                            onClick = onPaymentSubscriptionClicked,
-                            testTag = "setting_payment_subscription"
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CurbSectionHeader(title = "ACCOUNT")
+                    Card(
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                        border = BorderStroke(1.dp, BentoBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                            CurbSettingsRow(
+                                icon = Icons.Default.PersonOutline,
+                                title = "Account Information",
+                                subtitle = "Name, email & profile details",
+                                onClick = onAccountInfoClicked,
+                                testTag = "setting_account_info"
+                            )
+                            CurbSettingsDivider()
+                            CurbSettingsRow(
+                                icon = Icons.Default.CreditCard,
+                                title = "Payment & Subscription",
+                                subtitle = if (isPro) "Curb Pro active • Manage plan & quotas" else "Upgrade to Pro • View plans & promo codes",
+                                onClick = onPaymentSubscriptionClicked,
+                                testTag = "setting_payment_subscription"
+                            )
+                        }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(18.dp))
 
                 // 4. PREFERENCES SECTION
-                CurbSectionHeader(title = "PREFERENCES")
-                Spacer(modifier = Modifier.height(6.dp))
-                CurbCard(
-                    cornerRadius = RadiusCard,
-                    backgroundColor = CurbSurface
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 2.dp)) {
-                        CurbSettingsRow(
-                            icon = Icons.Default.NotificationsNone,
-                            title = "Notification Settings",
-                            subtitle = "Parking alerts & push notifications",
-                            onClick = onNotificationsClicked,
-                            testTag = "setting_notifications"
-                        )
-                        CurbSettingsDivider()
-                        CurbSettingsRow(
-                            icon = Icons.Default.BookmarkBorder,
-                            title = "Saved Places",
-                            subtitle = "Pinned parking locations & notes",
-                            onClick = onSavedPlacesClicked,
-                            testTag = "setting_saved_places"
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CurbSectionHeader(title = "PREFERENCES")
+                    Card(
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                        border = BorderStroke(1.dp, BentoBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                            CurbSettingsRow(
+                                icon = Icons.Default.NotificationsNone,
+                                title = "Notification Settings",
+                                subtitle = "Parking alerts & push notifications",
+                                onClick = onNotificationsClicked,
+                                testTag = "setting_notifications"
+                            )
+                            CurbSettingsDivider()
+                            CurbSettingsRow(
+                                icon = Icons.Default.BookmarkBorder,
+                                title = "Saved Places",
+                                subtitle = "Pinned parking locations & notes",
+                                onClick = onSavedPlacesClicked,
+                                testTag = "setting_saved_places"
+                            )
+                        }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(18.dp))
 
                 // 5. SUPPORT & INFORMATION SECTION
-                CurbSectionHeader(title = "SUPPORT & INFORMATION")
-                Spacer(modifier = Modifier.height(6.dp))
-                CurbCard(
-                    cornerRadius = RadiusCard,
-                    backgroundColor = CurbSurface
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 2.dp)) {
-                        CurbSettingsRow(
-                            icon = Icons.Default.HelpOutline,
-                            title = "Help & Support",
-                            subtitle = "FAQs, contact support & app feedback",
-                            onClick = onHelpSupportClicked,
-                            testTag = "setting_help_support"
-                        )
-                        CurbSettingsDivider()
-                        CurbSettingsRow(
-                            icon = Icons.Default.Shield,
-                            title = "Privacy Policy",
-                            subtitle = "Data protection & privacy rights",
-                            onClick = onPrivacyPolicyClicked,
-                            testTag = "setting_privacy_policy"
-                        )
-                        CurbSettingsDivider()
-                        CurbSettingsRow(
-                            icon = Icons.Default.Description,
-                            title = "Terms of Service",
-                            subtitle = "Terms & conditions of use",
-                            onClick = onTermsOfServiceClicked,
-                            testTag = "setting_terms_of_service"
-                        )
-                        CurbSettingsDivider()
-                        CurbSettingsRow(
-                            icon = Icons.Default.Info,
-                            title = "About Curb AI",
-                            subtitle = "Version 1.0.0 • AI Parking Assistant",
-                            onClick = onAboutCurbClicked,
-                            testTag = "setting_about_curb"
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CurbSectionHeader(title = "SUPPORT & INFORMATION")
+                    Card(
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                        border = BorderStroke(1.dp, BentoBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                            CurbSettingsRow(
+                                icon = Icons.Default.HelpOutline,
+                                title = "Help & Support",
+                                subtitle = "FAQs, contact support & app feedback",
+                                onClick = onHelpSupportClicked,
+                                testTag = "setting_help_support"
+                            )
+                            CurbSettingsDivider()
+                            CurbSettingsRow(
+                                icon = Icons.Default.Shield,
+                                title = "Privacy Policy",
+                                subtitle = "Data protection & privacy rights",
+                                onClick = onPrivacyPolicyClicked,
+                                testTag = "setting_privacy_policy"
+                            )
+                            CurbSettingsDivider()
+                            CurbSettingsRow(
+                                icon = Icons.Default.Description,
+                                title = "Terms of Service",
+                                subtitle = "Terms & conditions of use",
+                                onClick = onTermsOfServiceClicked,
+                                testTag = "setting_terms_of_service"
+                            )
+                            CurbSettingsDivider()
+                            CurbSettingsRow(
+                                icon = Icons.Default.Info,
+                                title = "About Curb AI",
+                                subtitle = "Version 1.0.0 • AI Parking Assistant",
+                                onClick = onAboutCurbClicked,
+                                testTag = "setting_about_curb"
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // 6. LOG OUT ACTION
-                CurbCard(
-                    cornerRadius = RadiusCard,
-                    backgroundColor = CurbSurface
+                // 6. LOG OUT ACTION CARD
+                Card(
+                    shape = RoundedCornerShape(RadiusCard),
+                    colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                    border = BorderStroke(1.dp, BentoBorder),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     CurbSettingsRow(
                         icon = Icons.AutoMirrored.Filled.Logout,
@@ -333,21 +339,26 @@ fun YouScreen(
         }
     }
 
+    // LOGOUT CONFIRMATION DIALOG
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
+            shape = RoundedCornerShape(RadiusCard),
+            containerColor = BentoWhite,
             title = {
                 Text(
                     text = "Log Out?",
                     fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface
+                    fontSize = 18.sp,
+                    color = BentoTextPrimary
                 )
             },
             text = {
                 Text(
                     text = "Logging out will end your current session. Your saved places and parking history will remain safely stored on this device.",
-                    color = CurbOnSurfaceVariant,
-                    fontSize = 14.sp
+                    color = BentoTextSecondary,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
                 )
             },
             confirmButton = {
@@ -362,13 +373,10 @@ fun YouScreen(
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { showLogoutDialog = false }
-                ) {
-                    Text("Cancel", color = CurbOnSurfaceVariant)
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("Cancel", color = BentoTextSecondary)
                 }
-            },
-            containerColor = CurbSurface
+            }
         )
     }
 }
@@ -379,15 +387,17 @@ private fun CurbProBanner(
     onClick: () -> Unit
 ) {
     if (isPro) {
-        CurbCard(
-            cornerRadius = RadiusCard,
-            backgroundColor = BentoSand,
-            borderColor = BentoBorder
+        Card(
+            shape = RoundedCornerShape(RadiusCard),
+            colors = CardDefaults.cardColors(containerColor = BentoSand),
+            border = BorderStroke(1.dp, BentoBorder),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onClick)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -399,15 +409,16 @@ private fun CurbProBanner(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .background(BentoPrimary, CircleShape),
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(BentoPrimary),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
-                            tint = CurbWhite,
-                            modifier = Modifier.size(18.dp)
+                            tint = BentoWhite,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     Column {
@@ -418,32 +429,34 @@ private fun CurbProBanner(
                             color = BentoTextDark
                         )
                         Text(
-                            text = "Unlimited sign scans & parking AI assistant unlocked",
+                            text = "Unlimited sign scans & AI assistant active",
                             fontSize = 11.sp,
-                            color = CurbOnSurfaceVariant,
-                            maxLines = 2
+                            color = BentoTextSecondary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
-                Spacer(modifier = Modifier.width(8.dp))
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = BentoTextDark,
+                    tint = BentoTextSecondary,
                     modifier = Modifier.size(18.dp)
                 )
             }
         }
     } else {
-        CurbCard(
-            cornerRadius = RadiusCard,
-            backgroundColor = BentoPrimary,
-            borderColor = BentoBorder
+        Card(
+            shape = RoundedCornerShape(RadiusCard),
+            colors = CardDefaults.cardColors(containerColor = BentoPeach),
+            border = BorderStroke(1.dp, BentoBorder),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onClick)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -455,49 +468,49 @@ private fun CurbProBanner(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .background(CurbWhite.copy(alpha = 0.2f), CircleShape),
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(BentoPrimaryDark),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Star,
                             contentDescription = null,
-                            tint = CurbWhite,
-                            modifier = Modifier.size(18.dp)
+                            tint = BentoWhite,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Upgrade to Curb Pro",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = CurbWhite
+                            color = BentoPrimaryDark
                         )
                         Text(
-                            text = "Get unlimited scans, AI advice & timer alerts",
+                            text = "Get unlimited scans, AI advice & parking alerts",
                             fontSize = 11.sp,
-                            color = CurbWhite.copy(alpha = 0.85f),
-                            maxLines = 2
+                            color = BentoTextDark,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Surface(
-                    shape = RoundedCornerShape(RadiusSmall),
-                    color = CurbWhite
+                    shape = RoundedCornerShape(RadiusChip),
+                    color = BentoPrimaryDark
                 ) {
                     Text(
-                        text = "Upgrade",
-                        color = BentoPrimary,
-                        fontSize = 11.sp,
+                        text = "UPGRADE",
+                        color = BentoWhite,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        letterSpacing = 0.5.sp,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                     )
                 }
             }
         }
     }
 }
-

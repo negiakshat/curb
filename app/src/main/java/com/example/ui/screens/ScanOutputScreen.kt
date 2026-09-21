@@ -2,7 +2,13 @@ package com.example.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,55 +25,52 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CurbNote
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
-import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbNoteDialog
 import com.example.ui.components.CurbNoteSection
 import com.example.ui.components.CurbPrimaryButton
 import com.example.ui.components.CurbProFeatureBottomSheet
 import com.example.ui.components.CurbSecondaryButton
 import com.example.ui.components.ParkingVerdictCard
-import com.example.ui.theme.CurbBackground
-import com.example.ui.theme.CurbBlack
-import com.example.ui.theme.CurbOnSurface
-import com.example.ui.theme.CurbOnSurfaceVariant
-import com.example.ui.theme.CurbSurface
-import com.example.ui.theme.CurbSurfaceVariant
-import com.example.ui.theme.RadiusCard
-
 import com.example.ui.components.StartSessionConfirmationSheet
+import com.example.ui.theme.BentoBorder
+import com.example.ui.theme.BentoCanvas
+import com.example.ui.theme.BentoPrimaryDark
+import com.example.ui.theme.BentoSand
+import com.example.ui.theme.BentoTextPrimary
+import com.example.ui.theme.BentoTextSecondary
+import com.example.ui.theme.BentoWhite
+import com.example.ui.theme.RadiusCard
 import com.example.util.ParkingTimerCalculator
-import com.example.util.ParkingTimerConfig
-
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
-import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,56 +105,74 @@ fun ScanOutputScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(CurbBackground)
+            .background(BentoCanvas)
             .statusBarsPadding()
             .testTag("scan_output_screen")
     ) {
-        // TOP APP BAR
+        // TOP APP BAR (Bento Styling)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.weight(1f, fill = false)
             ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.testTag("scan_output_back_button")
+                // Circular Back Button
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(BentoWhite)
+                        .border(1.dp, BentoBorder, CircleShape)
+                        .clickable { onBack() }
+                        .testTag("scan_output_back_button"),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = CurbOnSurface
+                        tint = BentoTextPrimary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
+
                 Text(
                     text = scanResult.locationName,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface,
+                    color = BentoTextPrimary,
                     maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
-            IconButton(
-                onClick = {
-                    if (isPro) {
-                        exportScanResult(context, scanResult)
-                    } else {
-                        showExportProSheet = true
+            // Circular Export Button
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(BentoWhite)
+                    .border(1.dp, BentoBorder, CircleShape)
+                    .clickable {
+                        if (isPro) {
+                            exportScanResult(context, scanResult)
+                        } else {
+                            showExportProSheet = true
+                        }
                     }
-                },
-                modifier = Modifier.testTag("scan_output_export_button")
+                    .testTag("scan_output_export_button"),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Outlined.FileDownload,
                     contentDescription = "Export Scan",
-                    tint = CurbBlack
+                    tint = BentoTextPrimary,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -176,7 +197,7 @@ fun ScanOutputScreen(
                             scanResult = scanResult,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Spacer(modifier = Modifier.height(18.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
@@ -191,10 +212,14 @@ fun ScanOutputScreen(
                     )
                 ) {
                     Column {
-                        CurbCard(
-                            cornerRadius = RadiusCard,
-                            backgroundColor = CurbSurface,
+                        Card(
+                            shape = RoundedCornerShape(RadiusCard),
+                            colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                            border = BorderStroke(1.dp, BentoBorder),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                             modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(RadiusCard))
                                 .clickable { onViewDetails() }
                                 .testTag("view_details_card")
                         ) {
@@ -213,13 +238,14 @@ fun ScanOutputScreen(
                                     Box(
                                         modifier = Modifier
                                             .size(42.dp)
-                                            .background(CurbSurfaceVariant, CircleShape),
+                                            .clip(CircleShape)
+                                            .background(BentoSand),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
                                             contentDescription = "View evidence details",
-                                            tint = CurbBlack,
+                                            tint = BentoPrimaryDark,
                                             modifier = Modifier.size(22.dp)
                                         )
                                     }
@@ -228,13 +254,13 @@ fun ScanOutputScreen(
                                             text = "View full evidence & details",
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = CurbOnSurface
+                                            color = BentoTextPrimary
                                         )
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
                                             text = "${scanResult.detectedSigns.size} sign(s) read • Complete rule analysis",
                                             fontSize = 12.sp,
-                                            color = CurbOnSurfaceVariant
+                                            color = BentoTextSecondary
                                         )
                                     }
                                 }
@@ -242,11 +268,12 @@ fun ScanOutputScreen(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                     contentDescription = "View Details",
-                                    tint = CurbOnSurfaceVariant
+                                    tint = BentoTextSecondary,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(18.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
@@ -255,9 +282,10 @@ fun ScanOutputScreen(
             item {
                 Text(
                     text = "Personal note",
-                    fontSize = 18.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface
+                    color = BentoTextPrimary,
+                    letterSpacing = 0.5.sp
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 CurbNoteSection(
@@ -283,8 +311,9 @@ fun ScanOutputScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(BentoCanvas)
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             when (scanResult.verdict) {
@@ -300,6 +329,7 @@ fun ScanOutputScreen(
                                     timerConfig.ruleSummary
                                 )
                             },
+                            backgroundColor = BentoPrimaryDark,
                             testTag = "start_parking_session_unrestricted_button"
                         )
                     } else {
@@ -308,6 +338,7 @@ fun ScanOutputScreen(
                             onClick = {
                                 showStartConfirmationSheet = true
                             },
+                            backgroundColor = BentoPrimaryDark,
                             testTag = "start_parking_session_button"
                         )
                     }
@@ -330,6 +361,7 @@ fun ScanOutputScreen(
                     CurbPrimaryButton(
                         text = "Retake scan",
                         onClick = onRetake,
+                        backgroundColor = BentoPrimaryDark,
                         testTag = "retake_scan_button"
                     )
                     CurbSecondaryButton(
@@ -342,6 +374,7 @@ fun ScanOutputScreen(
                     CurbPrimaryButton(
                         text = "Retake scan",
                         onClick = onRetake,
+                        backgroundColor = BentoPrimaryDark,
                         testTag = "retake_scan_button"
                     )
                     CurbSecondaryButton(

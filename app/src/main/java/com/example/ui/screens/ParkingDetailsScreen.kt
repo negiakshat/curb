@@ -2,7 +2,9 @@ package com.example.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,12 +19,12 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.DirectionsCar
@@ -30,8 +32,10 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,6 +52,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -55,34 +60,31 @@ import com.example.data.model.CurbNote
 import com.example.data.model.DetectedSign
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
-import com.example.ui.components.CurbCard
 import com.example.ui.components.CurbNoteDialog
 import com.example.ui.components.CurbNoteSection
 import com.example.ui.components.CurbPrimaryButton
 import com.example.ui.components.CurbProFeatureBottomSheet
 import com.example.ui.components.CurbVerdictBadge
-import com.example.ui.components.ParkingVerdictCard
 import com.example.ui.components.IndividualSignDetailSheet
-import com.example.ui.theme.CurbBackground
-import com.example.ui.theme.CurbBlack
+import com.example.ui.components.StartSessionConfirmationSheet
+import com.example.ui.theme.BentoBorder
+import com.example.ui.theme.BentoCanvas
+import com.example.ui.theme.BentoPrimaryDark
+import com.example.ui.theme.BentoSand
+import com.example.ui.theme.BentoTextPrimary
+import com.example.ui.theme.BentoTextSecondary
+import com.example.ui.theme.BentoWhite
 import com.example.ui.theme.CurbError
 import com.example.ui.theme.CurbErrorContainer
-import com.example.ui.theme.CurbOnSurface
-import com.example.ui.theme.CurbOnSurfaceVariant
 import com.example.ui.theme.CurbSuccess
 import com.example.ui.theme.CurbSuccessContainer
-import com.example.ui.theme.CurbSurface
-import com.example.ui.theme.CurbSurfaceVariant
 import com.example.ui.theme.CurbWarning
 import com.example.ui.theme.CurbWarningContainer
 import com.example.ui.theme.RadiusCard
 import com.example.ui.theme.RadiusChip
-import com.example.ui.theme.RadiusNested
-import java.io.File
-
-import com.example.ui.components.StartSessionConfirmationSheet
+import com.example.ui.theme.RadiusHero
 import com.example.util.ParkingTimerCalculator
-import com.example.util.ParkingTimerConfig
+import java.io.File
 
 @Composable
 fun ParkingDetailsScreen(
@@ -110,56 +112,74 @@ fun ParkingDetailsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(CurbBackground)
+            .background(BentoCanvas)
             .statusBarsPadding()
             .testTag("parking_details_screen")
     ) {
-        // TOP BAR
+        // 1. TOP APP BAR (Compact Bento Bar)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.weight(1f, fill = false)
             ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.testTag("details_back_button")
+                // Circular Back Button
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(BentoWhite)
+                        .border(1.dp, BentoBorder, CircleShape)
+                        .clickable { onBack() }
+                        .testTag("details_back_button"),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = CurbOnSurface
+                        tint = BentoTextPrimary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
+
                 Text(
                     text = "Parking details",
-                    fontSize = 20.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface,
+                    color = BentoTextPrimary,
                     maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
-            IconButton(
-                onClick = {
-                    if (isPro) {
-                        exportSingleScanDetails(context, scanResult)
-                    } else {
-                        showExportProSheet = true
+            // Circular Export Button
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(BentoWhite)
+                    .border(1.dp, BentoBorder, CircleShape)
+                    .clickable {
+                        if (isPro) {
+                            exportSingleScanDetails(context, scanResult)
+                        } else {
+                            showExportProSheet = true
+                        }
                     }
-                },
-                modifier = Modifier.testTag("details_export_button")
+                    .testTag("details_export_button"),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Outlined.FileDownload,
                     contentDescription = "Export Spot",
-                    tint = CurbBlack
+                    tint = BentoTextPrimary,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -170,26 +190,30 @@ fun ParkingDetailsScreen(
                 .fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
         ) {
-            // HEADER & SUBTITLE
+            // 2. INTRO CONTEXT
             item {
                 Text(
-                    text = "Here’s the complete evidence and rule analysis for this spot.",
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                    color = CurbOnSurfaceVariant
+                    text = "Everything Curb read, organized in one place.",
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    color = BentoTextSecondary
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
             }
 
-            // SECTION A: COMPACT DECISION CONTEXT
+            // 3. DECISION CONTEXT HERO SUMMARY
             item {
-                CurbCard(
-                    cornerRadius = RadiusCard,
-                    backgroundColor = when (scanResult.verdict) {
-                        ScanVerdict.ALLOWED -> CurbSuccessContainer
-                        ScanVerdict.RESTRICTED -> CurbErrorContainer
-                        ScanVerdict.AMBIGUOUS -> CurbWarningContainer
-                    },
+                Card(
+                    shape = RoundedCornerShape(RadiusCard),
+                    colors = CardDefaults.cardColors(
+                        containerColor = when (scanResult.verdict) {
+                            ScanVerdict.ALLOWED -> CurbSuccessContainer
+                            ScanVerdict.RESTRICTED -> CurbErrorContainer
+                            ScanVerdict.AMBIGUOUS -> CurbWarningContainer
+                        }
+                    ),
+                    border = BorderStroke(1.dp, BentoBorder),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -210,187 +234,102 @@ fun ParkingDetailsScreen(
                                 },
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = CurbOnSurface
+                                color = BentoTextPrimary
                             )
                             if (scanResult.verdict == ScanVerdict.ALLOWED && scanResult.timeRemaining.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = "${scanResult.timeRemaining} remaining",
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    fontWeight = FontWeight.Bold,
                                     color = CurbSuccess
                                 )
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
             }
 
-            // SECTION B: PRIMARY EVIDENCE — SIGNS CURB READ
+            // 4. PRIMARY EVIDENCE — SIGNS CURB READ (HEADER)
             item {
                 Text(
                     text = if (scanResult.detectedSigns.isNotEmpty()) "Signs Curb read (${scanResult.detectedSigns.size})" else "Physical sign evidence",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface
+                    color = BentoTextPrimary,
+                    letterSpacing = 0.5.sp
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 if (scanResult.detectedSigns.isNotEmpty()) {
                     Text(
                         text = "Tap any sign to view its sharp crop and detailed breakdown.",
                         fontSize = 12.sp,
-                        color = CurbOnSurfaceVariant
+                        color = BentoTextSecondary
                     )
                 }
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
+            // 5. SIGN EVIDENCE BENTO GRID CARDS
             if (scanResult.detectedSigns.isNotEmpty()) {
-                itemsIndexed(scanResult.detectedSigns) { index, sign ->
-                    Box(modifier = Modifier.padding(bottom = 12.dp)) {
-                        CurbCard(
-                            cornerRadius = RadiusNested,
-                            backgroundColor = CurbSurface,
-                            modifier = Modifier.clickable {
-                                selectedSignForDetail = sign
-                            }
+                val signPairs = scanResult.detectedSigns.chunked(2)
+                signPairs.forEachIndexed { pairIndex, pair ->
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                // Real Cropped Sign Plate Thumbnail
-                                if (!sign.croppedImageUri.isNullOrBlank() && File(sign.croppedImageUri).exists()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(width = 84.dp, height = 84.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(CurbSurfaceVariant),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        AsyncImage(
-                                            model = File(sign.croppedImageUri),
-                                            contentDescription = "Sign crop ${index + 1}",
-                                            contentScale = ContentScale.Fit,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(width = 84.dp, height = 84.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(CurbSurfaceVariant),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CropFree,
-                                            contentDescription = null,
-                                            tint = CurbOnSurfaceVariant,
-                                            modifier = Modifier.size(28.dp)
-                                        )
-                                    }
-                                }
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            text = if (sign.id.isNotBlank()) "SIGN ${sign.id.uppercase()}" else "SIGN ${index + 1}",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = CurbOnSurfaceVariant
-                                        )
-
-                                        val (badgeText, badgeBg, badgeFg) = when {
-                                            sign.isUncertain -> Triple("Uncertain", CurbWarningContainer, CurbWarning)
-                                            sign.isRestrictingNow -> Triple("Active Restriction", CurbErrorContainer, CurbError)
-                                            !sign.isRestrictingNow -> Triple("Inactive Schedule", CurbSurfaceVariant, CurbOnSurfaceVariant)
-                                            else -> Triple("Individual Rule", CurbSurfaceVariant, CurbOnSurfaceVariant)
-                                        }
-
-                                        Surface(
-                                            shape = RoundedCornerShape(RadiusChip),
-                                            color = badgeBg
-                                        ) {
-                                            Text(
-                                                text = badgeText,
-                                                color = badgeFg,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(2.dp))
-
-                                    Text(
-                                        text = sign.title.ifBlank { "Parking Regulation" },
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = CurbOnSurface
-                                    )
-
-                                    val daysHours = sign.applicableDaysHours.ifBlank { sign.subtitle }
-                                    if (daysHours.isNotBlank()) {
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = daysHours,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = CurbOnSurfaceVariant
-                                        )
-                                    }
-
-                                    val mainRule = sign.restrictions.ifBlank { sign.ruleText }
-                                    if (mainRule.isNotBlank()) {
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = mainRule,
-                                            fontSize = 12.sp,
-                                            lineHeight = 16.sp,
-                                            color = CurbOnSurface
-                                        )
-                                    }
-                                }
+                            pair.forEachIndexed { itemInPairIndex, sign ->
+                                val overallIndex = pairIndex * 2 + itemInPairIndex
+                                SignEvidenceBentoCard(
+                                    sign = sign,
+                                    index = overallIndex,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("sign_evidence_card_$overallIndex"),
+                                    onClick = { selectedSignForDetail = sign }
+                                )
+                            }
+                            if (pair.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
                     }
                 }
             } else {
                 item {
-                    CurbCard(
-                        cornerRadius = RadiusCard,
-                        backgroundColor = CurbSurface
+                    Card(
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                        border = BorderStroke(1.dp, BentoBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = "No clear physical sign plates could be extracted from this image. Please retake the photo with direct alignment and good lighting.",
                             fontSize = 13.sp,
                             lineHeight = 18.sp,
-                            color = CurbOnSurfaceVariant,
-                            modifier = Modifier.padding(14.dp)
+                            color = BentoTextSecondary,
+                            modifier = Modifier.padding(16.dp)
                         )
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
             }
 
-            item { Spacer(modifier = Modifier.height(18.dp)) }
+            item { Spacer(modifier = Modifier.height(12.dp)) }
 
-            // SECTION C: WHY THIS DECISION (RULE SYNTHESIS)
+            // 6. WHY THIS DECISION (RULE SYNTHESIS)
             item {
                 Text(
                     text = "Why this decision",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface
+                    color = BentoTextPrimary,
+                    letterSpacing = 0.5.sp
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -417,9 +356,12 @@ fun ParkingDetailsScreen(
                     }
                 }
 
-                CurbCard(
-                    cornerRadius = RadiusCard,
-                    backgroundColor = CurbSurface
+                Card(
+                    shape = RoundedCornerShape(RadiusCard),
+                    colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                    border = BorderStroke(1.dp, BentoBorder),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
@@ -429,14 +371,15 @@ fun ParkingDetailsScreen(
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = null,
-                                tint = CurbOnSurfaceVariant,
+                                tint = BentoTextSecondary,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
-                                text = "Rule Synthesis",
-                                fontSize = 12.sp,
+                                text = "RULE SYNTHESIS",
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = CurbOnSurfaceVariant
+                                letterSpacing = 0.5.sp,
+                                color = BentoTextSecondary
                             )
                         }
                         Spacer(modifier = Modifier.height(6.dp))
@@ -444,14 +387,14 @@ fun ParkingDetailsScreen(
                             text = synthesisText,
                             fontSize = 14.sp,
                             lineHeight = 20.sp,
-                            color = CurbOnSurface
+                            color = BentoTextPrimary
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
             }
 
-            // SECTION D: COMPLETE PARKING RULES (STRICTLY NO FALLBACKS)
+            // 7. COMPLETE PARKING RULES
             val activeRulesList = scanResult.parkingRules.filter {
                 scanResult.verdict == ScanVerdict.RESTRICTED || !it.contains("Inactive", ignoreCase = true)
             }
@@ -463,13 +406,17 @@ fun ParkingDetailsScreen(
                         text = "Complete parking rules",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = CurbOnSurface
+                        color = BentoTextPrimary,
+                        letterSpacing = 0.5.sp
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    CurbCard(
-                        cornerRadius = RadiusCard,
-                        backgroundColor = CurbSurface
+                    Card(
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                        border = BorderStroke(1.dp, BentoBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             if (activeRulesList.isNotEmpty()) {
@@ -486,7 +433,7 @@ fun ParkingDetailsScreen(
                                         text = "• $rule",
                                         fontSize = 14.sp,
                                         lineHeight = 20.sp,
-                                        color = CurbOnSurface,
+                                        color = BentoTextPrimary,
                                         modifier = Modifier.padding(vertical = 3.dp)
                                     )
                                 }
@@ -494,12 +441,7 @@ fun ParkingDetailsScreen(
 
                             if (activeRulesList.isNotEmpty() && inactiveSignsList.isNotEmpty()) {
                                 Spacer(modifier = Modifier.height(12.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(1.dp)
-                                        .background(CurbSurfaceVariant)
-                                )
+                                HorizontalDivider(color = BentoBorder, thickness = 1.dp)
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
 
@@ -509,7 +451,7 @@ fun ParkingDetailsScreen(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.5.sp,
-                                    color = CurbOnSurfaceVariant
+                                    color = BentoTextSecondary
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 inactiveSignsList.forEach { sign ->
@@ -519,18 +461,18 @@ fun ParkingDetailsScreen(
                                         text = "• ${sign.title}: $scheduleText ($ruleText)",
                                         fontSize = 13.sp,
                                         lineHeight = 18.sp,
-                                        color = CurbOnSurfaceVariant,
+                                        color = BentoTextSecondary,
                                         modifier = Modifier.padding(vertical = 3.dp)
                                     )
                                 }
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
             }
 
-            // SECTION E: ABOUT THIS SPOT (ONLY KNOWN NON-EMPTY FIELDS)
+            // 8. ABOUT THIS SPOT
             val hasLocation = scanResult.locationName.isNotBlank() && scanResult.locationName != "Unknown Location"
             val hasPayment = scanResult.paymentInfo.isNotBlank() && scanResult.paymentInfo != "Unknown" && scanResult.paymentInfo != "N/A"
             val hasVehicle = scanResult.vehicleApplicability.isNotBlank() && scanResult.vehicleApplicability != "Unknown"
@@ -541,13 +483,17 @@ fun ParkingDetailsScreen(
                         text = "About this spot",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = CurbOnSurface
+                        color = BentoTextPrimary,
+                        letterSpacing = 0.5.sp
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    CurbCard(
-                        cornerRadius = RadiusCard,
-                        backgroundColor = CurbSurface
+                    Card(
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                        border = BorderStroke(1.dp, BentoBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             if (hasLocation) {
@@ -575,44 +521,49 @@ fun ParkingDetailsScreen(
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
             }
 
-            // SECTION E: CURB AI EXPLANATION
+            // 9. CURB AI EXPLANATION
             item {
                 Text(
                     text = "Curb AI explanation",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface
+                    color = BentoTextPrimary,
+                    letterSpacing = 0.5.sp
                 )
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                CurbCard(
-                    cornerRadius = RadiusCard,
-                    backgroundColor = CurbSurface
+                Card(
+                    shape = RoundedCornerShape(RadiusCard),
+                    colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                    border = BorderStroke(1.dp, BentoBorder),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
                         text = scanResult.explanation,
                         fontSize = 14.sp,
                         lineHeight = 22.sp,
-                        color = CurbOnSurface,
+                        color = BentoTextPrimary,
                         modifier = Modifier.padding(18.dp)
                     )
                 }
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
-            // PERSONAL NOTE
+            // 10. PERSONAL NOTE
             item {
                 Text(
                     text = "Personal note",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = CurbOnSurface
+                    color = BentoTextPrimary,
+                    letterSpacing = 0.5.sp
                 )
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 CurbNoteSection(
                     note = note,
@@ -627,7 +578,7 @@ fun ParkingDetailsScreen(
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
-            // REPORT ISSUE LINK
+            // 11. REPORT ISSUE LINK
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -639,7 +590,7 @@ fun ParkingDetailsScreen(
                     ) {
                         Text(
                             text = "Need to report an issue with this spot?",
-                            color = CurbOnSurfaceVariant,
+                            color = BentoTextSecondary,
                             fontSize = 13.sp
                         )
                     }
@@ -648,13 +599,14 @@ fun ParkingDetailsScreen(
             }
         }
 
-        // BOTTOM ACTION
+        // 12. BOTTOM STICKY ACTION
         if (scanResult.verdict == ScanVerdict.ALLOWED) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(BentoCanvas)
                     .navigationBarsPadding()
-                    .padding(horizontal = 24.dp, vertical = 12.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
                 if (timerConfig.isUnrestricted) {
                     CurbPrimaryButton(
@@ -667,6 +619,7 @@ fun ParkingDetailsScreen(
                                 timerConfig.ruleSummary
                             )
                         },
+                        backgroundColor = BentoPrimaryDark,
                         testTag = "details_start_session_unrestricted_button"
                     )
                 } else {
@@ -675,6 +628,7 @@ fun ParkingDetailsScreen(
                         onClick = {
                             showStartConfirmationSheet = true
                         },
+                        backgroundColor = BentoPrimaryDark,
                         testTag = "details_start_session_button"
                     )
                 }
@@ -746,6 +700,158 @@ fun ParkingDetailsScreen(
     }
 }
 
+@Composable
+private fun SignEvidenceBentoCard(
+    sign: DetectedSign,
+    index: Int,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(RadiusCard),
+        colors = CardDefaults.cardColors(containerColor = BentoWhite),
+        border = BorderStroke(1.dp, BentoBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        modifier = modifier.clickable { onClick() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            // Header: ID + Badge
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (sign.id.isNotBlank()) "SIGN ${sign.id.uppercase()}" else "SIGN ${index + 1}",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BentoTextSecondary
+                )
+
+                val (badgeText, badgeBg, badgeFg) = when {
+                    sign.isUncertain -> Triple("Uncertain", CurbWarningContainer, CurbWarning)
+                    sign.isRestrictingNow -> Triple("Active", CurbErrorContainer, CurbError)
+                    !sign.isRestrictingNow -> Triple("Inactive", BentoSand, BentoTextSecondary)
+                    else -> Triple("Rule", BentoSand, BentoTextSecondary)
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(RadiusChip),
+                    color = badgeBg
+                ) {
+                    Text(
+                        text = badgeText,
+                        color = badgeFg,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Thumbnail Crop or Placeholder
+            if (!sign.croppedImageUri.isNullOrBlank() && File(sign.croppedImageUri).exists()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(90.dp)
+                        .clip(RoundedCornerShape(RadiusHero - 12.dp))
+                        .background(BentoSand),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = File(sign.croppedImageUri),
+                        contentDescription = "Sign crop ${index + 1}",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(70.dp)
+                        .clip(RoundedCornerShape(RadiusHero - 12.dp))
+                        .background(BentoSand),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CropFree,
+                        contentDescription = null,
+                        tint = BentoTextSecondary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Title
+            Text(
+                text = sign.title.ifBlank { "Parking Regulation" },
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = BentoTextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            val daysHours = sign.applicableDaysHours.ifBlank { sign.subtitle }
+            if (daysHours.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = daysHours,
+                    fontSize = 11.sp,
+                    color = BentoTextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            val mainRule = sign.restrictions.ifBlank { sign.ruleText }
+            if (mainRule.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = mainRule,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    color = BentoTextPrimary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "DETAILS",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BentoPrimaryDark,
+                    letterSpacing = 0.5.sp
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = BentoPrimaryDark,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+    }
+}
+
 private fun exportSingleScanDetails(context: Context, scan: ScanResult) {
     val builder = StringBuilder()
     builder.append("CURB SPOT REPORT: ${scan.locationName}\n")
@@ -780,27 +886,35 @@ private fun SpotInfoRow(
 ) {
     Row(
         verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = CurbBlack,
-            modifier = Modifier.size(20.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(BentoSand),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = BentoPrimaryDark,
+                modifier = Modifier.size(16.dp)
+            )
+        }
         Column {
             Text(
                 text = label,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = CurbOnSurface
+                color = BentoTextPrimary
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = value,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                color = CurbOnSurfaceVariant
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                color = BentoTextSecondary
             )
         }
     }

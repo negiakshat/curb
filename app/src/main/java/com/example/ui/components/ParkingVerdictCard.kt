@@ -1,16 +1,17 @@
 package com.example.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -21,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,17 +43,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
+import com.example.ui.theme.BentoBorder
+import com.example.ui.theme.BentoTextPrimary
+import com.example.ui.theme.BentoTextSecondary
+import com.example.ui.theme.BentoWhite
 import com.example.ui.theme.CurbError
 import com.example.ui.theme.CurbErrorContainer
-import com.example.ui.theme.CurbOnSurface
-import com.example.ui.theme.CurbOnSurfaceVariant
 import com.example.ui.theme.CurbSuccess
 import com.example.ui.theme.CurbSuccessContainer
 import com.example.ui.theme.CurbWarning
 import com.example.ui.theme.CurbWarningContainer
-import com.example.ui.theme.CurbWhite
 import com.example.ui.theme.RadiusCard
 import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusHero
 
 @Composable
 fun ParkingVerdictCard(
@@ -76,10 +81,10 @@ fun ParkingVerdictCard(
             backgroundColor = CurbSuccessContainer,
             iconBgColor = CurbSuccess,
             iconVector = Icons.Default.CheckCircle,
-            verdictLabel = "Parking allowed",
+            verdictLabel = "PARKING ALLOWED",
             supportingText = "You can park here under current rules.",
             section1Header = "ALLOWED UNTIL",
-            section1HeaderColor = CurbOnSurfaceVariant,
+            section1HeaderColor = BentoTextSecondary,
             section1PrimaryText = if (isUnrestrictedResult(scanResult)) "No Time Limit" else scanResult.allowedUntilTime.ifBlank { "Active Schedule" },
             section1PrimaryColor = CurbSuccess,
             section1ChipText = if (!isUnrestrictedResult(scanResult)) scanResult.timeRemaining.takeIf { it.isNotBlank() } else null,
@@ -92,12 +97,12 @@ fun ParkingVerdictCard(
             backgroundColor = CurbErrorContainer,
             iconBgColor = CurbError,
             iconVector = Icons.Default.Error,
-            verdictLabel = "Parking restricted",
+            verdictLabel = "PARKING RESTRICTED",
             supportingText = "An active rule prohibits parking right now.",
             section1Header = "ACTIVE RESTRICTION IN EFFECT",
             section1HeaderColor = CurbError,
             section1PrimaryText = scanResult.parkingRules.firstOrNull() ?: "Active zone or municipal restrictions prohibit parking at this location.",
-            section1PrimaryColor = CurbOnSurface,
+            section1PrimaryColor = BentoTextPrimary,
             section1ChipText = null,
             section1ChipBgColor = CurbErrorContainer,
             section1ChipTextColor = CurbError,
@@ -108,12 +113,12 @@ fun ParkingVerdictCard(
             backgroundColor = CurbWarningContainer,
             iconBgColor = CurbWarning,
             iconVector = Icons.Default.Warning,
-            verdictLabel = "Rule unclear",
-            supportingText = "Signage is obscured, faded, or incomplete.",
+            verdictLabel = "RULE UNCLEAR",
+            supportingText = "Verify physical street signs before parking.",
             section1Header = "VERIFY BEFORE PARKING",
             section1HeaderColor = CurbWarning,
             section1PrimaryText = "Check physical street signs before leaving your vehicle.",
-            section1PrimaryColor = CurbOnSurface,
+            section1PrimaryColor = BentoTextPrimary,
             section1ChipText = null,
             section1ChipBgColor = CurbWarningContainer,
             section1ChipTextColor = CurbWarning,
@@ -131,9 +136,10 @@ fun ParkingVerdictCard(
         label = "verdictIconBgColor"
     )
 
-    CurbCard(
-        cornerRadius = 20.dp,
-        backgroundColor = animatedBgColor,
+    Card(
+        shape = RoundedCornerShape(RadiusHero),
+        colors = CardDefaults.cardColors(containerColor = animatedBgColor),
+        border = BorderStroke(1.dp, BentoBorder),
         modifier = modifier
             .fillMaxWidth()
             .animateContentSize()
@@ -142,12 +148,12 @@ fun ParkingVerdictCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(18.dp)
         ) {
             // 1. HEADER: ICON CONTAINER + VERDICT LABEL + SUPPORTING SUBTITLE
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Box(
@@ -160,7 +166,7 @@ fun ParkingVerdictCard(
                     Icon(
                         imageVector = config.iconVector,
                         contentDescription = null,
-                        tint = CurbWhite,
+                        tint = BentoWhite,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -170,24 +176,26 @@ fun ParkingVerdictCard(
                         text = config.verdictLabel,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = CurbOnSurface
+                        color = BentoTextPrimary,
+                        letterSpacing = 0.5.sp
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = config.supportingText,
                         fontSize = 13.sp,
                         lineHeight = 18.sp,
-                        color = CurbOnSurfaceVariant
+                        color = BentoTextSecondary
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // 2. CONTEXT & TIMING SECTION (Responsive for small/narrow screens)
+            // 2. CONTEXT & TIMING TILE
             Surface(
                 shape = RoundedCornerShape(RadiusCard),
-                color = CurbWhite,
+                color = BentoWhite,
+                border = BorderStroke(1.dp, BentoBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -229,7 +237,7 @@ fun ParkingVerdictCard(
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = config.section1ChipTextColor,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                                     )
                                 }
                             }
@@ -246,32 +254,33 @@ fun ParkingVerdictCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // 3. IMMEDIATE REASON ("WHY?")
             Surface(
                 shape = RoundedCornerShape(RadiusCard),
-                color = CurbWhite.copy(alpha = 0.75f),
+                color = BentoWhite,
+                border = BorderStroke(1.dp, BentoBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp)
+                        .padding(14.dp)
                 ) {
                     Text(
                         text = config.section2Header,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp,
-                        color = CurbOnSurfaceVariant
+                        color = BentoTextSecondary
                     )
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = config.section2Content,
                         fontSize = 13.sp,
                         lineHeight = 18.sp,
-                        color = CurbOnSurface
+                        color = BentoTextPrimary
                     )
                 }
             }
