@@ -154,6 +154,12 @@ fun ParkingTimerScreen(
     var showMoreMenu by remember { mutableStateOf(false) }
     var isNotificationBannerVisible by remember { mutableStateOf(true) }
 
+    LaunchedEffect(effectiveSession?.id, effectiveSession?.isActive) {
+        if (effectiveSession?.isActive != true) {
+            showMoreMenu = false
+        }
+    }
+
     // State for reminder duration selection
     var selectedReminderMinutes by remember(effectiveSession?.reminderMinutesBefore) {
         mutableIntStateOf(effectiveSession?.reminderMinutesBefore ?: 15)
@@ -205,57 +211,57 @@ fun ParkingTimerScreen(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Circular More Menu Button
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(BentoWhite)
-                    .border(1.dp, BentoBorder, CircleShape)
-                    .clickable { showMoreMenu = true }
-                    .testTag("timer_more_menu_button"),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MoreHoriz,
-                    contentDescription = "More options",
-                    tint = BentoTextPrimary,
-                    modifier = Modifier.size(22.dp)
-                )
-
-                DropdownMenu(
-                    expanded = showMoreMenu,
-                    onDismissRequest = { showMoreMenu = false }
+            if (effectiveSession != null && effectiveSession.isActive) {
+                // Circular More Menu Button
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(BentoWhite)
+                        .border(1.dp, BentoBorder, CircleShape)
+                        .clickable { showMoreMenu = true }
+                        .testTag("timer_more_menu_button"),
+                    contentAlignment = Alignment.Center
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Set Custom Reminder", color = BentoTextPrimary) },
-                        leadingIcon = { Icon(Icons.Default.NotificationsNone, null, tint = BentoTextSecondary) },
-                        onClick = {
-                            showMoreMenu = false
-                            showReminderSheet = true
-                        }
+                    Icon(
+                        imageVector = Icons.Default.MoreHoriz,
+                        contentDescription = "More options",
+                        tint = BentoTextPrimary,
+                        modifier = Modifier.size(22.dp)
                     )
-                    DropdownMenuItem(
-                        text = { Text("View Parking Rules", color = BentoTextPrimary) },
-                        leadingIcon = { Icon(Icons.Default.Info, null, tint = BentoTextSecondary) },
-                        onClick = {
-                            showMoreMenu = false
-                            showRulesSheet = true
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Share Parking Details", color = BentoTextPrimary) },
-                        leadingIcon = { Icon(Icons.Default.Share, null, tint = BentoTextSecondary) },
-                        onClick = {
-                            showMoreMenu = false
-                            Toast.makeText(
-                                context,
-                                "Parking location & expiry copied to clipboard!",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    )
-                    if (effectiveSession != null && effectiveSession.isActive) {
+
+                    DropdownMenu(
+                        expanded = showMoreMenu,
+                        onDismissRequest = { showMoreMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Set Custom Reminder", color = BentoTextPrimary) },
+                            leadingIcon = { Icon(Icons.Default.NotificationsNone, null, tint = BentoTextSecondary) },
+                            onClick = {
+                                showMoreMenu = false
+                                showReminderSheet = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("View Parking Rules", color = BentoTextPrimary) },
+                            leadingIcon = { Icon(Icons.Default.Info, null, tint = BentoTextSecondary) },
+                            onClick = {
+                                showMoreMenu = false
+                                showRulesSheet = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Share Parking Details", color = BentoTextPrimary) },
+                            leadingIcon = { Icon(Icons.Default.Share, null, tint = BentoTextSecondary) },
+                            onClick = {
+                                showMoreMenu = false
+                                Toast.makeText(
+                                    context,
+                                    "Parking location & expiry copied to clipboard!",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
                         DropdownMenuItem(
                             text = { Text("End Session", color = CurbError) },
                             onClick = {
@@ -265,19 +271,22 @@ fun ParkingTimerScreen(
                         )
                     }
                 }
+            } else {
+                // Same-width invisible placeholder to keep header balanced
+                Box(modifier = Modifier.size(44.dp))
             }
         }
 
-        // MAIN SCROLLABLE CONTENT AREA
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(scrollState)
-                .padding(horizontal = 20.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            if (effectiveSession != null && effectiveSession.isActive) {
+        if (effectiveSession != null && effectiveSession.isActive) {
+            // MAIN SCROLLABLE CONTENT AREA (ACTIVE SESSION)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 20.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 // Pre-calculated timer state
                 val totalDuration = (effectiveSession.endTime - effectiveSession.startTime).coerceAtLeast(1000L)
                 val remaining = (effectiveSession.endTime - currentTimeMillis)
@@ -730,140 +739,18 @@ fun ParkingTimerScreen(
                     }
                 }
 
-            } else {
-                // ==========================================
-                // NO ACTIVE SESSION: QUICK START LAUNCHER
-                // ==========================================
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(RadiusHero)),
-                    shape = RoundedCornerShape(RadiusHero),
-                    colors = CardDefaults.cardColors(containerColor = BentoWhite),
-                    border = BorderStroke(1.dp, BentoBorder),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(BentoSand),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LocalParking,
-                                contentDescription = null,
-                                tint = BentoPrimaryDark,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = "No Active Parking Session",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = BentoTextPrimary
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Text(
-                            text = if (canStartQuickTimer) {
-                                "Your car is currently free of timer drama. Choose a duration below to start your parking session."
-                            } else {
-                                "Scan a parking sign first."
-                            },
-                            fontSize = 13.sp,
-                            color = BentoTextSecondary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 18.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        Text(
-                            text = "QUICK DURATION PRESETS",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = BentoTextSecondary,
-                            letterSpacing = 0.5.sp,
-                            modifier = Modifier.align(Alignment.Start)
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // 2x2 Bento Duration Grid
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                QuickPresetTile(
-                                    label = "30 MIN",
-                                    minutes = 30,
-                                    enabled = canStartQuickTimer,
-                                    onClick = { onStartQuickTimer(30, "30m limit") },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                QuickPresetTile(
-                                    label = "1 HOUR",
-                                    minutes = 60,
-                                    enabled = canStartQuickTimer,
-                                    onClick = { onStartQuickTimer(60, "1h limit") },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                QuickPresetTile(
-                                    label = "2H 15M",
-                                    minutes = 135,
-                                    isPrimary = true,
-                                    enabled = canStartQuickTimer,
-                                    onClick = { onStartQuickTimer(135, "2h 30m limit") },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                QuickPresetTile(
-                                    label = "4 HOURS",
-                                    minutes = 240,
-                                    enabled = canStartQuickTimer,
-                                    onClick = { onStartQuickTimer(240, "4h limit") },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.height(10.dp))
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        // ==========================================
-        // STICKY BOTTOM ACTIONS
-        // ==========================================
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(BentoCanvas)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (effectiveSession != null && effectiveSession.isActive) {
+            // STICKY BOTTOM ACTIONS FOR ACTIVE SESSION
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(BentoCanvas)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 // LEFT BUTTON: "Add time"
                 CurbSecondaryButton(
                     text = "Add time",
@@ -880,14 +767,51 @@ fun ParkingTimerScreen(
                     backgroundColor = CurbError,
                     testTag = "end_parking_session_button"
                 )
-            } else {
-                CurbPrimaryButton(
-                    text = "Start Parking Session (2h 15m)",
-                    onClick = { onStartQuickTimer(135, "2h 30m limit") },
-                    leadingIcon = Icons.Default.Add,
-                    backgroundColor = BentoPrimaryDark,
-                    testTag = "start_quick_session_button",
-                    enabled = canStartQuickTimer
+            }
+        } else {
+            // ==========================================
+            // NO ACTIVE SESSION: CENTERED EMPTY STATE
+            // ==========================================
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(BentoSand),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocalParking,
+                        contentDescription = null,
+                        tint = BentoPrimaryDark,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "No Active Parking Session",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BentoTextPrimary,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "Scan a parking sign first.",
+                    fontSize = 14.sp,
+                    color = BentoTextSecondary,
+                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -896,7 +820,7 @@ fun ParkingTimerScreen(
     // ==========================================
     // BOTTOM SHEET 1: ADD TIME (EXTEND SESSION)
     // ==========================================
-    if (showAddTimeSheet && effectiveSession != null) {
+    if (showAddTimeSheet && effectiveSession?.isActive == true) {
         val sheetState = rememberModalBottomSheetState()
         val maxAllowed = effectiveSession.maxAllowedEndTimeMillis
         val maxExtensionMillis = if (maxAllowed != null) {
@@ -987,7 +911,7 @@ fun ParkingTimerScreen(
     // ==========================================
     // BOTTOM SHEET 2: REMINDER SETTINGS
     // ==========================================
-    if (showReminderSheet && effectiveSession != null) {
+    if (showReminderSheet && effectiveSession?.isActive == true) {
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(
             onDismissRequest = { showReminderSheet = false },
@@ -1070,7 +994,7 @@ fun ParkingTimerScreen(
     // ==========================================
     // BOTTOM SHEET 3: PARKING RULES BREAKDOWN
     // ==========================================
-    if (showRulesSheet) {
+    if (showRulesSheet && effectiveSession?.isActive == true) {
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(
             onDismissRequest = { showRulesSheet = false },
@@ -1148,7 +1072,7 @@ fun ParkingTimerScreen(
     // ==========================================
     // BOTTOM SHEET 4: INTERACTIVE MAP & PIN
     // ==========================================
-    if (showMapSheet && effectiveSession != null) {
+    if (showMapSheet && effectiveSession?.isActive == true) {
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(
             onDismissRequest = { showMapSheet = false },
@@ -1319,54 +1243,6 @@ private fun TimerDetailRow(
         }
 
         trailingContent()
-    }
-}
-
-@Composable
-private fun QuickPresetTile(
-    label: String,
-    minutes: Int,
-    isPrimary: Boolean = false,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier
-            .clip(RoundedCornerShape(RadiusNested))
-            .clickable(enabled = enabled) { onClick() },
-        shape = RoundedCornerShape(RadiusNested),
-        color = when {
-            !enabled -> BentoCanvas.copy(alpha = 0.5f)
-            isPrimary -> BentoPeach
-            else -> BentoCanvas
-        },
-        border = BorderStroke(
-            1.dp,
-            when {
-                !enabled -> BentoBorder.copy(alpha = 0.4f)
-                isPrimary -> BentoPrimary
-                else -> BentoBorder
-            }
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = label,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = when {
-                    !enabled -> BentoTextSecondary.copy(alpha = 0.5f)
-                    isPrimary -> BentoPrimaryDark
-                    else -> BentoTextPrimary
-                }
-            )
-        }
     }
 }
 
