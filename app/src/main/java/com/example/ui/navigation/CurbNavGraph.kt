@@ -617,22 +617,10 @@ fun CurbNavGraph(
                     Toast.makeText(context, "Note deleted", Toast.LENGTH_SHORT).show()
                 },
                 onScanPlace = { place ->
-                    viewModel.processCapturedImage(
-                        bitmap = null,
-                        explicitLocationName = place.name,
-                        explicitCityState = place.address,
-                        onPaywallRequired = {
-                            Toast.makeText(
-                                context,
-                                "You've used all 10 free scans for this month. Upgrade to Curb Pro for unlimited scans!",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            navController.navigate(Routes.CURB_PRO_PAYWALL)
-                        },
-                        onComplete = {
-                            navController.navigate(Routes.SCAN_OUTPUT)
-                        }
-                    )
+                    // CRITICAL ISSUE 7 FIX: Do not fabricate a scan without a captured image.
+                    // Navigate to the real Scan screen so the user can capture the actual parking sign.
+                    // The saved place name is available as context but must not replace real sign evidence.
+                    navController.navigate(Routes.SCAN)
                 },
                 onUpgradeToPro = {
                     navController.navigate(Routes.CURB_PRO_PAYWALL)

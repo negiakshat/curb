@@ -38,7 +38,10 @@ data class LocalSignCrop(
     val fileUri: String,
     val bitmap: Bitmap,
     val isDemo: Boolean = false,
-    val ocrQuality: com.example.util.OcrQuality = com.example.util.OcrQuality.CLEAR
+    val ocrQuality: com.example.util.OcrQuality = com.example.util.OcrQuality.CLEAR,
+    // CRITICAL ISSUE 3: Carry uncertainty from validation through the entire pipeline.
+    // Weak/insufficient OCR cannot silently become certain evidence.
+    val isUncertain: Boolean = false
 )
 
 data class LocalDetectionResult(
@@ -265,7 +268,8 @@ object SignDetectionService {
                                 ocrText = candidate.ocrCandidate.text,
                                 fileUri = cropFile.absolutePath,
                                 bitmap = croppedBmp,
-                                ocrQuality = candidate.ocrQuality
+                                ocrQuality = candidate.ocrQuality,
+                                isUncertain = candidate.isUncertain
                             )
                         )
                     }
@@ -355,7 +359,12 @@ object SignDetectionService {
                         }
 
                         if (cropFile.exists() && cropFile.length() > 0) {
-                            crops.add(
+                            // CRITICAL ISSUE 3: Propagate uncertainty from quality into the crop.
+                        // Weak OCR or short/sparse text must remain uncertain through the pipeline.
+                        val cropIsUncertain = quality == com.example.util.OcrQuality.WEAK ||
+                                box.ocrText.trim().length <= 6 ||
+                                !com.example.util.SignCandidateValidator.containsExplicitParkingRule(box.ocrText)
+                        crops.add(
                                 LocalSignCrop(
                                     id = signId,
                                     normalizedBox = box.copy(
@@ -369,7 +378,8 @@ object SignDetectionService {
                                     ocrText = box.ocrText,
                                     fileUri = cropFile.absolutePath,
                                     bitmap = croppedBmp,
-                                    ocrQuality = quality
+                                    ocrQuality = quality,
+                                    isUncertain = cropIsUncertain
                                 )
                             )
                         }
@@ -736,6 +746,16 @@ object SignDetectionService {
         private val isProcessing = AtomicBoolean(false)
         private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
+        // CRITICAL ISSUE 13: Detection flicker debouncing
+        // Require stable detection across multiple frames before reporting detected state.
+        private var lastDetectedBoxes: List<SignBoundingBox> = emptyList()
+        private var lastDetectedCount = 0
+        private var lastStateChangeTimestamp = 0L
+        private val MIN_STABLE_FRAMES = 2  // Require 2 consecutive frames with detections
+        private var stableDetectionCount = 0
+        private var stableNonDetectionCount = 0
+        private val MIN_STABLE_CLEAR_FRAMES = 3  // Require 3 consecutive empty frames to clear
+
         @OptIn(ExperimentalGetImage::class)
         override fun analyze(imageProxy: ImageProxy) {
             // Drop frames immediately if previous frame inference is still active
@@ -773,7 +793,26 @@ object SignDetectionService {
                     .addOnSuccessListener { visionText ->
                         try {
                             val internalDetections = processVisionText(visionText, imgWidth, imgHeight)
-                            onSignsDetected(internalDetections.map { it.normalizedBox })
+                            val currentBoxes = internalDetections.map { it.normalizedBox }
+
+                            // CRITICAL ISSUE 13: Debounce detection state changes
+                            // Require multiple consecutive frames with detections before
+                            // reporting the detected state to avoid flicker.
+                            if (currentBoxes.isNotEmpty()) {
+                                stableDetectionCount++
+                                stableNonDetectionCount = 0
+                                if (stableDetectionCount >= MIN_STABLE_FRAMES) {
+                                    lastDetectedBoxes = currentBoxes
+                                    onSignsDetected(currentBoxes)
+                                }
+                            } else {
+                                stableNonDetectionCount++
+                                stableDetectionCount = 0
+                                if (stableNonDetectionCount >= MIN_STABLE_CLEAR_FRAMES && lastDetectedBoxes.isNotEmpty()) {
+                                    lastDetectedBoxes = emptyList()
+                                    onSignsDetected(emptyList())
+                                }
+                            }
                         } catch (e: Throwable) {
                             onSignsDetected(emptyList())
                         } finally {
@@ -783,7 +822,12 @@ object SignDetectionService {
                     }
                     .addOnFailureListener {
                         try {
-                            onSignsDetected(emptyList())
+                            // On failure, maintain current state briefly to avoid flicker
+                            stableDetectionCount = 0
+                            stableNonDetectionCount++
+                            if (stableNonDetectionCount >= MIN_STABLE_CLEAR_FRAMES) {
+                                onSignsDetected(emptyList())
+                            }
                         } finally {
                             imageProxy.close()
                             isProcessing.set(false)

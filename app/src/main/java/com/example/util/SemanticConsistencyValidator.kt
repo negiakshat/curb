@@ -63,8 +63,19 @@ object SemanticConsistencyValidator {
             // Verdict claims ALLOWED but physical sign has active restriction -> RESTRICTED
             finalVerdict = ScanVerdict.RESTRICTED
         } else if (ocrHasPermission && !ocrHasRestricting && finalVerdict != ScanVerdict.AMBIGUOUS) {
-            // Physical sign is purely permission (e.g. 2 HOUR PARKING) -> ALLOWED
-            finalVerdict = ScanVerdict.ALLOWED
+            // CRITICAL ISSUE 5 FIX: "PERMIT" alone is NOT permission — it requires
+            // either a time-based permission pattern (e.g., "2 HOUR PARKING")
+            // or explicit parking permission keywords (e.g., "PARKING PERMITTED").
+            // "PERMIT PARKING ONLY" means permit holders only — not general permission.
+            // "PERMIT REQUIRED" means you need a permit — not permission for everyone.
+            if (ocrHasExplicitTimeBasedPermission(combinedOcrText)) {
+                finalVerdict = ScanVerdict.ALLOWED
+            } else if (ocrHasPermitOnlyOrRequired(combinedOcrText)) {
+                // CRITICAL ISSUE 5: Permit-only signs mean unknown user eligibility.
+                // Prefer AMBIGUOUS rather than claiming permission.
+                finalVerdict = ScanVerdict.AMBIGUOUS
+            }
+            // Otherwise, leave verdict unchanged
         }
 
         // 2. Normalize Payment Info
@@ -129,8 +140,18 @@ object SemanticConsistencyValidator {
 
                 // Check for usable duration in rawResult or extract from OCR
                 val extractedTime = extractAllowedUntilFromOcr(combinedOcrText)
+
+                // CRITICAL ISSUE 4: Before accepting Gemini's allowedUntilTime, verify it
+                // against OCR evidence. If OCR only has a duration (e.g., "2 HOUR") without
+                // a specific clock cutoff, reject any invented clock time.
+                val geminiTimeSupported = isUsableClockTimeOrDuration(rawResult.allowedUntilTime) &&
+                    rawResult.timeRemaining != "--" &&
+                    EvidenceAnchoringValidator.isAllowedUntilTimeSupportedByEvidence(
+                        rawResult.allowedUntilTime, combinedOcrText
+                    )
+
                 val (allowedUntil, remaining) = when {
-                    isUsableClockTimeOrDuration(rawResult.allowedUntilTime) && rawResult.timeRemaining != "--" -> {
+                    geminiTimeSupported -> {
                         Pair(rawResult.allowedUntilTime, rawResult.timeRemaining)
                     }
                     extractedTime != null -> {
@@ -188,21 +209,70 @@ object SemanticConsistencyValidator {
                 }
     }
 
+    /**
+     * CRITICAL ISSUE 5 FIX: Determines whether the OCR contains an explicit time-based
+     * permission pattern (e.g., "2 HOUR PARKING", "PARKING ALLOWED 8AM-6PM").
+     *
+     * "PERMIT PARKING ONLY" is NOT time-based permission — it means permit holders only.
+     * "PERMIT REQUIRED" is NOT permission — it means a permit is needed.
+     * Only genuine time limits or explicit permission phrases count.
+     */
+    /**
+     * CRITICAL ISSUE 5 FIX: Determines whether the OCR contains an explicit time-based
+     * permission pattern (e.g., "2 HOUR PARKING", "PARKING ALLOWED 8AM-6PM").
+     *
+     * "PERMIT PARKING ONLY" is NOT time-based permission — it means permit holders only.
+     * "PERMIT REQUIRED" is NOT permission — it means a permit is needed.
+     * Only genuine time limits or explicit permission phrases count.
+     */
+    private fun ocrHasExplicitTimeBasedPermission(ocrUpper: String): Boolean {
+        // Strong time-based permission signals
+        val hasTimeLimit = Regex("""\d+\s*(?:HOUR|HR|HRS|MIN|MINUTE)""").containsMatchIn(ocrUpper)
+        val hasParkingAllowed = Regex("""PARKING\s+(?:ALLOWED|PERMITTED)""").containsMatchIn(ocrUpper)
+        val hasMeterOrPay = Regex("""(?:METER|PAY|PAYMENT|KIOSK)""").containsMatchIn(ocrUpper)
+        val hasTimeRange = Regex("""\d{1,2}\s*(?:AM|PM|A\.M\.|P\.M\.)\s*(?:-|TO|THROUGH)\s*\d{1,2}\s*(?:AM|PM)""").containsMatchIn(ocrUpper)
+        val hasScheduleDays = Regex("""(?:MON|TUE|WED|THU|FRI|SAT|SUN)""").containsMatchIn(ocrUpper)
+
+        // If it's a permit-restricted sign, it's NOT time-based permission for the general public
+        if (isPermitOnlyOrRequired(ocrUpper)) {
+            return false
+        }
+
+        // Must have either a time limit, a time range, or explicit "PARKING ALLOWED/PERMITTED"
+        return hasTimeLimit || hasParkingAllowed || (hasTimeRange && hasScheduleDays) || (hasMeterOrPay && hasTimeRange)
+    }
+
+    /**
+     * CRITICAL ISSUE 5: Detects permit-only or permit-required text that must NOT
+     * become ALLOWED for an unknown user.
+     */
+    private fun ocrHasPermitOnlyOrRequired(ocrUpper: String): Boolean {
+        return isPermitOnlyOrRequired(ocrUpper)
+    }
+
+    private fun isPermitOnlyOrRequired(ocrUpper: String): Boolean {
+        val isPermitOnly = Regex("""PERMIT\s+(?:PARKING\s+)?ONLY""").containsMatchIn(ocrUpper)
+        val isPermitRequired = Regex("""PERMIT\s+REQUIRED""").containsMatchIn(ocrUpper)
+        val isResidentPermit = Regex("""RESIDENT\s+PERMIT""").containsMatchIn(ocrUpper)
+        val isAreaPermit = Regex("""AREA\s+PERMIT""").containsMatchIn(ocrUpper)
+        return isPermitOnly || isPermitRequired || isResidentPermit || isAreaPermit
+    }
+
     private fun extractAllowedUntilFromOcr(ocrText: String): Pair<String, String>? {
         if (ocrText.isBlank()) return null
         val upper = ocrText.uppercase(Locale.US)
 
-        val hourMatch = Regex("(\\d+)\\s*(?:HOUR|HR|HRS)").find(upper)
+        val hourMatch = Regex("""(\d+)\s*(?:HOUR|HR|HRS)""").find(upper)
         if (hourMatch != null) {
             val hours = hourMatch.groupValues[1].toIntOrNull() ?: 2
             return Pair("In $hours ${if (hours == 1) "hour" else "hours"}", "${hours}h 00m remaining")
         }
-        val minMatch = Regex("(\\d+)\\s*(?:MIN|MINUTE|MINS)").find(upper)
+        val minMatch = Regex("""(\d+)\s*(?:MIN|MINUTE|MINS)""").find(upper)
         if (minMatch != null) {
             val mins = minMatch.groupValues[1].toIntOrNull() ?: 30
             return Pair("In $mins mins", "${mins}m remaining")
         }
-        val pmMatch = Regex("(\\d{1,2}(?::\\d{2})?\\s*PM)").find(upper)
+        val pmMatch = Regex("""(\d{1,2}(?::\d{2})?\s*PM)""").find(upper)
         if (pmMatch != null) {
             val clock = pmMatch.groupValues[1]
             return Pair(clock, "Until $clock")
@@ -221,7 +291,8 @@ object SemanticConsistencyValidator {
     private fun isPermissionText(upperText: String): Boolean {
         val permissionKeywords = listOf(
             "2 HOUR", "1 HOUR", "3 HOUR", "PARKING ALLOWED", "PARKING PERMITTED",
-            "PERMIT PARKING", "PAY AT METER", "METERED PARKING", "LIMIT"
+            "PERMIT PARKING", "PAY AT METER", "METERED PARKING", "LIMIT",
+            "PERMIT", "RESIDENT"
         )
         return permissionKeywords.any { upperText.contains(it) }
     }

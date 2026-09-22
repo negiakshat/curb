@@ -74,6 +74,14 @@ class ScanCoordinator(
     ) {
         if (_isProcessingScan.value) return
 
+        // CRITICAL ISSUE 6: bitmap == null capture failure must not save scan or consume quota
+        if (bitmap == null && localDetections.isEmpty()) {
+            val errorMsg = "Camera capture failed. Please ensure the sign is visible and try again."
+            _scanError.value = errorMsg
+            onError?.invoke(errorMsg)
+            return
+        }
+
         if (!scanUsageManager.canPerformScan(isUserPro)) {
             onPaywallRequired()
             return
@@ -87,37 +95,25 @@ class ScanCoordinator(
 
             try {
                 // Stage 1: Fast Crop Generation / Local Sign Detection
+                // CRITICAL ISSUE 1+3: Always run fresh detection on the captured bitmap.
+                // Live detection boxes are UI guidance only; they must NOT bypass
+                // fresh full-image OCR on the actual captured pixels.
+                // Pre-supplied localDetections (e.g. from gallery) are accepted as-is
+                // because they come from the same image.
                 val stage1Start = System.currentTimeMillis()
                 val detectedCrops = if (localDetections.isNotEmpty()) {
                     Log.d("CurbPipeline", "Using pre-supplied local detections: ${localDetections.size}")
                     localDetections
                 } else if (bitmap != null) {
-                    if (detectionBoxes.isNotEmpty()) {
-                        Log.d("CurbTiming", "Attempting fast crop from live detection boxes: ${detectionBoxes.size}")
-                        val liveCrops = SignDetectionService.cropSignsFromBoxes(
-                            application,
-                            bitmap,
-                            detectionBoxes
-                        )
-                        if (liveCrops.isNotEmpty()) {
-                            Log.d("CurbTiming", "Successfully extracted ${liveCrops.size} validated crops from live boxes in ${System.currentTimeMillis() - stage1Start} ms (bypassed full OCR)")
-                            liveCrops
-                        } else {
-                            Log.d("CurbTiming", "Live boxes yielded 0 validated crops, falling back to full bitmap OCR")
-                            val detectionResult = SignDetectionService.detectAndCropSigns(
-                                application,
-                                bitmap
-                            )
-                            detectionResult.signs
-                        }
-                    } else {
-                        Log.d("CurbTiming", "No live detection boxes available, running on-device OCR on captured bitmap ${bitmap.width}x${bitmap.height}")
-                        val detectionResult = SignDetectionService.detectAndCropSigns(
-                            application,
-                            bitmap
-                        )
-                        detectionResult.signs
-                    }
+                    // ISSUE 1+3 FIX: Always run full on-device detection on the captured bitmap
+                    // instead of carrying stale live-frame boxes forward.
+                    // Live boxes (detectionBoxes) are NOT used here — they are UI hints only.
+                    Log.d("CurbTiming", "Running fresh on-device OCR on captured bitmap ${bitmap.width}x${bitmap.height} (ignoring ${detectionBoxes.size} live detection boxes)")
+                    val detectionResult = SignDetectionService.detectAndCropSigns(
+                        application,
+                        bitmap
+                    )
+                    detectionResult.signs
                 } else {
                     emptyList()
                 }

@@ -18,7 +18,9 @@ enum class ScanVerdict {
         get() = when (this) {
             ALLOWED -> "You can park here under the current rules."
             RESTRICTED -> "An active rule prohibits parking at this spot right now."
-            AMBIGUOUS -> "Some signage is faded, incomplete, or obstructed. Curb couldn't confidently determine the active parking rule."
+            // CRITICAL ISSUE 10: Generic subtitle that does NOT claim a sign was visible
+            // when none may have been detected. Specific wording is handled by ParkingVerdictCard.
+            AMBIGUOUS -> "Curb could not confidently determine the active parking rule."
         }
 }
 

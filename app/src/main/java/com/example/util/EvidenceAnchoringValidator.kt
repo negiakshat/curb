@@ -58,8 +58,21 @@ object EvidenceAnchoringValidator {
 
         // Rule 10: paymentInfo must only be populated if validated sign evidence explicitly supports payment/meter requirements
         val hasPaymentEvidence = hasPaymentEvidence(combinedOcrText)
+        // CRITICAL ISSUE 4: Strip invented specific payment amounts ($3.00/hour) when
+        // OCR only contains generic payment keywords without specific rates.
         val sanitizedPaymentInfo = if (hasPaymentEvidence) {
-            rawScanResult.paymentInfo.ifBlank { "Pay at meter or station" }
+            val ocrHasSpecificRate = Regex("\\$\\d+").containsMatchIn(combinedOcrText)
+            if (ocrHasSpecificRate) {
+                rawScanResult.paymentInfo.ifBlank { "Pay at meter or station" }
+            } else {
+                // OCR has payment keywords but no specific rates — strip any invented amounts
+                val geminiHasAmount = Regex("\\$\\d+").containsMatchIn(rawScanResult.paymentInfo)
+                if (geminiHasAmount) {
+                    "Pay at meter or station" // Reset invented amounts to generic
+                } else {
+                    rawScanResult.paymentInfo.ifBlank { "Pay at meter or station" }
+                }
+            }
         } else {
             "" // Reset to empty if unsupported by sign evidence
         }
@@ -115,6 +128,12 @@ object EvidenceAnchoringValidator {
         val cropOcrUpper = cropOcr.uppercase(Locale.US)
         val defaultTitle = crop.normalizedBox.label.ifBlank { "Sign #${crop.id}" }
 
+        // CRITICAL ISSUE 3: Propagate crop uncertainty to DetectedSign.
+        // Weak/insufficient OCR must remain uncertain through the entire pipeline.
+        val cropIsUncertain = crop.isUncertain ||
+            crop.ocrQuality == com.example.util.OcrQuality.WEAK ||
+            cropOcr.trim().length <= 6
+
         if (candidateSign == null) {
             val cleanOcr = SignCandidateValidator.sanitizeText(cropOcr, "Sign text could not be confidently read.")
             val schedule = extractScheduleFromOcr(cropOcr)
@@ -128,8 +147,8 @@ object EvidenceAnchoringValidator {
                 exceptions = "",
                 ruleText = SignCandidateValidator.sanitizeOcrText(cropOcr),
                 isRestrictingNow = isRestrictingText(cropOcrUpper),
-                isUncertain = false,
-                statusBadge = if (isRestrictingText(cropOcrUpper)) "Active Restriction" else "Posted Sign",
+                isUncertain = cropIsUncertain,
+                statusBadge = if (isRestrictingText(cropOcrUpper)) "Active Restriction" else if (cropIsUncertain) "Unclear / Obstructed" else "Posted Sign",
                 rawText = cleanOcr,
                 croppedImageUri = crop.fileUri,
                 confidence = crop.normalizedBox.confidence
@@ -174,7 +193,9 @@ object EvidenceAnchoringValidator {
             applicableDaysHours = cleanSubtitle,
             restrictions = cleanRestrictions,
             ruleText = cleanRestrictions,
-            exceptions = cleanExceptions
+            exceptions = cleanExceptions,
+            // CRITICAL ISSUE 3: Propagate uncertainty — weak crop evidence cannot become certain
+            isUncertain = candidateSign.isUncertain || cropIsUncertain
         )
     }
 
@@ -198,21 +219,78 @@ object EvidenceAnchoringValidator {
         if (schedule.isBlank()) return true
         val upperSchedule = schedule.uppercase(Locale.US)
         val dayKeywords = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN", "DAILY", "WEEKDAY", "WEEKEND")
-        val hasScheduleDaysInCandidate = dayKeywords.any { upperSchedule.contains(it) }
-        val hasDigitsInCandidate = upperSchedule.any { it.isDigit() }
 
-        if (!hasScheduleDaysInCandidate && !hasDigitsInCandidate) return true
-
-        if (hasScheduleDaysInCandidate) {
-            val hasDaysInCrop = dayKeywords.any { cropOcrUpper.contains(it) }
-            if (!hasDaysInCrop) return false
+        // CRITICAL ISSUE 4: Extract specific clock hours from both Gemini claim and OCR
+        // and verify that claimed times actually appear in OCR evidence.
+        val claimedClockHours = extractClockHours(upperSchedule)
+        if (claimedClockHours.isNotEmpty()) {
+            val ocrClockHours = extractClockHours(cropOcrUpper)
+            if (!claimedClockHours.all { ocrClockHours.contains(it) }) {
+                return false // Gemini invented a clock time not present in OCR
+            }
         }
 
-        if (hasDigitsInCandidate) {
-            val hasDigitsInCrop = cropOcrUpper.any { it.isDigit() } || cropOcrUpper.contains("AM") || cropOcrUpper.contains("PM")
-            if (!hasDigitsInCrop) return false
+        // CRITICAL ISSUE 4: Verify claimed day-of-week keywords are in OCR
+        val claimedDays = dayKeywords.filter { upperSchedule.contains(it) }
+        if (claimedDays.isNotEmpty()) {
+            val ocrDays = dayKeywords.filter { cropOcrUpper.contains(it) }
+            if (!claimedDays.all { ocrDays.contains(it) }) {
+                return false // Gemini invented a day not present in OCR
+            }
         }
 
+        // CRITICAL ISSUE 4: Verify claimed duration limits are in OCR
+        val claimedDurationMatches = Regex("(\\d+)\\s*(?:HOUR|HR|HRS|MIN|MINUTE|MINS)").findAll(upperSchedule).toList()
+        if (claimedDurationMatches.isNotEmpty()) {
+            for (match in claimedDurationMatches) {
+                if (!cropOcrUpper.contains(match.value.trim())) {
+                    return false // Gemini invented a duration not present in OCR
+                }
+            }
+        }
+
+        return true
+    }
+
+    /**
+     * CRITICAL ISSUE 4: Extract normalized clock hours (e.g., "8AM", "6PM") from text
+     * to enable exact time value comparison between Gemini claims and OCR evidence.
+     */
+    private fun extractClockHours(text: String): Set<String> {
+        val matches = Regex("(\\d{1,2})(?::\\d{2})?\\s*(?:AM|PM|A\\.M\\.|P\\.M\\.)").findAll(text)
+        return matches.map {
+            val hour = it.groupValues[1].toIntOrNull() ?: return@map null
+            val periodStr = it.groupValues[2]
+            val period = if (periodStr.startsWith("A")) "AM" else "PM"
+            "${hour}${period}"
+        }.filterNotNull().toSet()
+    }
+
+    /**
+     * CRITICAL ISSUE 4: Verify that Gemini's allowed-until clock time is supported
+     * by OCR evidence. If OCR only has a duration limit (e.g., "2 HOUR") without
+     * a specific clock cutoff, any invented clock time must be rejected.
+     */
+    fun isAllowedUntilTimeSupportedByEvidence(allowedUntil: String, ocrUpper: String): Boolean {
+        if (allowedUntil.isBlank()) return true
+        val upper = allowedUntil.uppercase(Locale.US)
+
+        // Duration-based times (e.g., "In 2 hours") — check if duration is in OCR
+        val durationMatch = Regex("IN\\s+(\\d+)\\s*(?:HOUR|HR|HRS|MIN|MINUTE|MINS)").find(upper)
+        if (durationMatch != null) {
+            val durValue = durationMatch.groupValues[1]
+            return ocrUpper.contains("$durValue HOUR") || ocrUpper.contains("$durValue HR") ||
+                    ocrUpper.contains("$durValue MIN") || ocrUpper.contains("$durValue MINUTE")
+        }
+
+        // Clock times (e.g., "6:00 PM") — verify the specific hour appears in OCR
+        val clockHours = extractClockHours(upper)
+        if (clockHours.isNotEmpty()) {
+            val ocrClockHours = extractClockHours(ocrUpper)
+            return clockHours.all { ocrClockHours.contains(it) }
+        }
+
+        // Neutral/standard values always pass
         return true
     }
 

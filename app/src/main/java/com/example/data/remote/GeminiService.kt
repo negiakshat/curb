@@ -250,7 +250,11 @@ object GeminiService {
                 val response = client.newCall(request).execute()
                 val geminiDuration = System.currentTimeMillis() - geminiRequestStart
                 android.util.Log.d("CurbTiming", "Gemini API request completed in ${geminiDuration} ms with HTTP ${response.code}")
-                val responseString = response.body?.string() ?: ""
+                val responseString = try {
+                    response.body?.string() ?: ""
+                } finally {
+                    response.close()
+                }
                 if (response.isSuccessful && responseString.isNotEmpty()) {
                     val parseStartTime = System.currentTimeMillis()
                     val rootJson = JSONObject(responseString)
@@ -488,7 +492,11 @@ object GeminiService {
                     .build()
 
                 val response = client.newCall(request).execute()
-                val responseString = response.body?.string() ?: ""
+                val responseString = try {
+                    response.body?.string() ?: ""
+                } finally {
+                    response.close()
+                }
                 if (response.isSuccessful && responseString.isNotEmpty()) {
                     val rootJson = JSONObject(responseString)
                     val candidates = rootJson.optJSONArray("candidates")

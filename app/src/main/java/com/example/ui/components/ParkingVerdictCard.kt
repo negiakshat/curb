@@ -109,22 +109,47 @@ fun ParkingVerdictCard(
             section2Header = "WHY PARKING IS RESTRICTED",
             section2Content = scanResult.explanation.ifBlank { "Posted signage prohibits parking or stopping during the current time window." }
         )
-        ScanVerdict.AMBIGUOUS -> VerdictCardConfig(
-            backgroundColor = CurbWarningContainer,
-            iconBgColor = CurbWarning,
-            iconVector = Icons.Default.Warning,
-            verdictLabel = "RULE UNCLEAR",
-            supportingText = "Verify physical street signs before parking.",
-            section1Header = "VERIFY BEFORE PARKING",
-            section1HeaderColor = CurbWarning,
-            section1PrimaryText = "Check physical street signs before leaving your vehicle.",
-            section1PrimaryColor = BentoTextPrimary,
-            section1ChipText = null,
-            section1ChipBgColor = CurbWarningContainer,
-            section1ChipTextColor = CurbWarning,
-            section2Header = "REASON FOR UNCERTAINTY",
-            section2Content = scanResult.explanation.ifBlank { "Signage text was partially obscured, faded, or incomplete, preventing a definitive ruling." }
-        )
+        ScanVerdict.AMBIGUOUS -> {
+            // CRITICAL ISSUE 10: Differentiate between no verified sign evidence
+            // and sign detected but unreadable/conflicting
+            val hasDetectedSigns = scanResult.detectedSigns.isNotEmpty()
+            val hasUncertainSigns = scanResult.detectedSigns.any { it.isUncertain }
+
+            val ambiguousSupportingText = when {
+                !hasDetectedSigns -> "No verified parking sign evidence was resolved."
+                hasUncertainSigns -> "A sign was detected but its text is unclear or unreadable."
+                else -> "Verify physical street signs before parking."
+            }
+
+            val ambiguousSection2Content = when {
+                !hasDetectedSigns -> scanResult.explanation.ifBlank {
+                    "No distinct parking signs were resolved in the image. Parking rules could not be determined from verified sign evidence."
+                }
+                hasUncertainSigns -> scanResult.explanation.ifBlank {
+                    "A parking sign was detected but its text could not be clearly read. Please verify the physical sign on-site."
+                }
+                else -> scanResult.explanation.ifBlank {
+                    "Signage text was partially obscured, faded, or incomplete, preventing a definitive ruling."
+                }
+            }
+
+            VerdictCardConfig(
+                backgroundColor = CurbWarningContainer,
+                iconBgColor = CurbWarning,
+                iconVector = Icons.Default.Warning,
+                verdictLabel = "RULE UNCLEAR",
+                supportingText = ambiguousSupportingText,
+                section1Header = "VERIFY BEFORE PARKING",
+                section1HeaderColor = CurbWarning,
+                section1PrimaryText = "Check physical street signs before leaving your vehicle.",
+                section1PrimaryColor = BentoTextPrimary,
+                section1ChipText = null,
+                section1ChipBgColor = CurbWarningContainer,
+                section1ChipTextColor = CurbWarning,
+                section2Header = "REASON FOR UNCERTAINTY",
+                section2Content = ambiguousSection2Content
+            )
+        }
     }
 
     val animatedBgColor by animateColorAsState(

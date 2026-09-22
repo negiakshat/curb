@@ -24,21 +24,52 @@ object SignCandidateValidator {
     private val UUID_REGEX = Regex("""(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""")
     private val HASH_TOKEN_REGEX = Regex("""(?i)\b[a-f0-9]{16,}\b|\b[a-zA-Z0-9_-]{24,}\b""")
     private val UNIX_TIMESTAMP_REGEX = Regex("""\b1[6-9]\d{11,}\b|:\d{10,}:?""")
-    private val FILE_PATH_REGEX = Regex("""(?i)\b(IMG_\d+|DCIM|\.jpe?g|\.png|\.json|file://|crop_live_|crop_\d+)\b""")
+    private val FILE_PATH_REGEX = Regex("""(?i)\b(IMG_\d+|DCIM|\.jpe?g|\.png|\.json|file://|crop_live_|crop_\d+)""")
     private val CODE_FRAGMENT_REGEX = Regex("""(?i)(\{"|"\s*:|function\b|var\s+|let\s+|const\s+|</?[a-z]+>)""")
 
-    // Parking domain vocabulary keywords
+    // CRITICAL ISSUE 2: Generic civic vocabulary that must NOT alone constitute parking-sign evidence.
+    // These words appear on municipal signs but without a parking-rule pattern they are just labels.
+    private val GENERIC_CIVIC_WORDS = setOf(
+        "CITY", "STREET", "POLICE", "FINE", "CURB", "DEPT", "MUNICIPAL",
+        "CITY HALL", "DEPARTMENT", "PUBLIC", "GOVERNMENT", "OFFICE",
+        "BUREAU", "AGENCY", "SANITATION", "TRANSPORT", "TRANSIT",
+        "INFRASTRUCTURE", "UTILITIES", "ADMIN", "DIVISION"
+    )
+
+    // Parking domain vocabulary keywords — words that genuinely indicate parking rules
     private val PARKING_KEYWORDS = setOf(
         "PARK", "PARKING", "STOP", "STOPPING", "STAND", "STANDING",
         "TOW", "TOW-AWAY", "TOWAWAY", "METER", "PAY", "PERMIT", "RESIDENT",
         "ZONE", "CLEAN", "CLEANING", "SWEEP", "SWEEPING", "LOADING",
         "PASSENGER", "COMMERCIAL", "EXCEPT", "ONLY", "LIMIT", "RESERVED",
         "NO", "BUS", "TAXI", "DISABLED", "HANDICAPPED", "PLACARD", "VALET",
-        "BLVD", "STREET", "AVE", "WAY", "DRIVE", "HWY", "CITY", "MUNICIPAL",
-        "DEPT", "POLICE", "FINE", "VIOLATION", "CURB", "HOUR", "HR", "HRS",
+        "BLVD", "AVE", "WAY", "DRIVE", "HWY",
+        "HOUR", "HR", "HRS",
         "MIN", "MINUTES", "SEC", "AM", "PM", "MON", "TUE", "WED", "THU",
         "FRI", "SAT", "SUN", "DAILY", "HOLIDAY", "HOLIDAYS", "EXCEPTED",
         "ENFORCED", "SCHEDULE", "TEMPORARY", "CONSTRUCTION", "TIME", "TIMES"
+    )
+
+    // CRITICAL ISSUE 2: Strong parking-specific patterns that genuinely indicate a parking rule.
+    // These are the primary signals that should be sufficient evidence on their own.
+    private val PARKING_RULE_PATTERNS = listOf(
+        Regex("""(?i)\b\d+\s*(?:HOUR|HR|HRS|MIN|MINUTE|MINS)\b"""),
+        Regex("""(?i)\b(?:AM|PM|A\.M\.|P\.M\.)\b"""),
+        Regex("""(?i)\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\b"""),
+        Regex("""(?i)\b\d{1,2}\s*[:\-]\s*\d{1,2}\b"""),
+        Regex("""(?i)\b(?:TOW|TOW-AWAY|TOWAWAY)\b"""),
+        Regex("""(?i)\b(?:STREET\s*CLEAN|STREET\s*SWEEP|SWEEPING|CLEANING)\b"""),
+        Regex("""(?i)\b(?:NO\s*(?:PARK|STOP|STAND))\b"""),
+        Regex("""(?i)\b(?:PERMIT\s*(?:ONLY|REQUIRED|ZONE|AREA))\b"""),
+        Regex("""(?i)\b(?:METER|PAY|PAYMENT|COIN|KIOSK)\b"""),
+        Regex("""(?i)\b(?:ZONE\s*[A-Z0-9])\b"""),
+        Regex("""(?i)\b\d+\s*:\s*\d{2}\s*(?:AM|PM)\b"""),
+        Regex("""(?i)\b(?:TO|THROUGH|UNTIL)\s+\d{1,2}\s*(?:AM|PM)\b"""),
+        Regex("""(?i)\b(?:EXCEPT|EXEMPT)\b"""),
+        Regex("""(?i)\b(?:DISABLED|HANDICAPPED|PLACARD)\b"""),
+        Regex("""(?i)\b(?:LOADING|COMMERCIAL|PASSENGER)\s+(?:ONLY|ZONE)\b"""),
+        Regex("""(?i)\b(?:LIMIT|LIMITED)\s+\d+\b"""),
+        Regex("""(?i)\b\d+\s*(?:MIN|MINUTE)\b""")
     )
 
     private val SCHEDULE_TIME_REGEX = Regex("""(?i)\b(\d{1,2}(:\d{2})?\s*(AM|PM|A\.M\.|P\.M\.)|\d+\s*(HR|HOUR|HRS|MIN|MINUTE)|\d{1,2}\s*-\s*\d{1,2})\b""")
@@ -91,8 +122,8 @@ object SignCandidateValidator {
             return CandidateValidation.Invalid("Corrupted OCR with excessive symbols or special characters")
         }
 
-        // 7. Check if string has any meaningful parking language or schedule patterns
-        if (containsExplicitParkingRule(text)) {
+        // 7. Check if string has strong parking-rule patterns (schedules, times, specific rules)
+        if (hasStrongParkingRulePattern(text)) {
             return CandidateValidation.Valid(OcrQuality.CLEAR)
         }
 
@@ -104,13 +135,23 @@ object SignCandidateValidator {
             return CandidateValidation.Valid(OcrQuality.CLEAR)
         }
 
-        // If string has words, check if any word is a parking keyword
+        // CRITICAL ISSUE 2 FIX: Check for strong parking-specific combinations
+        // Single generic civic words alone are NOT sufficient.
         val uppercaseWords = text.uppercase(Locale.ROOT)
             .split(Regex("""[^A-Z0-9]+"""))
             .filter { it.isNotBlank() }
 
-        val hasKeyword = uppercaseWords.any { word -> PARKING_KEYWORDS.contains(word) }
-        if (hasKeyword) {
+        val hasStrongParkingCombination = hasStrongParkingCombination(uppercaseWords, text.uppercase(Locale.ROOT))
+        if (hasStrongParkingCombination) {
+            return CandidateValidation.Valid(OcrQuality.CLEAR)
+        }
+
+        // Check for partial parking vocabulary — but require at least one strong signal
+        val parkingWords = uppercaseWords.filter { PARKING_KEYWORDS.contains(it) }
+        val hasGenericCivicOnly = parkingWords.all { GENERIC_CIVIC_WORDS.contains(it) }
+
+        if (parkingWords.isNotEmpty() && !hasGenericCivicOnly) {
+            // At least one non-generic parking keyword present
             return CandidateValidation.Valid(OcrQuality.PARTIAL)
         }
 
@@ -134,6 +175,71 @@ object SignCandidateValidator {
         }
 
         return CandidateValidation.Invalid("No recognizable parking sign vocabulary or schedule detected")
+    }
+
+    /**
+     * CRITICAL ISSUE 2: Checks whether the text contains a strong parking-rule pattern
+     * that genuinely indicates a parking regulation (not just a civic label).
+     */
+    private fun hasStrongParkingRulePattern(text: String): Boolean {
+        val upper = text.uppercase(Locale.US)
+        return PARKING_RULE_PATTERNS.any { it.containsMatchIn(upper) }
+    }
+
+    /**
+     * CRITICAL ISSUE 2: Checks for a strong combination of parking-specific words
+     * that together clearly indicate a parking rule (not just a single generic word).
+     *
+     * Examples of strong combinations:
+     * - "NO PARKING" (NO + PARKING)
+     * - "PERMIT ONLY" (PERMIT + ONLY)
+     * - "2 HOUR" (digit + HOUR)
+     * - "TOW AWAY" (TOW + AWAY)
+     * - "STREET CLEANING" (but not just "STREET" alone)
+     */
+    private fun hasStrongParkingCombination(words: List<String>, fullText: String): Boolean {
+        // Strong two-word combinations
+        val strongPairs = listOf(
+            setOf("NO", "PARKING"), setOf("NO", "PARK"), setOf("NO", "STOPPING"),
+            setOf("NO", "STOP"), setOf("NO", "STANDING"),
+            setOf("TOW", "AWAY"), setOf("TOW", "AWAY"), setOf("TOW-AWAY", "ZONE"),
+            setOf("PERMIT", "ONLY"), setOf("PERMIT", "REQUIRED"), setOf("PERMIT", "ZONE"),
+            setOf("PERMIT", "AREA"), setOf("PERMIT", "HOLDERS"),
+            setOf("STREET", "CLEANING"), setOf("STREET", "SWEEPING"),
+            setOf("COMMERCIAL", "LOADING"), setOf("COMMERCIAL", "ZONE"),
+            setOf("LOADING", "ZONE"), setOf("LOADING", "ONLY"),
+            setOf("PASSENGER", "LOADING"), setOf("PASSENGER", "ONLY"),
+            setOf("RESIDENT", "PERMIT"), setOf("RESIDENT", "ZONE"),
+            setOf("BUS", "STOP"), setOf("TAXI", "STAND"),
+            setOf("DISABLED", "PARKING"), setOf("HANDICAPPED", "ZONE"),
+            setOf("TIME", "LIMIT"), setOf("PAY", "METER"),
+            setOf("METER", "PARKING"), setOf("CLEANING", "ZONE"),
+            setOf("SWEEPING", "ZONE"), setOf("SWEEPING", "DAY"),
+            setOf("HOLIDAY", "EXCEPTION"), setOf("HOLIDAY", "EXCEPTED")
+        )
+
+        val wordSet = words.toSet()
+        if (strongPairs.any { pair -> pair.all { wordSet.contains(it) } }) {
+            return true
+        }
+
+        // CRITICAL ISSUE 2: "PERMIT" alone with a zone/area designation like "AREA G"
+        // is a valid parking rule indicator, but "PERMIT" by itself is not sufficient.
+        // "RESIDENT PERMIT ONLY" should work; "PERMIT" alone should not.
+        val hasPermitWithZone = words.contains("PERMIT") &&
+                (words.any { it.startsWith("AREA") || it.startsWith("ZONE") } ||
+                        fullText.contains(Regex("""(?i)PERMIT\s+(?:ONLY|REQUIRED|ZONE|AREA)""")))
+
+        if (hasPermitWithZone) return true
+
+        // Check for "CITY HALL" — this is NOT a parking rule
+        if (words == listOf("CITY", "HALL") || words == listOf("CITY")) return false
+        if (words == listOf("POLICE")) return false
+        if (words == listOf("DEPT")) return false
+        if (words == listOf("MUNICIPAL")) return false
+        if (words == listOf("FINE")) return false
+
+        return false
     }
 
     fun isDemoOrSampleCrop(fileUri: String? = null, isDemo: Boolean = false, candidateId: String = ""): Boolean {
@@ -224,6 +330,7 @@ object SignCandidateValidator {
             .split(Regex("""[^A-Z0-9]+"""))
             .filter { it.isNotBlank() }
 
+        if (hasStrongParkingRulePattern(sanitized)) return true
         if (words.any { PARKING_KEYWORDS.contains(it) }) return true
         if (SCHEDULE_TIME_REGEX.containsMatchIn(sanitized)) return true
         return false
@@ -275,7 +382,7 @@ object SignCandidateValidator {
         cleaned = cleaned
             .replace(Regex("""[&?=#%_<>{}\[\]"\\]+"""), " ")
             .replace(Regex("""\s+"""), " ")
-            .trim(' ', ':', ';', ',', '-', '_', '.')
+            .trim(' ', ':', ';', ',', '-', '.', '_')
 
         if (cleaned.isBlank()) return fallbackIfEmpty
 
@@ -300,6 +407,6 @@ object SignCandidateValidator {
      * while preserving legitimate parking schedule text.
      */
     fun sanitizeOcrText(rawText: String): String {
-        return sanitizeText(rawText, fallbackIfEmpty = "Unclear Sign Rule")
+        return sanitizeText(rawText, "Unreadable sign text")
     }
 }
