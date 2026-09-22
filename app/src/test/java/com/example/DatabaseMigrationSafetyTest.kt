@@ -71,8 +71,6 @@ class DatabaseMigrationSafetyTest {
                                 allowedUntilTime TEXT NOT NULL,
                                 reminderMinutesBefore INTEGER NOT NULL DEFAULT 15,
                                 notes TEXT NOT NULL DEFAULT '',
-                                timerBasis TEXT NOT NULL DEFAULT '',
-                                parkingRuleSummary TEXT NOT NULL DEFAULT '',
                                 isActive INTEGER NOT NULL DEFAULT 1
                             )
                             """.trimIndent()
@@ -198,8 +196,6 @@ class DatabaseMigrationSafetyTest {
                 allowedUntilTime TEXT NOT NULL,
                 reminderMinutesBefore INTEGER NOT NULL DEFAULT 15,
                 notes TEXT NOT NULL DEFAULT '',
-                timerBasis TEXT NOT NULL DEFAULT '',
-                parkingRuleSummary TEXT NOT NULL DEFAULT '',
                 isActive INTEGER NOT NULL DEFAULT 1
             )
             """.trimIndent()
@@ -261,9 +257,93 @@ class DatabaseMigrationSafetyTest {
         assertNull(columnDefault(db, "parking_spots", "isDemo"))
 
         CurbDatabase.MIGRATION_7_8.migrate(db)
-        assertNull(columnDefault(db, "parking_sessions", "timerBasis"))
+        assertTrue(hasColumn(db, "parking_sessions", "timerBasis"))
+        assertTrue(hasColumn(db, "parking_sessions", "parkingRuleSummary"))
         helper.close()
         context.deleteDatabase(stepDbName)
+    }
+
+    @Test
+    fun testMigrateV7WithoutParkingRuleSummaryToV8() {
+        val helperFactory = FrameworkSQLiteOpenHelperFactory()
+        val dbName = "test_curb_v7_without_summary.db"
+        context.deleteDatabase(dbName)
+        val configuration = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(dbName)
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(7) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE parking_sessions (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            scanResultId INTEGER NOT NULL DEFAULT 0,
+                            locationName TEXT NOT NULL,
+                            startTime INTEGER NOT NULL,
+                            endTime INTEGER NOT NULL,
+                            allowedUntilTime TEXT NOT NULL,
+                            reminderMinutesBefore INTEGER NOT NULL DEFAULT 15,
+                            notes TEXT NOT NULL DEFAULT '',
+                            timerBasis TEXT NOT NULL DEFAULT '',
+                            isActive INTEGER NOT NULL DEFAULT 1,
+                            maxAllowedEndTimeMillis INTEGER,
+                            timerMode TEXT NOT NULL DEFAULT 'TIMED_LIMIT',
+                            isDemo INTEGER NOT NULL DEFAULT 0
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        INSERT INTO parking_sessions (
+                            id, scanResultId, locationName, startTime, endTime, allowedUntilTime,
+                            reminderMinutesBefore, notes, timerBasis, isActive, maxAllowedEndTimeMillis,
+                            timerMode, isDemo
+                        ) VALUES (
+                            1, 42, 'Market St', 100000, 200000, '17:00',
+                            10, 'Parked near cafe', '2 Hour Limit', 1, 200000,
+                            'TIMED_LIMIT', 0
+                        )
+                        """.trimIndent()
+                    )
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+
+        val helper = helperFactory.create(configuration)
+        val db = helper.writableDatabase
+
+        // Assert column does NOT exist in legacy v7 schema
+        assertFalse(hasColumn(db, "parking_sessions", "parkingRuleSummary"))
+
+        // Run migration 7 -> 8
+        CurbDatabase.MIGRATION_7_8.migrate(db)
+
+        // Assert column exists after migration
+        assertTrue(hasColumn(db, "parking_sessions", "parkingRuleSummary"))
+        assertTrue(hasColumn(db, "parking_sessions", "timerBasis"))
+
+        // Assert data is preserved and parkingRuleSummary migrated as empty string
+        db.query("SELECT id, scanResultId, locationName, startTime, endTime, allowedUntilTime, reminderMinutesBefore, notes, timerBasis, parkingRuleSummary, isActive, maxAllowedEndTimeMillis, timerMode, isDemo FROM parking_sessions WHERE id = 1").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1L, cursor.getLong(0))
+            assertEquals(42L, cursor.getLong(1))
+            assertEquals("Market St", cursor.getString(2))
+            assertEquals(100000L, cursor.getLong(3))
+            assertEquals(200000L, cursor.getLong(4))
+            assertEquals("17:00", cursor.getString(5))
+            assertEquals(10, cursor.getInt(6))
+            assertEquals("Parked near cafe", cursor.getString(7))
+            assertEquals("2 Hour Limit", cursor.getString(8))
+            assertEquals("", cursor.getString(9)) // migrated default value is ""
+            assertEquals(1, cursor.getInt(10))
+            assertEquals(200000L, cursor.getLong(11))
+            assertEquals("TIMED_LIMIT", cursor.getString(12))
+            assertEquals(0, cursor.getInt(13))
+        }
+
+        helper.close()
+        context.deleteDatabase(dbName)
     }
 
     @Test
@@ -347,6 +427,18 @@ class DatabaseMigrationSafetyTest {
             helper.close()
             context.deleteDatabase(partialDbName)
         }
+    }
+
+    private fun hasColumn(db: SupportSQLiteDatabase, table: String, column: String): Boolean {
+        db.query("PRAGMA table_info(`$table`)").use { cursor ->
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex) == column) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     private fun tableExists(db: SupportSQLiteDatabase, table: String): Boolean {

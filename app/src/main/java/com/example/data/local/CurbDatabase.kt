@@ -114,6 +114,7 @@ abstract class CurbDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 addColumnIfNotExists(db, "parking_sessions", "timerBasis", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "parking_sessions", "parkingRuleSummary", "TEXT NOT NULL DEFAULT ''")
                 rebuildParkingSessions(db)
             }
         }
@@ -200,6 +201,8 @@ abstract class CurbDatabase : RoomDatabase() {
         }
 
         private fun rebuildParkingSessions(db: SupportSQLiteDatabase) {
+            addColumnIfNotExists(db, "parking_sessions", "timerBasis", "TEXT NOT NULL DEFAULT ''")
+            addColumnIfNotExists(db, "parking_sessions", "parkingRuleSummary", "TEXT NOT NULL DEFAULT ''")
             db.execSQL(
                 """
                 CREATE TABLE parking_sessions_new (
