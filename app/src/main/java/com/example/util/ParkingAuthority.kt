@@ -19,7 +19,7 @@ object ParkingAuthority {
     fun hasVerifiedSignEvidence(localDetections: List<LocalSignCrop>): Boolean {
         return localDetections.isNotEmpty() && localDetections.any { crop ->
             !SignCandidateValidator.isDemoOrSampleCrop(crop.fileUri, crop.isDemo, crop.id) &&
-                    SignCandidateValidator.validateOcr(crop.ocrText).isValid &&
+                    (crop.isUncertain || SignCandidateValidator.validateOcr(crop.ocrText).isValid) &&
                     ((crop.bitmap != null && !crop.bitmap.isRecycled) ||
                             (crop.fileUri.isNotBlank() && java.io.File(crop.fileUri).let { it.exists() && it.length() > 0 }))
         }
@@ -116,7 +116,10 @@ object ParkingAuthority {
         return SemanticConsistencyValidator.enforceSemanticConsistency(scanResult, localDetections)
     }
 
-    private fun enforceAmbiguousFallback(scanResult: ScanResult): ScanResult {
+    private fun enforceAmbiguousFallback(
+        scanResult: ScanResult,
+        hasDetectedSigns: Boolean = false
+    ): ScanResult {
         val locationContextStr = if (scanResult.locationName.isNotBlank() &&
             scanResult.locationName != "Current Location" &&
             scanResult.locationName != "Location unavailable" &&
@@ -125,14 +128,21 @@ object ParkingAuthority {
             " at ${scanResult.locationName}"
         } else ""
 
+        val hasSigns = hasDetectedSigns || scanResult.detectedSigns.isNotEmpty()
+        val explanationText = if (hasSigns) {
+            "Parking signage was detected$locationContextStr, but the text or regulations could not be clearly verified. Please verify physical signage before parking."
+        } else {
+            "No distinct parking signs were resolved in the image$locationContextStr. Location data provides geographic context only and cannot determine parking rules."
+        }
+
         return scanResult.copy(
             verdict = ScanVerdict.AMBIGUOUS,
             statusChipText = "Signage unclear",
             allowedUntilTime = "Verify physical signage",
             timeRemaining = "--",
             parkingRules = listOf("No verified parking rule has been established."),
-            explanation = "No distinct parking signs were resolved in the image$locationContextStr. Location data provides geographic context only and cannot determine parking rules.",
-            detectedSigns = emptyList(),
+            explanation = explanationText,
+            detectedSigns = if (hasSigns) scanResult.detectedSigns else emptyList(),
             paymentInfo = "",
             vehicleApplicability = ""
         )
@@ -146,24 +156,18 @@ object ParkingAuthority {
         if (scanResult.verdict != ScanVerdict.ALLOWED) return false
         if (scanResult.isDemo) return true
 
+        // Strict Requirement: Non-demo scans MUST have detected physical sign evidence
+        if (scanResult.detectedSigns.isEmpty()) {
+            return false
+        }
+
         if (!SemanticConsistencyValidator.canAuthorizeTimer(scanResult)) {
             return false
         }
 
-        if (scanResult.detectedSigns.isNotEmpty()) {
-            return scanResult.detectedSigns.any { sign ->
-                !SignCandidateValidator.isDemoOrSampleCrop(sign.croppedImageUri, sign.isDemo, sign.id) &&
-                        SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid
-            }
+        return scanResult.detectedSigns.any { sign ->
+            !SignCandidateValidator.isDemoOrSampleCrop(sign.croppedImageUri, sign.isDemo, sign.id) &&
+                    (sign.isUncertain || SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid)
         }
-
-        return scanResult.parkingRules.isNotEmpty() &&
-                scanResult.parkingRules.none {
-                    it.contains("No verified parking rule", ignoreCase = true) ||
-                            it.contains("Assumed", ignoreCase = true) ||
-                            it.contains("Derived", ignoreCase = true) ||
-                            it.contains("location", ignoreCase = true) ||
-                            it.contains("city center rule", ignoreCase = true)
-                }
     }
 }

@@ -256,14 +256,21 @@ object EvidenceAnchoringValidator {
      * CRITICAL ISSUE 4: Extract normalized clock hours (e.g., "8AM", "6PM") from text
      * to enable exact time value comparison between Gemini claims and OCR evidence.
      */
-    private fun extractClockHours(text: String): Set<String> {
-        val matches = Regex("(\\d{1,2})(?::\\d{2})?\\s*(?:AM|PM|A\\.M\\.|P\\.M\\.)").findAll(text)
-        return matches.map {
-            val hour = it.groupValues[1].toIntOrNull() ?: return@map null
-            val periodStr = it.groupValues[2]
-            val period = if (periodStr.startsWith("A")) "AM" else "PM"
-            "${hour}${period}"
-        }.filterNotNull().toSet()
+    fun extractClockHours(text: String): Set<String> {
+        try {
+            if (text.isBlank()) return emptySet()
+            val matches = Regex("(\\d{1,2})(?::\\d{2})?\\s*(AM|PM|A\\.M\\.|P\\.M\\.)", RegexOption.IGNORE_CASE).findAll(text)
+            return matches.mapNotNull { match ->
+                if (match.groupValues.size >= 3) {
+                    val hour = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
+                    val rawPeriod = match.groupValues[2].uppercase(Locale.US).replace(".", "")
+                    val period = if (rawPeriod.startsWith("A")) "AM" else "PM"
+                    "${hour}${period}"
+                } else null
+            }.toSet()
+        } catch (e: Throwable) {
+            return emptySet()
+        }
     }
 
     /**

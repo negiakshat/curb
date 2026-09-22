@@ -111,7 +111,7 @@ object SemanticConsistencyValidator {
                     timeRemaining = "--",
                     parkingRules = sanitizedRules,
                     paymentInfo = sanitizedPaymentInfo,
-                    explanation = normalizeExplanation(rawResult.explanation, ScanVerdict.AMBIGUOUS),
+                    explanation = normalizeExplanation(rawResult.explanation, ScanVerdict.AMBIGUOUS, hasSigns = sanitizedSigns.isNotEmpty()),
                     detectedSigns = sanitizedSigns
                 )
             }
@@ -322,22 +322,30 @@ object SemanticConsistencyValidator {
         return hasDigits && hasClockOrDuration
     }
 
-    private fun normalizeExplanation(currentExp: String, verdict: ScanVerdict): String {
+    private fun normalizeExplanation(currentExp: String, verdict: ScanVerdict, hasSigns: Boolean = false): String {
         return when (verdict) {
             ScanVerdict.AMBIGUOUS -> {
-                if (currentExp.contains("allowed", ignoreCase = true) || currentExp.contains("restricted", ignoreCase = true)) {
-                    "Sign evidence is unclear or conflicting. Please verify posted physical signage before parking."
-                } else currentExp.ifBlank { "Sign evidence is unclear or ambiguous." }
+                if (hasSigns) {
+                    "Parking signage was detected, but the text or regulations could not be clearly verified. Please verify physical signage before parking."
+                } else if (currentExp.contains("allowed", ignoreCase = true) || currentExp.contains("restricted", ignoreCase = true) || currentExp.isBlank()) {
+                    "Sign evidence is unclear or ambiguous. Please verify physical signage before parking."
+                } else {
+                    currentExp
+                }
             }
             ScanVerdict.RESTRICTED -> {
-                if (currentExp.contains("allowed", ignoreCase = true)) {
+                if (currentExp.contains("allowed", ignoreCase = true) || currentExp.isBlank()) {
                     "Parking is restricted at this location based on posted sign evidence."
-                } else currentExp.ifBlank { "Parking is currently restricted based on physical sign rules." }
+                } else {
+                    currentExp
+                }
             }
             ScanVerdict.ALLOWED -> {
-                if (currentExp.contains("restricted", ignoreCase = true) || currentExp.contains("no parking", ignoreCase = true)) {
+                if (currentExp.contains("restricted", ignoreCase = true) || currentExp.contains("no parking", ignoreCase = true) || currentExp.isBlank()) {
                     "Parking is allowed according to posted sign regulations."
-                } else currentExp.ifBlank { "Parking is allowed at this location." }
+                } else {
+                    currentExp
+                }
             }
         }
     }
