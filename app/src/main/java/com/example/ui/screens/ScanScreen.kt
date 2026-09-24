@@ -14,11 +14,19 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -30,6 +38,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +46,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -70,6 +80,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -81,6 +92,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.example.data.detection.ImageProxyBitmapConverter
 import com.example.data.detection.SignDetectionService
 import com.example.data.local.ScanUsageInfo
 import com.example.data.model.SampleSignPreset
@@ -98,6 +110,7 @@ import com.example.ui.theme.CurbBlack
 import com.example.ui.theme.CurbError
 import com.example.ui.theme.CurbErrorContainer
 import com.example.ui.theme.CurbWhite
+import com.example.ui.theme.RadiusChip
 import com.example.ui.theme.RadiusHero
 import com.example.ui.theme.RadiusNested
 import java.nio.ByteBuffer
@@ -114,7 +127,7 @@ fun ScanScreen(
     onClearScanError: () -> Unit = {},
     usageInfo: ScanUsageInfo = ScanUsageInfo(0),
     isPro: Boolean = false,
-    onCaptureImage: (Bitmap?, List<SignBoundingBox>) -> Unit,
+    onCaptureImage: (Bitmap?, List<SignBoundingBox>, String?) -> Unit,
     onPresetSelected: (SampleSignPreset) -> Unit = {},
     onBack: () -> Unit
 ) {
@@ -164,9 +177,9 @@ fun ScanScreen(
         if (uri != null) {
             try {
                 val bitmap = SignDetectionService.loadOrientedBitmapFromUri(context, uri)
-                onCaptureImage(bitmap, emptyList())
+                onCaptureImage(bitmap, emptyList(), null)
             } catch (e: Exception) {
-                onCaptureImage(null, emptyList())
+                onCaptureImage(null, emptyList(), "Couldn't process the selected photo. Please try again.")
             }
         }
     }
@@ -259,23 +272,65 @@ fun ScanScreen(
             )
         }
 
-        // 3. SUBTLE PROCESSING SCRIM & SPINNER (NO CARD, NO LARGE TEXT)
+        // 3. TRANSLUCENT WARM CURB OVERLAY + CENTER LOADING RING + FADING STATUS TEXT
         AnimatedVisibility(
             visible = isProcessing,
-            enter = fadeIn(),
-            exit = fadeOut()
+            enter = fadeIn(animationSpec = tween(220)),
+            exit = fadeOut(animationSpec = tween(220))
         ) {
+            val currentStatement = remember(processingStatusText) {
+                when {
+                    processingStatusText.contains("Checking", ignoreCase = true) ||
+                    processingStatusText.contains("rules", ignoreCase = true) -> "Checking parking rules…"
+
+                    processingStatusText.contains("Verifying", ignoreCase = true) ||
+                    processingStatusText.contains("details", ignoreCase = true) -> "Verifying the details…"
+
+                    else -> "Reading your sign…"
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(CurbBlack.copy(alpha = 0.18f)),
+                    .background(BentoPrimaryDark.copy(alpha = 0.65f)),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(
-                    color = BentoPrimary,
-                    strokeWidth = 3.5.dp,
-                    modifier = Modifier.size(40.dp)
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(horizontal = 32.dp)
+                ) {
+                    // Center Loading Indicator
+                    CircularProgressIndicator(
+                        color = BentoPeach,
+                        strokeWidth = 3.5.dp,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .testTag("scan_processing_spinner")
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Single Status Text with smooth 200ms Fade In / Fade Out in the exact same location
+                    AnimatedContent(
+                        targetState = currentStatement,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(200))
+                        },
+                        label = "statusTextFade"
+                    ) { statement ->
+                        Text(
+                            text = statement,
+                            color = BentoWhite,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.3.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.testTag("scan_processing_status_text")
+                        )
+                    }
+                }
             }
         }
 
@@ -380,42 +435,50 @@ fun ScanScreen(
                                     SignDetectionService.getAnalysisExecutor(),
                                     object : ImageCapture.OnImageCapturedCallback() {
                                         override fun onCaptureSuccess(image: ImageProxy) {
-                                            try {
-                                                val rotationDegrees = image.imageInfo.rotationDegrees
-                                                val buffer: ByteBuffer = image.planes[0].buffer
-                                                val bytes = ByteArray(buffer.remaining())
-                                                buffer.get(bytes)
-                                                var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                                if (bitmap != null && rotationDegrees != 0) {
-                                                    val matrix = Matrix()
-                                                    matrix.postRotate(rotationDegrees.toFloat())
-                                                    bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                                            val conversionResult = ImageProxyBitmapConverter.convert(image)
+                                            val bitmap = conversionResult.bitmap
+                                            val errorMsg = conversionResult.errorMessage
+
+                                            android.util.Log.d(
+                                                "CurbPipeline",
+                                                "Camera picture taken: bmp=${bitmap?.width}x${bitmap?.height}, error=$errorMsg, liveBoxes=${capturedBoxesSnapshot.size}"
+                                            )
+
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                if (bitmap == null) {
+                                                    frozenPreviewBitmap = null
+                                                    isPreviewFrozen = false
                                                 }
-                                                android.util.Log.d(
-                                                    "CurbPipeline",
-                                                    "Camera picture taken: bmp=${bitmap?.width}x${bitmap?.height}, liveBoxes=${capturedBoxesSnapshot.size}"
+                                                onCaptureImage(
+                                                    bitmap,
+                                                    if (bitmap != null) capturedBoxesSnapshot else emptyList(),
+                                                    errorMsg ?: "Couldn't process the captured photo. Please try again."
                                                 )
-                                                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                                    onCaptureImage(bitmap, capturedBoxesSnapshot)
-                                                }
-                                            } catch (e: Throwable) {
-                                                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                                    onCaptureImage(null, emptyList())
-                                                }
-                                            } finally {
-                                                image.close()
                                             }
                                         }
 
                                         override fun onError(exception: ImageCaptureException) {
+                                            android.util.Log.e("CurbCapture", "ImageCapture failure: errorCode=${exception.imageCaptureError}", exception)
                                             android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                                onCaptureImage(null, emptyList())
+                                                frozenPreviewBitmap = null
+                                                isPreviewFrozen = false
+                                                onCaptureImage(
+                                                    null,
+                                                    emptyList(),
+                                                    "Couldn't capture the photo. Please try again."
+                                                )
                                             }
                                         }
                                     }
                                 )
                             } else {
-                                onCaptureImage(null, emptyList())
+                                frozenPreviewBitmap = null
+                                isPreviewFrozen = false
+                                onCaptureImage(
+                                    null,
+                                    emptyList(),
+                                    "Couldn't capture the photo. Please try again."
+                                )
                             }
                         }
                         .testTag("shutter_capture_button"),

@@ -51,8 +51,19 @@ data class SavedPlaceEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val address: String,
-    val parkingNote: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val parkingNote: String = "",
+    val timestamp: Long = System.currentTimeMillis(),
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val scanResultId: Long? = null,
+    val parkingRuleSummary: String = "",
+    val parkingSchedule: String = "",
+    val parkingVerdict: String = "",
+    val signImageUri: String = "",
+    val lastCheckedAt: Long = System.currentTimeMillis(),
+    val reminderEnabled: Boolean = false,
+    val reminderMinutesBefore: Int = 15,
+    val reminderScheduleText: String = ""
 )
 
 @Entity(

@@ -60,6 +60,7 @@ import com.example.ui.components.CurbNoteSection
 import com.example.ui.components.CurbPrimaryButton
 import com.example.ui.components.CurbProFeatureBottomSheet
 import com.example.ui.components.CurbSecondaryButton
+import com.example.ui.components.CurbTertiaryButton
 import com.example.ui.components.ParkingVerdictCard
 import com.example.ui.components.StartSessionConfirmationSheet
 import com.example.ui.theme.BentoBorder
@@ -77,9 +78,15 @@ import com.example.util.ParkingTimerCalculator
 fun ScanOutputScreen(
     scanResult: ScanResult,
     note: CurbNote? = null,
+    savedPlaces: List<com.example.data.model.SavedPlace> = emptyList(),
+    rescanTargetPlace: com.example.data.model.SavedPlace? = null,
     isPro: Boolean = false,
     onSaveNote: (String) -> Unit = {},
     onDeleteNote: () -> Unit = {},
+    onSavePlace: (com.example.data.model.SavedPlace, (com.example.data.repository.SavePlaceResult) -> Unit) -> Unit = { place, callback ->
+        callback(com.example.data.repository.SavePlaceResult.Success(place.copy(id = 1L)))
+    },
+    onViewSavedPlaces: () -> Unit = {},
     onViewDetails: () -> Unit,
     onStartParkingSession: (durationMinutes: Int, allowedUntilTime: String, timerBasis: String, ruleSummary: String) -> Unit,
     onAskCurb: () -> Unit,
@@ -90,8 +97,12 @@ fun ScanOutputScreen(
     val context = LocalContext.current
     var showExportProSheet by remember { mutableStateOf(false) }
     var showNotesProSheet by remember { mutableStateOf(false) }
+    var showSavedPlacesProSheet by remember { mutableStateOf(false) }
     var showNoteDialog by remember { mutableStateOf(false) }
     var showStartConfirmationSheet by remember { mutableStateOf(false) }
+    var showSaveSpotSheet by remember { mutableStateOf(false) }
+    var savedPlaceForSuccessDialog by remember { mutableStateOf<com.example.data.model.SavedPlace?>(null) }
+    var duplicateSavedSpot by remember { mutableStateOf<com.example.data.model.SavedPlace?>(null) }
 
     var isContentVisible by remember { mutableStateOf(false) }
     LaunchedEffect(scanResult) {
@@ -308,6 +319,8 @@ fun ScanOutputScreen(
                 scanResult.explanation.contains("unclear", ignoreCase = true) ||
                 scanResult.explanation.contains("unresolved", ignoreCase = true)
 
+        val isRealScan = !scanResult.isDemo && scanResult.locationName != "Location unavailable"
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -316,6 +329,21 @@ fun ScanOutputScreen(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            if (isRealScan) {
+                CurbSecondaryButton(
+                    text = if (rescanTargetPlace != null) "UPDATE THIS SPOT" else "SAVE THIS SPOT",
+                    onClick = {
+                        val canSaveFree = isPro || rescanTargetPlace != null || savedPlaces.size < 3
+                        if (canSaveFree) {
+                            showSaveSpotSheet = true
+                        } else {
+                            showSavedPlacesProSheet = true
+                        }
+                    },
+                    testTag = "save_this_spot_button"
+                )
+            }
+
             when (scanResult.verdict) {
                 ScanVerdict.ALLOWED -> {
                     if (timerConfig.isUnrestricted) {
@@ -349,7 +377,7 @@ fun ScanOutputScreen(
                         testTag = "contextual_copilot_button"
                     )
 
-                    CurbSecondaryButton(
+                    CurbTertiaryButton(
                         text = "Retake scan",
                         onClick = onRetake,
                         testTag = "retake_scan_button"
@@ -383,6 +411,65 @@ fun ScanOutputScreen(
                 }
             }
         }
+    }
+
+    if (showSaveSpotSheet) {
+        com.example.ui.components.SaveSpotBottomSheet(
+            scanResult = scanResult,
+            rescanTargetPlace = rescanTargetPlace,
+            onDismiss = { showSaveSpotSheet = false },
+            onSave = { savedPlace ->
+                onSavePlace(savedPlace) { result ->
+                    when (result) {
+                        is com.example.data.repository.SavePlaceResult.Success -> {
+                            savedPlaceForSuccessDialog = result.savedPlace
+                        }
+                        is com.example.data.repository.SavePlaceResult.Duplicate -> {
+                            duplicateSavedSpot = result.existingPlace
+                        }
+                        is com.example.data.repository.SavePlaceResult.Error -> {
+                            android.widget.Toast.makeText(context, result.message.ifBlank { "Could not save spot. Please try again." }, android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                showSaveSpotSheet = false
+            }
+        )
+    }
+
+    savedPlaceForSuccessDialog?.let { savedSpot ->
+        com.example.ui.components.SavedSpotSuccessDialog(
+            placeName = savedSpot.name,
+            onViewSavedPlaces = {
+                savedPlaceForSuccessDialog = null
+                onViewSavedPlaces()
+            },
+            onDone = {
+                savedPlaceForSuccessDialog = null
+            }
+        )
+    }
+
+    duplicateSavedSpot?.let { _ ->
+        com.example.ui.components.DuplicateSavedSpotDialog(
+            onViewSavedSpot = {
+                duplicateSavedSpot = null
+                onViewSavedPlaces()
+            },
+            onDone = {
+                duplicateSavedSpot = null
+            }
+        )
+    }
+
+    if (showSavedPlacesProSheet) {
+        CurbProFeatureBottomSheet(
+            title = "Save Unlimited Parking Spots",
+            supportingText = "Save as many parking locations and sign intelligence records as you need with Curb Pro.",
+            icon = androidx.compose.material.icons.Icons.Default.Edit,
+            onGetPro = onUpgradeToPro,
+            onDismiss = { showSavedPlacesProSheet = false }
+        )
     }
 
     if (showExportProSheet) {

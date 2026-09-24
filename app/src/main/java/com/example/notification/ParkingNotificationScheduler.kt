@@ -152,6 +152,57 @@ object ParkingNotificationScheduler {
         }
     }
 
+    fun scheduleSavedPlaceReminder(context: Context, place: com.example.data.model.SavedPlace) {
+        try {
+            if (place.id <= 0L || !place.reminderEnabled) return
+            createNotificationChannel(context)
+            cancelSavedPlaceReminder(context, place.id)
+
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+            val now = System.currentTimeMillis()
+
+            // Calculate trigger time if schedule has an explicit allowed time limit or target
+            // Default: 15 minutes before limit, or trigger if schedule is active
+            val reminderMins = if (place.reminderMinutesBefore > 0) place.reminderMinutesBefore else 15
+            val triggerTime = place.lastCheckedAt + (60 * 60 * 1000L) - (reminderMins * 60 * 1000L)
+
+            if (triggerTime > now) {
+                val intent = Intent(context, ParkingNotificationReceiver::class.java).apply {
+                    putExtra(EXTRA_SESSION_ID, place.id)
+                    putExtra(EXTRA_NOTIFICATION_TYPE, NotificationType.REMINDER.name)
+                    putExtra(EXTRA_NAVIGATE_ROUTE, "saved_places")
+                }
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    getSavedPlaceRequestCode(place.id),
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                setAlarm(alarmManager, triggerTime, pendingIntent)
+            }
+        } catch (_: Throwable) {}
+    }
+
+    fun cancelSavedPlaceReminder(context: Context, placeId: Long) {
+        try {
+            if (placeId <= 0L) return
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+            val intent = Intent(context, ParkingNotificationReceiver::class.java)
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                getSavedPlaceRequestCode(placeId),
+                intent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            )
+            if (pendingIntent != null) {
+                alarmManager.cancel(pendingIntent)
+                pendingIntent.cancel()
+            }
+        } catch (_: Throwable) {}
+    }
+
+    fun getSavedPlaceRequestCode(placeId: Long): Int = (100000 + placeId).toInt()
+
     fun getReminderRequestCode(sessionId: Long): Int = (sessionId * 10 + 1).toInt()
     fun getExpirationRequestCode(sessionId: Long): Int = (sessionId * 10 + 2).toInt()
 }

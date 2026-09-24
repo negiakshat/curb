@@ -263,17 +263,17 @@ object SemanticConsistencyValidator {
 
         val hourMatch = Regex("""(\d+)\s*(?:HOUR|HR|HRS)""").find(upper)
         if (hourMatch != null) {
-            val hours = hourMatch.groupValues[1].toIntOrNull() ?: 2
+            val hours = hourMatch.groupValues.getOrNull(1)?.toIntOrNull() ?: 2
             return Pair("In $hours ${if (hours == 1) "hour" else "hours"}", "${hours}h 00m remaining")
         }
         val minMatch = Regex("""(\d+)\s*(?:MIN|MINUTE|MINS)""").find(upper)
         if (minMatch != null) {
-            val mins = minMatch.groupValues[1].toIntOrNull() ?: 30
+            val mins = minMatch.groupValues.getOrNull(1)?.toIntOrNull() ?: 30
             return Pair("In $mins mins", "${mins}m remaining")
         }
         val pmMatch = Regex("""(\d{1,2}(?::\d{2})?\s*PM)""").find(upper)
         if (pmMatch != null) {
-            val clock = pmMatch.groupValues[1]
+            val clock = pmMatch.groupValues.getOrNull(1) ?: ""
             return Pair(clock, "Until $clock")
         }
         return null
@@ -308,7 +308,7 @@ object SemanticConsistencyValidator {
                 upper.contains("STREET SWEEPING") || upper.contains("NO STOPPING")
     }
 
-    private fun isUsableClockTimeOrDuration(timeStr: String): Boolean {
+    fun isUsableClockTimeOrDuration(timeStr: String): Boolean {
         if (timeStr.isBlank() || timeStr == "Verify physical signage" || timeStr == "No parking permitted" || timeStr == "--") {
             return false
         }

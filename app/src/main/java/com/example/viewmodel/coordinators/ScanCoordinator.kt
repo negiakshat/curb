@@ -9,6 +9,7 @@ import com.example.data.local.ScanUsageManager
 import com.example.data.location.LocationService
 import com.example.data.location.UserLocationResult
 import com.example.data.model.SampleSignPreset
+import com.example.data.model.ScanProcessingStage
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
 import com.example.data.model.SignBoundingBox
@@ -39,6 +40,9 @@ class ScanCoordinator(
     private val _scanError = MutableStateFlow<String?>(null)
     val scanError: StateFlow<String?> = _scanError.asStateFlow()
 
+    private val _processingStage = MutableStateFlow(ScanProcessingStage.IDLE)
+    val processingStage: StateFlow<ScanProcessingStage> = _processingStage.asStateFlow()
+
     private val _processingStatusText = MutableStateFlow("Reading your parking sign…")
     val processingStatusText: StateFlow<String> = _processingStatusText.asStateFlow()
 
@@ -58,7 +62,8 @@ class ScanCoordinator(
         _currentScanResult.value = null
         _isProcessingScan.value = false
         _scanError.value = null
-        _processingStatusText.value = "Reading your parking sign…"
+        _processingStage.value = ScanProcessingStage.IDLE
+        _processingStatusText.value = ""
     }
 
     fun processCapturedImage(
@@ -70,13 +75,14 @@ class ScanCoordinator(
         isUserPro: Boolean,
         onPaywallRequired: () -> Unit,
         onComplete: () -> Unit,
-        onError: ((String) -> Unit)? = null
+        onError: ((String) -> Unit)? = null,
+        captureErrorMessage: String? = null
     ) {
         if (_isProcessingScan.value) return
 
         // CRITICAL ISSUE 6: bitmap == null capture failure must not save scan or consume quota
         if (bitmap == null && localDetections.isEmpty()) {
-            val errorMsg = "Camera capture failed. Please ensure the sign is visible and try again."
+            val errorMsg = captureErrorMessage ?: "Couldn't capture the photo. Please try again."
             _scanError.value = errorMsg
             onError?.invoke(errorMsg)
             return
@@ -90,25 +96,20 @@ class ScanCoordinator(
         coroutineScope.launch {
             _isProcessingScan.value = true
             _scanError.value = null
-            _processingStatusText.value = "Reading your parking sign…"
+            _processingStage.value = ScanProcessingStage.CAPTURED
+            _processingStatusText.value = ScanProcessingStage.CAPTURED.statusText
             val totalScanStart = System.currentTimeMillis()
 
             try {
                 // Stage 1: Fast Crop Generation / Local Sign Detection
-                // CRITICAL ISSUE 1+3: Always run fresh detection on the captured bitmap.
-                // Live detection boxes are UI guidance only; they must NOT bypass
-                // fresh full-image OCR on the actual captured pixels.
-                // Pre-supplied localDetections (e.g. from gallery) are accepted as-is
-                // because they come from the same image.
+                _processingStage.value = ScanProcessingStage.LOCAL_DETECTION
+                _processingStatusText.value = ScanProcessingStage.LOCAL_DETECTION.statusText
+
                 val stage1Start = System.currentTimeMillis()
                 val detectedCrops = if (localDetections.isNotEmpty()) {
                     Log.d("CurbPipeline", "Using pre-supplied local detections: ${localDetections.size}")
                     localDetections
                 } else if (bitmap != null) {
-                    // ISSUE 1+3 FIX: Always run full on-device detection on the captured bitmap
-                    // instead of carrying stale live-frame boxes forward.
-                    // Live boxes (detectionBoxes) are NOT used here — they are UI hints only.
-                    Log.d("CurbTiming", "Running fresh on-device OCR on captured bitmap ${bitmap.width}x${bitmap.height} (ignoring ${detectionBoxes.size} live detection boxes)")
                     val detectionResult = SignDetectionService.detectAndCropSigns(
                         application,
                         bitmap
@@ -118,12 +119,16 @@ class ScanCoordinator(
                     emptyList()
                 }
 
+                _processingStage.value = ScanProcessingStage.CROP_CREATION
+                _processingStatusText.value = ScanProcessingStage.CROP_CREATION.statusText
+
                 val stage1Time = System.currentTimeMillis() - stage1Start
                 Log.d("CurbTiming", "Stage 1 (Detection & Cropping) finished in $stage1Time ms. Validated crops: ${detectedCrops.size}")
 
-                _processingStatusText.value = "Reading your parking sign…"
-
                 // Stage 2: Location Resolution
+                _processingStage.value = ScanProcessingStage.LOCATION_RESOLUTION
+                _processingStatusText.value = ScanProcessingStage.LOCATION_RESOLUTION.statusText
+
                 val stage2Start = System.currentTimeMillis()
                 val (resolvedLocName, resolvedCityState, isKnown) = if (!explicitLocationName.isNullOrBlank()) {
                     Triple(explicitLocationName, explicitCityState ?: "", true)
@@ -150,6 +155,9 @@ class ScanCoordinator(
                 Log.d("CurbTiming", "Stage 2 (Location Resolution) finished in $stage2Time ms: $resolvedLocName")
 
                 // Stage 3: Gemini / Evidence-Anchored Analysis
+                _processingStage.value = ScanProcessingStage.GEMINI_REQUEST
+                _processingStatusText.value = ScanProcessingStage.GEMINI_REQUEST.statusText
+
                 val stage3Start = System.currentTimeMillis()
                 val result = GeminiService.analyzeParkingSigns(
                     bitmap = bitmap,
@@ -159,6 +167,10 @@ class ScanCoordinator(
                     localDetections = detectedCrops,
                     context = application
                 )
+
+                _processingStage.value = ScanProcessingStage.EVIDENCE_VALIDATION
+                _processingStatusText.value = ScanProcessingStage.EVIDENCE_VALIDATION.statusText
+
                 val stage3Time = System.currentTimeMillis() - stage3Start
                 Log.d("CurbTiming", "Stage 3 (Gemini & Evidence Anchoring) finished in $stage3Time ms. Verdict: ${result.verdict}")
 
@@ -168,6 +180,7 @@ class ScanCoordinator(
                 val savedResult = result.copy(id = scanId)
                 _currentScanResult.value = savedResult
                 scanUsageManager.consumeScan(isUserPro)
+                _processingStage.value = ScanProcessingStage.COMPLETED
                 val stage4Time = System.currentTimeMillis() - stage4Start
                 Log.d("CurbTiming", "Stage 4 (DB Save & Usage) finished in $stage4Time ms. ScanId: $scanId")
 
@@ -177,7 +190,8 @@ class ScanCoordinator(
                 onComplete()
             } catch (e: Exception) {
                 Log.e("CurbPipeline", "Error analyzing parking sign", e)
-                val errorMsg = e.message ?: "Unable to analyze parking signs. Please ensure the sign is clear and try again."
+                _processingStage.value = ScanProcessingStage.FAILED
+                val errorMsg = e.message ?: "Couldn't process the captured photo. Please try again."
                 _scanError.value = errorMsg
                 onError?.invoke(errorMsg)
             } finally {

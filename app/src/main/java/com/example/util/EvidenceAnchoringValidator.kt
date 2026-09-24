@@ -262,8 +262,8 @@ object EvidenceAnchoringValidator {
             val matches = Regex("(\\d{1,2})(?::\\d{2})?\\s*(AM|PM|A\\.M\\.|P\\.M\\.)", RegexOption.IGNORE_CASE).findAll(text)
             return matches.mapNotNull { match ->
                 if (match.groupValues.size >= 3) {
-                    val hour = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
-                    val rawPeriod = match.groupValues[2].uppercase(Locale.US).replace(".", "")
+                    val hour = match.groupValues.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
+                    val rawPeriod = match.groupValues.getOrNull(2)?.uppercase(Locale.US)?.replace(".", "") ?: ""
                     val period = if (rawPeriod.startsWith("A")) "AM" else "PM"
                     "${hour}${period}"
                 } else null

@@ -164,7 +164,18 @@ data class SavedPlace(
     val name: String,
     val address: String,
     val parkingNote: String = "",
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val scanResultId: Long? = null,
+    val parkingRuleSummary: String = "",
+    val parkingSchedule: String = "",
+    val parkingVerdict: String = "",
+    val signImageUri: String = "",
+    val lastCheckedAt: Long = timestamp,
+    val reminderEnabled: Boolean = false,
+    val reminderMinutesBefore: Int = 15,
+    val reminderScheduleText: String = ""
 )
 
 data class UserProfile(

@@ -28,6 +28,7 @@ import com.example.data.remote.SubscriptionService
 import com.example.data.remote.SubscriptionUiState
 import com.example.data.remote.WalkingRoute
 import com.example.data.repository.CurbRepository
+import com.example.data.repository.SavePlaceResult
 import com.example.viewmodel.coordinators.ChatCoordinator
 import com.example.viewmodel.coordinators.LocationSpotCoordinator
 import com.example.viewmodel.coordinators.NotificationCoordinator
@@ -299,7 +300,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
         localDetections: List<LocalSignCrop> = emptyList(),
         onPaywallRequired: () -> Unit,
         onComplete: () -> Unit,
-        onError: ((String) -> Unit)? = null
+        onError: ((String) -> Unit)? = null,
+        captureErrorMessage: String? = null
     ) {
         scanCoordinator.processCapturedImage(
             bitmap = bitmap,
@@ -313,7 +315,8 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
                 usageCoordinator.refreshUsageInfo()
                 onComplete()
             },
-            onError = onError
+            onError = onError,
+            captureErrorMessage = captureErrorMessage
         )
     }
 
@@ -416,6 +419,25 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Saved Places & Notes Methods (delegating to CurbRepository)
+    private val _rescanTargetPlace = MutableStateFlow<SavedPlace?>(null)
+    val rescanTargetPlace: StateFlow<SavedPlace?> = _rescanTargetPlace.asStateFlow()
+
+    fun setRescanTargetPlace(place: SavedPlace?) {
+        _rescanTargetPlace.value = place
+    }
+
+    fun saveSavedPlace(place: SavedPlace, onResult: (SavePlaceResult) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = repository.saveSavedPlaceWithCheck(place)
+            _rescanTargetPlace.value = null
+            onResult(result)
+        }
+    }
+
+    suspend fun checkDuplicateSavedPlace(place: SavedPlace): SavedPlace? {
+        return repository.findDuplicateSavedPlace(place)
+    }
+
     fun addSavedPlace(name: String, address: String, note: String) {
         viewModelScope.launch {
             repository.addSavedPlace(

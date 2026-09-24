@@ -15,11 +15,20 @@ import com.example.data.model.SavedPlace
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
 import com.example.util.ParkingTimerCalculator
+import com.example.util.SavedSpotFingerprint
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+sealed class SavePlaceResult {
+    data class Success(val savedPlace: SavedPlace) : SavePlaceResult()
+    data class Duplicate(val existingPlace: SavedPlace) : SavePlaceResult()
+    data class Error(val message: String) : SavePlaceResult()
+}
 
 class CurbRepository(context: Context) {
     private val appContext = context.applicationContext
@@ -275,20 +284,91 @@ class CurbRepository(context: Context) {
         }
     }
 
+    private val saveMutex = Mutex()
+
+    suspend fun findDuplicateSavedPlace(candidate: SavedPlace): SavedPlace? {
+        val existingEntities = savedPlaceDao.getSavedPlacesList()
+        val existingPlaces = existingEntities.map { entityToSavedPlace(it) }
+        return existingPlaces.firstOrNull { SavedSpotFingerprint.isDuplicate(candidate, it) }
+    }
+
+    suspend fun saveSavedPlaceWithCheck(place: SavedPlace): SavePlaceResult = saveMutex.withLock {
+        return try {
+            if (place.id > 0) {
+                updateSavedPlace(place)
+                val updated = getSavedPlaceById(place.id) ?: place
+                SavePlaceResult.Success(updated)
+            } else {
+                val duplicate = findDuplicateSavedPlace(place)
+                if (duplicate != null) {
+                    SavePlaceResult.Duplicate(duplicate)
+                } else {
+                    val newId = addSavedPlace(place)
+                    val inserted = getSavedPlaceById(newId) ?: place.copy(id = newId)
+                    SavePlaceResult.Success(inserted)
+                }
+            }
+        } catch (e: Throwable) {
+            SavePlaceResult.Error(e.message ?: "Failed to save place")
+        }
+    }
+
     suspend fun addSavedPlace(place: SavedPlace): Long {
-        return savedPlaceDao.insertPlace(
-            SavedPlaceEntity(
-                name = place.name,
-                address = place.address,
-                parkingNote = place.parkingNote,
-                timestamp = System.currentTimeMillis()
-            )
+        val durableImageUri = persistSignImage(place.signImageUri)
+        val placeToInsert = place.copy(
+            signImageUri = durableImageUri,
+            lastCheckedAt = if (place.lastCheckedAt > 0) place.lastCheckedAt else System.currentTimeMillis()
         )
+        val id = savedPlaceDao.insertPlace(savedPlaceToEntity(placeToInsert))
+        val placeWithId = placeToInsert.copy(id = id)
+        if (placeWithId.reminderEnabled) {
+            com.example.notification.ParkingNotificationScheduler.scheduleSavedPlaceReminder(appContext, placeWithId)
+        } else {
+            com.example.notification.ParkingNotificationScheduler.cancelSavedPlaceReminder(appContext, id)
+        }
+        return id
+    }
+
+    suspend fun updateSavedPlace(place: SavedPlace) {
+        val durableImageUri = persistSignImage(place.signImageUri)
+        val placeToUpdate = place.copy(signImageUri = durableImageUri)
+        savedPlaceDao.updatePlace(savedPlaceToEntity(placeToUpdate))
+        if (placeToUpdate.reminderEnabled) {
+            com.example.notification.ParkingNotificationScheduler.scheduleSavedPlaceReminder(appContext, placeToUpdate)
+        } else {
+            com.example.notification.ParkingNotificationScheduler.cancelSavedPlaceReminder(appContext, placeToUpdate.id)
+        }
     }
 
     suspend fun deleteSavedPlace(id: Long) {
         savedPlaceDao.deletePlaceById(id)
         noteDao.deleteNoteForSavedPlace(id)
+        com.example.notification.ParkingNotificationScheduler.cancelSavedPlaceReminder(appContext, id)
+    }
+
+    suspend fun getSavedPlaceById(id: Long): SavedPlace? {
+        val entity = savedPlaceDao.getPlaceById(id) ?: return null
+        return entityToSavedPlace(entity)
+    }
+
+    fun persistSignImage(sourceUriString: String?): String {
+        if (sourceUriString.isNullOrBlank()) return ""
+        try {
+            if (sourceUriString.contains("saved_places_images")) return sourceUriString
+            val sourceUri = android.net.Uri.parse(sourceUriString)
+            val dir = java.io.File(appContext.filesDir, "saved_places_images")
+            if (!dir.exists()) dir.mkdirs()
+            val destFile = java.io.File(dir, "place_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(6)}.jpg")
+            appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
+                java.io.FileOutputStream(destFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            return android.net.Uri.fromFile(destFile).toString()
+        } catch (e: Exception) {
+            android.util.Log.w("CurbRepository", "Failed to persist sign image: ${e.message}")
+            return sourceUriString
+        }
     }
 
     suspend fun getSessionById(id: Long): ActiveParkingSession? {
@@ -446,7 +526,39 @@ class CurbRepository(context: Context) {
             name = entity.name,
             address = entity.address,
             parkingNote = entity.parkingNote,
-            timestamp = entity.timestamp
+            timestamp = entity.timestamp,
+            latitude = entity.latitude,
+            longitude = entity.longitude,
+            scanResultId = entity.scanResultId,
+            parkingRuleSummary = entity.parkingRuleSummary,
+            parkingSchedule = entity.parkingSchedule,
+            parkingVerdict = entity.parkingVerdict,
+            signImageUri = entity.signImageUri,
+            lastCheckedAt = if (entity.lastCheckedAt > 0) entity.lastCheckedAt else entity.timestamp,
+            reminderEnabled = entity.reminderEnabled,
+            reminderMinutesBefore = entity.reminderMinutesBefore,
+            reminderScheduleText = entity.reminderScheduleText
+        )
+    }
+
+    private fun savedPlaceToEntity(place: SavedPlace): SavedPlaceEntity {
+        return SavedPlaceEntity(
+            id = place.id,
+            name = place.name,
+            address = place.address,
+            parkingNote = place.parkingNote,
+            timestamp = place.timestamp,
+            latitude = place.latitude,
+            longitude = place.longitude,
+            scanResultId = place.scanResultId,
+            parkingRuleSummary = place.parkingRuleSummary,
+            parkingSchedule = place.parkingSchedule,
+            parkingVerdict = place.parkingVerdict,
+            signImageUri = place.signImageUri,
+            lastCheckedAt = if (place.lastCheckedAt > 0) place.lastCheckedAt else place.timestamp,
+            reminderEnabled = place.reminderEnabled,
+            reminderMinutesBefore = place.reminderMinutesBefore,
+            reminderScheduleText = place.reminderScheduleText
         )
     }
 

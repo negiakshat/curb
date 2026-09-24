@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CurbNoteEntity::class,
         ParkingSpotEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class CurbDatabase : RoomDatabase() {
@@ -119,6 +119,23 @@ abstract class CurbDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "saved_places", "latitude", "REAL")
+                addColumnIfNotExists(db, "saved_places", "longitude", "REAL")
+                addColumnIfNotExists(db, "saved_places", "scanResultId", "INTEGER")
+                addColumnIfNotExists(db, "saved_places", "parkingRuleSummary", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "saved_places", "parkingSchedule", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "saved_places", "parkingVerdict", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "saved_places", "signImageUri", "TEXT NOT NULL DEFAULT ''")
+                addColumnIfNotExists(db, "saved_places", "lastCheckedAt", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "saved_places", "reminderEnabled", "INTEGER NOT NULL DEFAULT 0")
+                addColumnIfNotExists(db, "saved_places", "reminderMinutesBefore", "INTEGER NOT NULL DEFAULT 15")
+                addColumnIfNotExists(db, "saved_places", "reminderScheduleText", "TEXT NOT NULL DEFAULT ''")
+                db.execSQL("UPDATE saved_places SET lastCheckedAt = timestamp WHERE lastCheckedAt = 0")
+            }
+        }
+
         fun getDatabase(context: Context): CurbDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -133,7 +150,8 @@ abstract class CurbDatabase : RoomDatabase() {
                         MIGRATION_4_5,
                         MIGRATION_5_6,
                         MIGRATION_6_7,
-                        MIGRATION_7_8
+                        MIGRATION_7_8,
+                        MIGRATION_8_9
                     )
                     .build()
                 INSTANCE = instance

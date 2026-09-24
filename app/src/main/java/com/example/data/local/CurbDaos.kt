@@ -75,11 +75,20 @@ interface ParkingSessionDao {
 
 @Dao
 interface SavedPlaceDao {
-    @Query("SELECT * FROM saved_places ORDER BY timestamp DESC")
+    @Query("SELECT * FROM saved_places ORDER BY lastCheckedAt DESC, timestamp DESC")
     fun getAllSavedPlaces(): Flow<List<SavedPlaceEntity>>
+
+    @Query("SELECT * FROM saved_places ORDER BY lastCheckedAt DESC, timestamp DESC")
+    suspend fun getSavedPlacesList(): List<SavedPlaceEntity>
+
+    @Query("SELECT * FROM saved_places WHERE id = :id LIMIT 1")
+    suspend fun getPlaceById(id: Long): SavedPlaceEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlace(place: SavedPlaceEntity): Long
+
+    @Update
+    suspend fun updatePlace(place: SavedPlaceEntity)
 
     @Query("DELETE FROM saved_places WHERE id = :id")
     suspend fun deletePlaceById(id: Long)

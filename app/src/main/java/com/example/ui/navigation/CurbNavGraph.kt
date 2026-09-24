@@ -78,6 +78,7 @@ fun CurbNavGraph(
     val chatUsageInfo by viewModel.chatUsageInfo.collectAsStateWithLifecycle()
     val walkingRoute by viewModel.walkingRouteState.collectAsStateWithLifecycle()
     val isUserPro by viewModel.isUserPro.collectAsStateWithLifecycle()
+    val rescanTargetPlace by viewModel.rescanTargetPlace.collectAsStateWithLifecycle()
 
     NavHost(
         navController = navController,
@@ -223,7 +224,7 @@ fun CurbNavGraph(
                 onClearScanError = { viewModel.clearScanError() },
                 usageInfo = scanUsageInfo,
                 isPro = isUserPro,
-                onCaptureImage = { bitmap, boxes ->
+                onCaptureImage = { bitmap, boxes, customError ->
                     viewModel.processCapturedImage(
                         bitmap = bitmap,
                         detectionBoxes = boxes,
@@ -240,7 +241,8 @@ fun CurbNavGraph(
                         },
                         onError = { err ->
                             Toast.makeText(context, err, Toast.LENGTH_LONG).show()
-                        }
+                        },
+                        captureErrorMessage = customError
                     )
                 },
                 onPresetSelected = { preset ->
@@ -290,6 +292,8 @@ fun CurbNavGraph(
             ScanOutputScreen(
                 scanResult = currentScan,
                 note = currentScanNote,
+                savedPlaces = savedPlaces,
+                rescanTargetPlace = rescanTargetPlace,
                 isPro = isUserPro,
                 onSaveNote = { text ->
                     viewModel.saveNote(CurbNote.TARGET_SCAN_RESULT, currentScan.id, text)
@@ -298,6 +302,14 @@ fun CurbNavGraph(
                 onDeleteNote = {
                     viewModel.deleteNote(CurbNote.TARGET_SCAN_RESULT, currentScan.id)
                     Toast.makeText(context, "Note deleted", Toast.LENGTH_SHORT).show()
+                },
+                onSavePlace = { place, onResult ->
+                    viewModel.saveSavedPlace(place) { result ->
+                        onResult(result)
+                    }
+                },
+                onViewSavedPlaces = {
+                    navController.navigate(Routes.SAVED_PLACES)
                 },
                 onViewDetails = {
                     navController.navigate(Routes.PARKING_DETAILS)
@@ -631,26 +643,21 @@ fun CurbNavGraph(
                 savedPlaces = savedPlaces,
                 notes = allNotes,
                 isPro = isUserPro,
-                onAddPlace = { name, address, note ->
-                    viewModel.addSavedPlace(name, address, note)
-                    Toast.makeText(context, "Place saved", Toast.LENGTH_SHORT).show()
+                onSavePlace = { place, onResult ->
+                    viewModel.saveSavedPlace(place) { result ->
+                        onResult(result)
+                    }
                 },
                 onDeletePlace = { id ->
                     viewModel.deleteSavedPlace(id)
-                    Toast.makeText(context, "Place removed", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Spot removed", Toast.LENGTH_SHORT).show()
                 },
-                onSaveNote = { targetType, targetId, text ->
-                    viewModel.saveNote(targetType, targetId, text)
-                    Toast.makeText(context, "Note saved", Toast.LENGTH_SHORT).show()
+                onCheckSignAgain = { place ->
+                    viewModel.setRescanTargetPlace(place)
+                    navController.navigate(Routes.SCAN)
                 },
-                onDeleteNote = { targetType, targetId ->
-                    viewModel.deleteNote(targetType, targetId)
-                    Toast.makeText(context, "Note deleted", Toast.LENGTH_SHORT).show()
-                },
-                onScanPlace = { place ->
-                    // CRITICAL ISSUE 7 FIX: Do not fabricate a scan without a captured image.
-                    // Navigate to the real Scan screen so the user can capture the actual parking sign.
-                    // The saved place name is available as context but must not replace real sign evidence.
+                onOpenScan = {
+                    viewModel.setRescanTargetPlace(null)
                     navController.navigate(Routes.SCAN)
                 },
                 onUpgradeToPro = {

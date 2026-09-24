@@ -105,15 +105,15 @@ class SemanticConsistencyTest {
 
     @Test
     fun testD_AllowedVerdictWithNoVerifiedDuration_TimerNotAuthorized() {
-        val crop = createCrop("crop_1", "PERMIT PARKING ONLY AREA G")
+        val crop = createCrop("crop_1", "PARKING ALLOWED")
         val scan = ScanResult(
             locationName = "Sutter St",
             verdict = ScanVerdict.ALLOWED,
             allowedUntilTime = "Verify physical signage",
             timeRemaining = "--",
-            parkingRules = listOf("Area G Permit Parking"),
+            parkingRules = listOf("Parking Allowed"),
             detectedSigns = listOf(
-                DetectedSign(id = "crop_1", title = "Permit Parking", croppedImageUri = crop.fileUri, rawText = crop.ocrText)
+                DetectedSign(id = "crop_1", title = "Parking Allowed", croppedImageUri = crop.fileUri, rawText = crop.ocrText)
             )
         )
 
