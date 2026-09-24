@@ -43,7 +43,15 @@ class LocationSpotCoordinator(
     private var lastRouteFetchLng: Double? = null
 
     init {
-        // Defer location initialization out of startup chain so cold launch never blocks or crashes on location APIs
+        if (locationService.hasLocationPermission()) {
+            coroutineScope.launch {
+                try {
+                    refreshLocation()
+                } catch (_: Throwable) {
+                    // Ignore startup location refresh errors
+                }
+            }
+        }
     }
 
     fun refreshLocation() {
@@ -54,9 +62,17 @@ class LocationSpotCoordinator(
                     return@launch
                 }
                 val result = locationService.fetchCurrentLocation()
-                _userLocationState.value = result
+                if (result is UserLocationResult.Success) {
+                    _userLocationState.value = result
+                } else {
+                    if (_userLocationState.value !is UserLocationResult.Success) {
+                        _userLocationState.value = result
+                    }
+                }
             } catch (e: Throwable) {
-                _userLocationState.value = UserLocationResult.Unavailable("Location unavailable")
+                if (_userLocationState.value !is UserLocationResult.Success) {
+                    _userLocationState.value = UserLocationResult.Unavailable("Location unavailable")
+                }
             }
         }
     }
@@ -82,8 +98,14 @@ class LocationSpotCoordinator(
                 _userLocationState.value = UserLocationResult.PermissionRequired()
                 return@launch
             }
-            locationService.getLocationUpdates(intervalMs = 3000L).collect { result ->
-                _userLocationState.value = result
+            locationService.getLocationUpdates(intervalMs = 5000L).collect { result ->
+                if (result is UserLocationResult.Success) {
+                    _userLocationState.value = result
+                } else {
+                    if (_userLocationState.value !is UserLocationResult.Success) {
+                        _userLocationState.value = result
+                    }
+                }
             }
         }
     }

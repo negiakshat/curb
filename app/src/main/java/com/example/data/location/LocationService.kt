@@ -10,6 +10,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
 import android.os.Looper
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -23,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -54,6 +56,11 @@ class LocationService(private val context: Context) {
         LocationServices.getFusedLocationProviderClient(context)
     }
 
+    @Volatile private var cachedGeocodedLat: Double? = null
+    @Volatile private var cachedGeocodedLng: Double? = null
+    @Volatile private var cachedGeocodeTime: Long = 0L
+    @Volatile private var cachedGeocodedTriple: Triple<String, String, String>? = null
+
     fun hasLocationPermission(): Boolean {
         val fineLocation = ContextCompat.checkSelfPermission(
             context,
@@ -66,7 +73,32 @@ class LocationService(private val context: Context) {
         return fineLocation || coarseLocation
     }
 
-    fun getLocationUpdates(intervalMs: Long = 3000L): Flow<UserLocationResult> = callbackFlow {
+    fun shouldReverseGeocode(lat: Double, lng: Double, now: Long): Boolean {
+        val lastLat = cachedGeocodedLat
+        val lastLng = cachedGeocodedLng
+        val lastTriple = cachedGeocodedTriple
+        if (lastLat == null || lastLng == null || lastTriple == null) return true
+
+        val dist = FloatArray(1)
+        Location.distanceBetween(lat, lng, lastLat, lastLng, dist)
+        val distanceMeters = dist[0]
+        val elapsedMs = now - cachedGeocodeTime
+
+        val needsGeocode = distanceMeters >= 50f || elapsedMs >= 30000L
+        if (!needsGeocode) {
+            Log.d("LocationService", "Reverse-geocode skipped due to distance/cooldown (dist=${distanceMeters}m, elapsed=${elapsedMs}ms)")
+        }
+        return needsGeocode
+    }
+
+    fun updateCachedLocationForTest(lat: Double, lng: Double, time: Long, triple: Triple<String, String, String>) {
+        cachedGeocodedLat = lat
+        cachedGeocodedLng = lng
+        cachedGeocodeTime = time
+        cachedGeocodedTriple = triple
+    }
+
+    fun getLocationUpdates(intervalMs: Long = 5000L): Flow<UserLocationResult> = callbackFlow {
         if (!hasLocationPermission()) {
             trySend(UserLocationResult.PermissionRequired())
             close()
@@ -84,18 +116,32 @@ class LocationService(private val context: Context) {
         val locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val loc = result.lastLocation ?: return
+                launch {
+                    processAndEmitLocation(loc, "FUSED")
+                }
+            }
+
+            private suspend fun processAndEmitLocation(loc: Location, source: String) {
                 val lat = loc.latitude
                 val lng = loc.longitude
                 val accuracy = if (loc.hasAccuracy()) loc.accuracy else null
                 val time = if (loc.time > 0) loc.time else System.currentTimeMillis()
 
-                val coordsStr = String.format(Locale.US, "%.4f, %.4f", lat, lng)
+                Log.d("LocationService", "Location update received from $source: raw lat=$lat, lng=$lng, acc=$accuracy")
+
+                val needsGeocode = shouldReverseGeocode(lat, lng, time)
+                val labelTriple = if (needsGeocode) {
+                    reverseGeocode(lat, lng)
+                } else {
+                    cachedGeocodedTriple ?: Triple("Location active", "", "Location active")
+                }
+
                 val userRes = UserLocationResult.Success(
                     latitude = lat,
                     longitude = lng,
-                    locationName = "Current Location",
-                    cityState = coordsStr,
-                    formattedDisplay = "GPS ($coordsStr)",
+                    locationName = labelTriple.first,
+                    cityState = labelTriple.second,
+                    formattedDisplay = labelTriple.third,
                     timestamp = time,
                     accuracy = accuracy
                 )
@@ -112,7 +158,7 @@ class LocationService(private val context: Context) {
             fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
             isFusedActive = true
         } catch (e: Exception) {
-            // Fused client update request failed
+            Log.d("LocationService", "Fused location updates request failed: ${e.message}")
         }
 
         var locationManagerListener: LocationListener? = null
@@ -121,22 +167,33 @@ class LocationService(private val context: Context) {
                 val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
                 if (locationManager != null && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                     val listener = LocationListener { loc ->
-                        val lat = loc.latitude
-                        val lng = loc.longitude
-                        val accuracy = if (loc.hasAccuracy()) loc.accuracy else null
-                        val time = if (loc.time > 0) loc.time else System.currentTimeMillis()
-                        val coordsStr = String.format(Locale.US, "%.4f, %.4f", lat, lng)
-                        trySend(
-                            UserLocationResult.Success(
-                                latitude = lat,
-                                longitude = lng,
-                                locationName = "Current Location",
-                                cityState = coordsStr,
-                                formattedDisplay = "GPS ($coordsStr)",
-                                timestamp = time,
-                                accuracy = accuracy
+                        launch {
+                            val lat = loc.latitude
+                            val lng = loc.longitude
+                            val accuracy = if (loc.hasAccuracy()) loc.accuracy else null
+                            val time = if (loc.time > 0) loc.time else System.currentTimeMillis()
+
+                            Log.d("LocationService", "Location update received from GPS_PROVIDER: raw lat=$lat, lng=$lng, acc=$accuracy")
+
+                            val needsGeocode = shouldReverseGeocode(lat, lng, time)
+                            val labelTriple = if (needsGeocode) {
+                                reverseGeocode(lat, lng)
+                            } else {
+                                cachedGeocodedTriple ?: Triple("Location active", "", "Location active")
+                            }
+
+                            trySend(
+                                UserLocationResult.Success(
+                                    latitude = lat,
+                                    longitude = lng,
+                                    locationName = labelTriple.first,
+                                    cityState = labelTriple.second,
+                                    formattedDisplay = labelTriple.third,
+                                    timestamp = time,
+                                    accuracy = accuracy
+                                )
                             )
-                        )
+                        }
                     }
                     locationManagerListener = listener
                     locationManager.requestLocationUpdates(
@@ -148,7 +205,7 @@ class LocationService(private val context: Context) {
                     )
                 }
             } catch (e: Exception) {
-                // Ignore
+                Log.d("LocationService", "LocationManager updates request failed: ${e.message}")
             }
         }
 
@@ -174,31 +231,34 @@ class LocationService(private val context: Context) {
 
         try {
             var rawLocation: Location? = null
+            var source = "FUSED (getCurrentLocation)"
 
-            // 1. Try Google Play Services FusedLocationProviderClient getCurrentLocation (Fresh single-shot fix)
+            // 1. Try Google Play Services FusedLocationProviderClient getCurrentLocation (Fresh single-shot fix with HIGH_ACCURACY)
             try {
                 val cts = CancellationTokenSource()
                 val task = fusedLocationClient.getCurrentLocation(
-                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                    Priority.PRIORITY_HIGH_ACCURACY,
                     cts.token
                 )
                 rawLocation = task.awaitTask()
             } catch (e: Exception) {
-                // Ignore and try fallback
+                Log.d("LocationService", "getCurrentLocation high accuracy failed: ${e.message}")
             }
 
             // 2. Fallback to fusedLocationClient.lastLocation
             if (rawLocation == null) {
                 try {
+                    source = "FUSED (lastLocation)"
                     rawLocation = fusedLocationClient.lastLocation.awaitTask()
                 } catch (e: Exception) {
-                    // Ignore and try fallback
+                    Log.d("LocationService", "lastLocation failed: ${e.message}")
                 }
             }
 
             // 3. Fallback to standard Android LocationManager
             if (rawLocation == null) {
                 try {
+                    source = "LocationManager fallback"
                     val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
                     if (locationManager != null) {
                         val gpsLoc = try {
@@ -222,7 +282,7 @@ class LocationService(private val context: Context) {
                         }
                     }
                 } catch (e: Exception) {
-                    // Ignore
+                    Log.d("LocationService", "LocationManager fallback failed: ${e.message}")
                 }
             }
 
@@ -236,6 +296,8 @@ class LocationService(private val context: Context) {
             val lng = rawLocation.longitude
             val accuracy = if (rawLocation.hasAccuracy()) rawLocation.accuracy else null
             val time = if (rawLocation.time > 0) rawLocation.time else System.currentTimeMillis()
+
+            Log.d("LocationService", "Location source: $source, raw lat=$lat, lng=$lng, acc=$accuracy")
 
             // 4. Reverse-geocode to human-readable address
             val geocoded = reverseGeocode(lat, lng)
@@ -259,8 +321,9 @@ class LocationService(private val context: Context) {
         withContext(Dispatchers.IO) {
             try {
                 if (!Geocoder.isPresent()) {
-                    val coordsStr = String.format(Locale.US, "%.4f, %.4f", latitude, longitude)
-                    return@withContext Triple("Current Location", coordsStr, "Near $coordsStr")
+                    Log.d("LocationService", "Geocoder not present on device")
+                    val fallback = cachedGeocodedTriple ?: Triple("Location active", "", "Location active")
+                    return@withContext fallback
                 }
 
                 val geocoder = Geocoder(context, Locale.getDefault())
@@ -290,14 +353,16 @@ class LocationService(private val context: Context) {
 
                 val address = addresses?.firstOrNull()
                 if (address != null) {
-                    // Thoroughfare (street name e.g. "Mission St", "Oak Ave", "Hazratganj")
                     val thoroughfare = address.thoroughfare
                     val subThoroughfare = address.subThoroughfare
+                    val featureName = address.featureName
+                    val subLocality = address.subLocality
+
                     val streetAddress = when {
                         !subThoroughfare.isNullOrBlank() && !thoroughfare.isNullOrBlank() -> "$subThoroughfare $thoroughfare"
                         !thoroughfare.isNullOrBlank() -> thoroughfare
-                        !address.featureName.isNullOrBlank() && address.featureName != thoroughfare -> address.featureName
-                        !address.subLocality.isNullOrBlank() -> address.subLocality
+                        !featureName.isNullOrBlank() && featureName != thoroughfare && !featureName.matches(Regex("""^\d+$""")) -> featureName
+                        !subLocality.isNullOrBlank() -> subLocality
                         else -> null
                     }
 
@@ -305,14 +370,14 @@ class LocationService(private val context: Context) {
                     val adminArea = address.adminArea
                     val country = address.countryName
 
-                    val locationName = streetAddress ?: locality ?: "Current Spot"
+                    val locationName = streetAddress ?: locality ?: "Location active"
 
                     val cityState = when {
                         !locality.isNullOrBlank() && !adminArea.isNullOrBlank() -> "$locality, $adminArea"
                         !locality.isNullOrBlank() && !country.isNullOrBlank() -> "$locality, $country"
                         !adminArea.isNullOrBlank() -> adminArea
                         !country.isNullOrBlank() -> country
-                        else -> "Local Zone"
+                        else -> ""
                     }
 
                     val formattedDisplay = if (!streetAddress.isNullOrBlank() && !cityState.isNullOrBlank()) {
@@ -323,14 +388,21 @@ class LocationService(private val context: Context) {
                         locationName
                     }
 
-                    return@withContext Triple(locationName, cityState, formattedDisplay)
+                    cachedGeocodedLat = latitude
+                    cachedGeocodedLng = longitude
+                    cachedGeocodeTime = System.currentTimeMillis()
+                    val resultTriple = Triple(locationName, cityState, formattedDisplay)
+                    cachedGeocodedTriple = resultTriple
+
+                    Log.d("LocationService", "Reverse geocode performed: lat=$latitude, lng=$longitude -> resolved: street/locality=$locationName, cityState=$cityState")
+                    return@withContext resultTriple
                 }
             } catch (e: Exception) {
-                // Geocoder network or service failure
+                Log.d("LocationService", "Reverse geocode failed for lat=$latitude, lng=$longitude: ${e.message}")
             }
 
-            val fallbackDisplay = String.format(Locale.US, "GPS (%.3f, %.3f)", latitude, longitude)
-            return@withContext Triple("Current Location", fallbackDisplay, fallbackDisplay)
+            val fallback = cachedGeocodedTriple ?: Triple("Location active", "", "Location active")
+            return@withContext fallback
         }
 
     private suspend fun <T> Task<T>.awaitTask(): T? = suspendCancellableCoroutine { cont ->

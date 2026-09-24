@@ -54,7 +54,7 @@ object SignCandidateValidator {
         Regex("""(?i)\b(?:NO\s*(?:PARK|PARKING|STOP|STOPPING|STAND|STANDING|ENTRY))\b"""),
         Regex("""(?i)\b(?:TOW|TOW-AWAY|TOWAWAY)(?:\s*ZONE|\s*AWAY)?\b"""),
         Regex("""(?i)\b(?:STREET\s*CLEAN(?:ING)?|STREET\s*SWEEP(?:ING)?|SWEEPING|CLEANING)\b"""),
-        Regex("""(?i)\b(?:PERMIT\s*(?:PARKING\s*)?(?:ONLY|REQUIRED|ZONE|AREA|HOLDERS))\b"""),
+        Regex("""(?i)\b(?:PERMIT\s+PARKING|PERMIT\s*(?:PARKING\s*)?(?:ONLY|REQUIRED|ZONE|AREA|HOLDERS)?)\b"""),
         Regex("""(?i)\b(?:METER|PAY|PAYMENT|COIN|KIOSK)(?:\s*PARKING|\s*STATION)?\b"""),
         Regex("""(?i)\b(?:LOADING|COMMERCIAL|PASSENGER)\s+(?:ONLY|ZONE)\b"""),
         Regex("""(?i)\b(?:DISABLED|HANDICAPPED)\s+(?:PARKING|ZONE|ONLY|PLACARD)\b"""),

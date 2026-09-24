@@ -343,19 +343,17 @@ fun ScanOutputScreen(
                         )
                     }
 
-                    if (hasUnresolvedAmbiguity) {
-                        CurbSecondaryButton(
-                            text = "Clarify with Curb AI",
-                            onClick = onAskCurb,
-                            testTag = "clarify_curb_ai_button"
-                        )
-                    } else {
-                        CurbSecondaryButton(
-                            text = "Retake scan",
-                            onClick = onRetake,
-                            testTag = "retake_scan_button"
-                        )
-                    }
+                    CurbSecondaryButton(
+                        text = "ASK ABOUT THIS SIGN",
+                        onClick = onAskCurb,
+                        testTag = "contextual_copilot_button"
+                    )
+
+                    CurbSecondaryButton(
+                        text = "Retake scan",
+                        onClick = onRetake,
+                        testTag = "retake_scan_button"
+                    )
                 }
                 ScanVerdict.RESTRICTED -> {
                     CurbPrimaryButton(
@@ -365,9 +363,9 @@ fun ScanOutputScreen(
                         testTag = "retake_scan_button"
                     )
                     CurbSecondaryButton(
-                        text = "Clarify with Curb AI",
+                        text = "ASK ABOUT THIS SIGN",
                         onClick = onAskCurb,
-                        testTag = "clarify_curb_ai_button"
+                        testTag = "contextual_copilot_button"
                     )
                 }
                 ScanVerdict.AMBIGUOUS -> {
@@ -378,9 +376,9 @@ fun ScanOutputScreen(
                         testTag = "retake_scan_button"
                     )
                     CurbSecondaryButton(
-                        text = "Clarify with Curb AI",
+                        text = "ASK ABOUT THIS SIGN",
                         onClick = onAskCurb,
-                        testTag = "clarify_curb_ai_button"
+                        testTag = "contextual_copilot_button"
                     )
                 }
             }

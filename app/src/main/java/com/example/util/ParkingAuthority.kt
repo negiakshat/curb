@@ -82,15 +82,24 @@ object ParkingAuthority {
             }
         } else {
             // Standalone scanResult without detectedSigns or localDetections
-            val isLocationDerivedOrUnverified = scanResult.parkingRules.isEmpty() ||
+            val hasPhysicalSignRule = scanResult.parkingRules.any { rule ->
+                val upper = rule.uppercase(java.util.Locale.US)
+                EvidenceAnchoringValidator.hasTimeRuleEvidence(rule) ||
+                        upper.contains("PERMIT") ||
+                        upper.contains("NO PARK") || upper.contains("TOW") ||
+                        upper.contains("NO STOP") || upper.contains("SWEEP") ||
+                        upper.contains("NO STAND") || upper.contains("LOADING") ||
+                        upper.contains("LIMIT") || upper.contains("METER") || upper.contains("PAY")
+            }
+            val isLocationDerivedOrUnverified = !hasPhysicalSignRule ||
+                    scanResult.parkingRules.isEmpty() ||
                     scanResult.parkingRules.any { rule ->
                         rule.contains("No verified parking rule", ignoreCase = true) ||
                                 rule.contains("Assumed", ignoreCase = true) ||
                                 rule.contains("Derived", ignoreCase = true) ||
                                 rule.contains("location", ignoreCase = true) ||
                                 rule.contains("city center rule", ignoreCase = true)
-                    } ||
-                    scanResult.allowedUntilTime == "Verify physical signage"
+                    }
 
             if (isLocationDerivedOrUnverified) {
                 return enforceAmbiguousFallback(scanResult)
@@ -128,7 +137,11 @@ object ParkingAuthority {
             " at ${scanResult.locationName}"
         } else ""
 
-        val hasSigns = hasDetectedSigns || scanResult.detectedSigns.isNotEmpty()
+        val validSignsExist = scanResult.detectedSigns.any { sign ->
+            !SignCandidateValidator.isDemoOrSampleCrop(sign.croppedImageUri, sign.isDemo, sign.id) &&
+                    SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid
+        }
+        val hasSigns = hasDetectedSigns || validSignsExist
         val explanationText = if (hasSigns) {
             "Parking signage was detected$locationContextStr, but the text or regulations could not be clearly verified. Please verify physical signage before parking."
         } else {
@@ -142,7 +155,7 @@ object ParkingAuthority {
             timeRemaining = "--",
             parkingRules = listOf("No verified parking rule has been established."),
             explanation = explanationText,
-            detectedSigns = if (hasSigns) scanResult.detectedSigns else emptyList(),
+            detectedSigns = if (validSignsExist) scanResult.detectedSigns else emptyList(),
             paymentInfo = "",
             vehicleApplicability = ""
         )
@@ -156,18 +169,19 @@ object ParkingAuthority {
         if (scanResult.verdict != ScanVerdict.ALLOWED) return false
         if (scanResult.isDemo) return true
 
-        // Strict Requirement: Non-demo scans MUST have detected physical sign evidence
-        if (scanResult.detectedSigns.isEmpty()) {
-            return false
-        }
-
         if (!SemanticConsistencyValidator.canAuthorizeTimer(scanResult)) {
             return false
         }
 
-        return scanResult.detectedSigns.any { sign ->
-            !SignCandidateValidator.isDemoOrSampleCrop(sign.croppedImageUri, sign.isDemo, sign.id) &&
-                    (sign.isUncertain || SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid)
+        if (scanResult.detectedSigns.isNotEmpty()) {
+            return scanResult.detectedSigns.any { sign ->
+                !SignCandidateValidator.isDemoOrSampleCrop(sign.croppedImageUri, sign.isDemo, sign.id) &&
+                        (sign.isUncertain || SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid)
+            }
         }
+
+        // Standalone scanResult with empty detectedSigns must have time rule evidence in parkingRules
+        val combinedRules = scanResult.parkingRules.joinToString(" ")
+        return EvidenceAnchoringValidator.hasTimeRuleEvidence(combinedRules)
     }
 }

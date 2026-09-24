@@ -1,14 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- Curb 'C' / Shield Emblem Foreground -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,30 C40.7,30 30,40.7 30,54 C30,67.3 40.7,78 54,78 C62.5,78 69.8,73.6 74,66.8 L66.5,62.2 C63.7,66.8 59.2,69.5 54,69.5 C45.4,69.5 38.5,62.6 38.5,54 C38.5,45.4 45.4,38.5 54,38.5 C59.2,38.5 63.7,41.2 66.5,45.8 L74,41.2 C69.8,34.4 62.5,30 54,30 Z" />
-    <path
-        android:fillColor="#34D399"
-        android:pathData="M60,48 L72,48 L72,52 L60,52 Z" />
-</vector>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="66dp"
+        android:height="66dp"
+        android:drawable="@drawable/img_curb_app_icon_1790081266276"
+        android:gravity="center" />
+</layer-list>
+

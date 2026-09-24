@@ -30,7 +30,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.CurbCard
-import com.example.ui.components.CurbSecondaryButton
 import com.example.ui.components.CurbSettingsDivider
 import com.example.ui.components.CurbSettingsRow
 import com.example.ui.components.CurbTopAppBar
@@ -44,7 +43,6 @@ import com.example.ui.theme.CurbSurface
 fun HelpSupportScreen(
     onPrivacyClicked: () -> Unit,
     onTermsClicked: () -> Unit,
-    onContactSupport: () -> Unit,
     onBack: () -> Unit
 ) {
     Column(
@@ -127,16 +125,6 @@ fun HelpSupportScreen(
                         )
                     }
                 }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                CurbSecondaryButton(
-                    text = "Contact Support Team",
-                    onClick = onContactSupport,
-                    testTag = "contact_support_button"
-                )
-                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

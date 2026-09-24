@@ -392,13 +392,26 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     fun extendParkingSession(sessionId: Long, additionalMinutes: Int, currentEndTime: Long) {
         viewModelScope.launch {
-            repository.extendActiveSession(sessionId, additionalMinutes, currentEndTime)
+            val success = repository.extendActiveSession(sessionId, additionalMinutes, currentEndTime)
+            if (success && _targetSession.value?.id == sessionId) {
+                val updated = repository.getSessionById(sessionId)
+                if (updated != null) {
+                    _targetSession.value = updated
+                }
+            }
         }
     }
 
     fun updateSessionReminder(sessionId: Long, reminderMinutes: Int) {
         viewModelScope.launch {
             repository.updateSessionReminder(sessionId, reminderMinutes)
+            if (_targetSession.value?.id == sessionId) {
+                _targetSession.value = _targetSession.value?.copy(reminderMinutesBefore = reminderMinutes)
+            }
+            val updated = repository.getSessionById(sessionId)
+            if (updated != null && _targetSession.value?.id == sessionId) {
+                _targetSession.value = updated
+            }
         }
     }
 

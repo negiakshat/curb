@@ -5,9 +5,6 @@ import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,14 +36,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalParking
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -61,7 +54,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -151,19 +143,6 @@ fun ParkingTimerScreen(
     var showReminderSheet by remember { mutableStateOf(false) }
     var showRulesSheet by remember { mutableStateOf(false) }
     var showMapSheet by remember { mutableStateOf(false) }
-    var showMoreMenu by remember { mutableStateOf(false) }
-    var isNotificationBannerVisible by remember { mutableStateOf(true) }
-
-    LaunchedEffect(effectiveSession?.id, effectiveSession?.isActive) {
-        if (effectiveSession?.isActive != true) {
-            showMoreMenu = false
-        }
-    }
-
-    // State for reminder duration selection
-    var selectedReminderMinutes by remember(effectiveSession?.reminderMinutesBefore) {
-        mutableIntStateOf(effectiveSession?.reminderMinutesBefore ?: 15)
-    }
 
     val scrollState = rememberScrollState()
 
@@ -175,7 +154,7 @@ fun ParkingTimerScreen(
             .navigationBarsPadding()
             .testTag("parking_timer_screen")
     ) {
-        // 1. TOP APP BAR: Back button | "Parking Timer" | 3-dots Overflow Menu
+        // 1. TOP APP BAR: Back button | "Parking Timer"
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -211,70 +190,8 @@ fun ParkingTimerScreen(
                 overflow = TextOverflow.Ellipsis
             )
 
-            if (effectiveSession != null && effectiveSession.isActive) {
-                // Circular More Menu Button
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(BentoWhite)
-                        .border(1.dp, BentoBorder, CircleShape)
-                        .clickable { showMoreMenu = true }
-                        .testTag("timer_more_menu_button"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreHoriz,
-                        contentDescription = "More options",
-                        tint = BentoTextPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-
-                    DropdownMenu(
-                        expanded = showMoreMenu,
-                        onDismissRequest = { showMoreMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Set Custom Reminder", color = BentoTextPrimary) },
-                            leadingIcon = { Icon(Icons.Default.NotificationsNone, null, tint = BentoTextSecondary) },
-                            onClick = {
-                                showMoreMenu = false
-                                showReminderSheet = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("View Parking Rules", color = BentoTextPrimary) },
-                            leadingIcon = { Icon(Icons.Default.Info, null, tint = BentoTextSecondary) },
-                            onClick = {
-                                showMoreMenu = false
-                                showRulesSheet = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Share Parking Details", color = BentoTextPrimary) },
-                            leadingIcon = { Icon(Icons.Default.Share, null, tint = BentoTextSecondary) },
-                            onClick = {
-                                showMoreMenu = false
-                                Toast.makeText(
-                                    context,
-                                    "Parking location & expiry copied to clipboard!",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("End Session", color = CurbError) },
-                            onClick = {
-                                showMoreMenu = false
-                                onEndSession(effectiveSession.id)
-                            }
-                        )
-                    }
-                }
-            } else {
-                // Same-width invisible placeholder to keep header balanced
-                Box(modifier = Modifier.size(44.dp))
-            }
+            // Equal 44.dp width invisible placeholder to balance [ Back ] title alignment
+            Box(modifier = Modifier.size(44.dp))
         }
 
         if (effectiveSession != null && effectiveSession.isActive) {
@@ -630,8 +547,9 @@ fun ParkingTimerScreen(
                         )
 
                         // Row 2: Reminder
-                        val reminderText = if (selectedReminderMinutes > 0) {
-                            "$selectedReminderMinutes min before expiry"
+                        val currentReminderMins = effectiveSession.reminderMinutesBefore
+                        val reminderText = if (currentReminderMins > 0) {
+                            "$currentReminderMins min before expiry"
                         } else {
                             "Disabled"
                         }
@@ -674,68 +592,6 @@ fun ParkingTimerScreen(
                                 )
                             }
                         )
-                    }
-                }
-
-                // Smart Notification Alert Banner
-                AnimatedVisibility(
-                    visible = isNotificationBannerVisible,
-                    enter = fadeIn(),
-                    exit = fadeOut()
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(RadiusCard),
-                        color = BentoSand,
-                        border = BorderStroke(1.dp, BentoBorder)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = CurbSuccess,
-                                    modifier = Modifier.size(20.dp)
-                                )
-
-                                Column {
-                                    Text(
-                                        text = "Smart push alerts enabled",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = BentoTextPrimary
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "We'll notify you before your parking limit expires.",
-                                        fontSize = 12.sp,
-                                        color = BentoTextSecondary
-                                    )
-                                }
-                            }
-
-                            IconButton(
-                                onClick = { isNotificationBannerVisible = false },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Dismiss notification banner",
-                                    tint = BentoTextSecondary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
                     }
                 }
 
@@ -948,13 +804,13 @@ fun ParkingTimerScreen(
                     0 to "Turn off reminders"
                 )
 
+                val currentSelectedMins = effectiveSession.reminderMinutesBefore
                 reminderOptions.forEach { (mins, label) ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(RadiusCard))
                             .clickable {
-                                selectedReminderMinutes = mins
                                 onUpdateReminder(effectiveSession.id, mins)
                                 showReminderSheet = false
                                 Toast.makeText(
@@ -970,15 +826,19 @@ fun ParkingTimerScreen(
                         Text(
                             text = label,
                             fontSize = 15.sp,
-                            fontWeight = if (selectedReminderMinutes == mins) FontWeight.Bold else FontWeight.Normal,
+                            fontWeight = if (currentSelectedMins == mins) FontWeight.Bold else FontWeight.Normal,
                             color = BentoTextPrimary
                         )
                         RadioButton(
-                            selected = selectedReminderMinutes == mins,
+                            selected = currentSelectedMins == mins,
                             onClick = {
-                                selectedReminderMinutes = mins
                                 onUpdateReminder(effectiveSession.id, mins)
                                 showReminderSheet = false
+                                Toast.makeText(
+                                    context,
+                                    if (mins > 0) "Reminder set for $mins min before expiry" else "Reminder disabled",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             },
                             colors = RadioButtonDefaults.colors(selectedColor = BentoPrimary)
                         )

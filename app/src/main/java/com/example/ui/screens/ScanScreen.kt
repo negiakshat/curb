@@ -14,7 +14,6 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
@@ -24,9 +23,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,7 +37,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -73,16 +70,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -104,9 +97,7 @@ import com.example.ui.theme.BentoWhite
 import com.example.ui.theme.CurbBlack
 import com.example.ui.theme.CurbError
 import com.example.ui.theme.CurbErrorContainer
-import com.example.ui.theme.CurbSuccess
 import com.example.ui.theme.CurbWhite
-import com.example.ui.theme.RadiusChip
 import com.example.ui.theme.RadiusHero
 import com.example.ui.theme.RadiusNested
 import java.nio.ByteBuffer
@@ -143,10 +134,19 @@ fun ScanScreen(
 
     var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
     var liveDetectedBoxes by remember { mutableStateOf<List<SignBoundingBox>>(emptyList()) }
-    // CRITICAL ISSUE 9: Surface camera bind failure instead of silently swallowing
     var cameraError by remember { mutableStateOf<String?>(null) }
-    // CRITICAL ISSUE 8: Camera lifecycle cleanup — track the camera provider for disposal
     var cameraProviderRef by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var previewViewRef by remember { mutableStateOf<PreviewView?>(null) }
+
+    var frozenPreviewBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var isPreviewFrozen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isProcessing, scanError) {
+        if (!isProcessing && scanError == null) {
+            frozenPreviewBitmap = null
+            isPreviewFrozen = false
+        }
+    }
 
     // Synchronize physical torch with state
     LaunchedEffect(flashEnabled, activeCamera) {
@@ -177,13 +177,14 @@ fun ScanScreen(
             .background(CurbBlack)
             .testTag("scan_screen")
     ) {
-        // REAL FULL-SCREEN CAMERA VIEWFINDER WITH REAL-TIME ON-DEVICE SIGN ANALYSIS
+        // 1. REAL FULL-SCREEN CAMERA VIEWFINDER WITH REAL-TIME ON-DEVICE SIGN ANALYSIS
         if (hasCameraPermission) {
             AndroidView(
                 factory = { ctx ->
                     val previewView = PreviewView(ctx).apply {
                         scaleType = PreviewView.ScaleType.FIT_CENTER
                     }
+                    previewViewRef = previewView
                     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                     cameraProviderFuture.addListener({
                         try {
@@ -223,7 +224,6 @@ fun ScanScreen(
                             activeCamera = cameraInstance
                             cameraProviderRef = cameraProvider
                         } catch (e: Exception) {
-                            // CRITICAL ISSUE 9: Surface camera bind failure
                             android.os.Handler(android.os.Looper.getMainLooper()).post {
                                 cameraError = "Camera initialization failed. Please grant camera permission and try again."
                             }
@@ -234,13 +234,14 @@ fun ScanScreen(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            // TRUTHFUL CAMERA UNAVAILABLE STATE — never claim the viewfinder is active
             ScanCameraUnavailable()
         }
 
-        // CRITICAL ISSUE 8: Camera lifecycle cleanup — unbind camera when leaving composition
+        // Camera lifecycle cleanup — unbind camera when leaving composition
         DisposableEffect(Unit) {
             onDispose {
+                frozenPreviewBitmap = null
+                isPreviewFrozen = false
                 try {
                     activeCamera = null
                     cameraProviderRef?.unbindAll()
@@ -248,25 +249,43 @@ fun ScanScreen(
             }
         }
 
-        // SUBTLE STATIC SIGN FRAMING GUIDE (internal ML boxes are never drawn)
-        if (hasCameraPermission) {
-            ScanFramingGuide(
-                isSignDetected = liveDetectedBoxes.isNotEmpty(),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .offset(y = (-24).dp)
+        // 2. FROZEN PREVIEW OVERLAY AT SHUTTER TAP MOMENT
+        if (isPreviewFrozen && frozenPreviewBitmap != null) {
+            Image(
+                bitmap = frozenPreviewBitmap!!.asImageBitmap(),
+                contentDescription = "Frozen Camera Preview",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
             )
         }
 
-        // MINIMAL FLOATING TOP HUD
+        // 3. SUBTLE PROCESSING SCRIM & SPINNER (NO CARD, NO LARGE TEXT)
+        AnimatedVisibility(
+            visible = isProcessing,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(CurbBlack.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = BentoPrimary,
+                    strokeWidth = 3.5.dp,
+                    modifier = Modifier.size(40.dp)
+                )
+            }
+        }
+
+        // 4. MINIMAL FLOATING TOP HUD
         ScanTopHud(
-            isPro = isPro,
-            usageInfo = usageInfo,
             onBack = onBack,
             onHelp = { showHelpSheet = true }
         )
 
-        // FLOATING BOTTOM CAMERA CONTROLS
+        // 5. FLOATING BOTTOM CAMERA CONTROLS
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -275,10 +294,6 @@ fun ScanScreen(
                 .padding(bottom = 26.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            ScanMicroCaption(isSignDetected = liveDetectedBoxes.isNotEmpty())
-
-            Spacer(modifier = Modifier.height(18.dp))
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -288,18 +303,26 @@ fun ScanScreen(
             ) {
                 // Photo picker button — first-class alternative capture path
                 IconButton(
-                    onClick = { galleryLauncher.launch("image/*") },
+                    onClick = {
+                        if (!isProcessing && !isPreviewFrozen) {
+                            galleryLauncher.launch("image/*")
+                        }
+                    },
+                    enabled = !isProcessing && !isPreviewFrozen,
                     modifier = Modifier
                         .size(52.dp)
                         .clip(CircleShape)
-                        .background(CurbWhite.copy(alpha = 0.22f))
+                        .background(
+                            if (isProcessing || isPreviewFrozen) CurbWhite.copy(alpha = 0.12f)
+                            else CurbWhite.copy(alpha = 0.22f)
+                        )
                         .border(1.dp, CurbWhite.copy(alpha = 0.28f), CircleShape)
                         .testTag("gallery_picker_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.PhotoLibrary,
                         contentDescription = "Pick photo from gallery",
-                        tint = CurbWhite,
+                        tint = if (isProcessing || isPreviewFrozen) CurbWhite.copy(alpha = 0.5f) else CurbWhite,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -308,7 +331,7 @@ fun ScanScreen(
                 val isSignDetected = liveDetectedBoxes.isNotEmpty()
 
                 val ringColor by animateColorAsState(
-                    targetValue = if (isSignDetected) CurbSuccess else BentoPrimaryDark,
+                    targetValue = if (isSignDetected) ScanSuccessOnDark else BentoPrimaryDark,
                     animationSpec = spring(),
                     label = "shutterRingColor"
                 )
@@ -321,7 +344,7 @@ fun ScanScreen(
                     label = "shutterScale"
                 )
                 val ringStrokeDp by animateDpAsState(
-                    targetValue = if (isSignDetected) 5.dp else 3.dp,
+                    targetValue = if (isSignDetected) 6.dp else 3.dp,
                     animationSpec = spring(),
                     label = "shutterRingStroke"
                 )
@@ -335,10 +358,23 @@ fun ScanScreen(
                         }
                         .shadow(10.dp, CircleShape)
                         .clip(CircleShape)
-                        .background(CurbWhite)
-                        .clickable {
+                        .background(if (isProcessing || isPreviewFrozen) CurbWhite.copy(alpha = 0.6f) else CurbWhite)
+                        .clickable(enabled = !isProcessing && !isPreviewFrozen) {
                             val capture = imageCapture
+
+                            // STEP 1 — immediate visual freeze
+                            val previewBitmap = previewViewRef?.bitmap
+                            if (previewBitmap != null) {
+                                frozenPreviewBitmap = previewBitmap
+                                isPreviewFrozen = true
+                            } else {
+                                android.util.Log.d("CurbPipeline", "CurbPipeline: Preview freeze frame unavailable")
+                            }
+
+                            // STEP 2 — snapshot live detection state
                             val capturedBoxesSnapshot = liveDetectedBoxes.toList()
+
+                            // STEP 3 — start REAL high-quality capture
                             if (capture != null) {
                                 capture.takePicture(
                                     SignDetectionService.getAnalysisExecutor(),
@@ -396,8 +432,24 @@ fun ScanScreen(
                 }
 
                 // Symmetrical Flashlight Toggle
+                val flashBurstScale by animateFloatAsState(
+                    targetValue = if (flashEnabled) 1f else 0.5f,
+                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 350f),
+                    label = "flashBurstScale"
+                )
+                val flashBurstAlpha by animateFloatAsState(
+                    targetValue = if (flashEnabled) 1f else 0f,
+                    animationSpec = spring(),
+                    label = "flashBurstAlpha"
+                )
+
                 IconButton(
-                    onClick = { flashEnabled = !flashEnabled },
+                    onClick = {
+                        if (!isProcessing && !isPreviewFrozen) {
+                            flashEnabled = !flashEnabled
+                        }
+                    },
+                    enabled = !isProcessing && !isPreviewFrozen,
                     modifier = Modifier
                         .size(52.dp)
                         .clip(CircleShape)
@@ -411,74 +463,38 @@ fun ScanScreen(
                         )
                         .testTag("flash_toggle_button")
                 ) {
-                    Icon(
-                        imageVector = if (flashEnabled) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                        contentDescription = "Toggle Flash",
-                        tint = if (flashEnabled) BentoPrimaryDark else CurbWhite,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-        }
-
-        // REAL HYBRID PROCESSING MODAL OVERLAY
-        AnimatedVisibility(
-            visible = isProcessing,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(CurbBlack.copy(alpha = 0.72f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(RadiusHero),
-                    color = BentoWhite,
-                    border = BorderStroke(1.dp, BentoBorder),
-                    shadowElevation = 14.dp
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 28.dp)
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        CircularProgressIndicator(
-                            color = BentoPrimary,
-                            strokeWidth = 3.5.dp,
-                            modifier = Modifier.size(46.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(22.dp))
-
-                        AnimatedContent(
-                            targetState = processingStatusText,
-                            transitionSpec = { fadeIn() togetherWith fadeOut() },
-                            label = "processingStatusTextAnimation"
-                        ) { targetText ->
-                            Text(
-                                text = targetText,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BentoTextPrimary,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        if (flashBurstAlpha > 0f) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .graphicsLayer {
+                                        scaleX = flashBurstScale
+                                        scaleY = flashBurstScale
+                                        alpha = flashBurstAlpha
+                                    }
+                                    .background(
+                                        color = BentoPrimary.copy(alpha = 0.35f),
+                                        shape = CircleShape
+                                    )
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "Checking parking regulations…",
-                            fontSize = 13.sp,
-                            color = BentoTextSecondary,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        Icon(
+                            imageVector = if (flashEnabled) Icons.Default.FlashOff else Icons.Default.FlashOn,
+                            contentDescription = "Toggle Flash",
+                            tint = if (flashEnabled) BentoPrimaryDark else CurbWhite,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
             }
         }
 
-        // CAMERA ERROR BANNER (ISSUE 9)
+        // CAMERA ERROR BANNER
         AnimatedVisibility(
             visible = cameraError != null,
             enter = fadeIn() + slideInVertically { -it },
@@ -506,7 +522,11 @@ fun ScanScreen(
         ) {
             ScanAlert(
                 message = scanError ?: "",
-                onDismiss = onClearScanError
+                onDismiss = {
+                    frozenPreviewBitmap = null
+                    isPreviewFrozen = false
+                    onClearScanError()
+                }
             )
         }
     }
@@ -576,12 +596,10 @@ fun ScanScreen(
 }
 
 /**
- * Compact floating Bento header. Back / identity / quota / help only — the camera stays dominant.
+ * Clean, lightweight top HUD containing only Back (left) and Help (right).
  */
 @Composable
 private fun ScanTopHud(
-    isPro: Boolean,
-    usageInfo: ScanUsageInfo,
     onBack: () -> Unit,
     onHelp: () -> Unit
 ) {
@@ -609,227 +627,22 @@ private fun ScanTopHud(
             )
         }
 
-        Column(
-            modifier = Modifier.align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "CURB",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 3.sp,
-                color = CurbWhite
-            )
-            Text(
-                text = "SCAN",
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 4.sp,
-                color = CurbWhite.copy(alpha = 0.72f)
-            )
-        }
-
-        Row(
-            modifier = Modifier.align(Alignment.CenterEnd),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ScanQuotaIndicator(usageInfo = usageInfo, isPro = isPro)
-
-            IconButton(
-                onClick = onHelp,
-                modifier = Modifier
-                    .size(44.dp)
-                    .shadow(4.dp, CircleShape)
-                    .background(BentoWhite.copy(alpha = 0.88f), CircleShape)
-                    .border(1.dp, BentoBorder.copy(alpha = 0.8f), CircleShape)
-                    .testTag("scan_help_button")
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.HelpOutline,
-                    contentDescription = "Scan Help",
-                    tint = BentoPrimaryDark,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-    }
-}
-
-/**
- * Truthful scan quota visualization driven by the real [ScanUsageInfo].
- * Free users get a ring with their remaining credits; Pro is a badge, never a fake number.
- */
-@Composable
-private fun ScanQuotaIndicator(usageInfo: ScanUsageInfo, isPro: Boolean) {
-    if (isPro) {
-        Surface(
-            shape = RoundedCornerShape(RadiusChip),
-            color = BentoWhite.copy(alpha = 0.88f),
-            border = BorderStroke(1.dp, BentoBorder.copy(alpha = 0.8f)),
-            shadowElevation = 4.dp,
-            modifier = Modifier.testTag("scan_usage_indicator")
-        ) {
-            Text(
-                text = "PRO",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp,
-                color = BentoPrimaryDark,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-            )
-        }
-    } else {
-        val remaining = usageInfo.scansRemaining
-        val limitReached = usageInfo.isLimitReached
-        val remainingFraction =
-            if (usageInfo.monthlyLimit > 0) remaining.toFloat() / usageInfo.monthlyLimit.toFloat() else 0f
-        val ringColor = if (limitReached) CurbError else CurbSuccess
-
-        Box(
+        IconButton(
+            onClick = onHelp,
             modifier = Modifier
-                .size(42.dp)
+                .align(Alignment.CenterEnd)
+                .size(44.dp)
                 .shadow(4.dp, CircleShape)
                 .background(BentoWhite.copy(alpha = 0.88f), CircleShape)
                 .border(1.dp, BentoBorder.copy(alpha = 0.8f), CircleShape)
-                .semantics {
-                    contentDescription = if (limitReached) {
-                        "No scans remaining this month"
-                    } else {
-                        "$remaining scans remaining"
-                    }
-                }
-                .testTag("scan_usage_indicator"),
-            contentAlignment = Alignment.Center
+                .testTag("scan_help_button")
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val strokeWidth = 3.dp.toPx()
-                val inset = strokeWidth / 2f
-                val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
-
-                drawArc(
-                    color = BentoBorder,
-                    startAngle = -90f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    topLeft = Offset(inset, inset),
-                    size = arcSize,
-                    style = Stroke(width = strokeWidth)
-                )
-                drawArc(
-                    color = ringColor,
-                    startAngle = -90f,
-                    sweepAngle = 360f * remainingFraction.coerceIn(0f, 1f),
-                    useCenter = false,
-                    topLeft = Offset(inset, inset),
-                    size = arcSize,
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                )
-            }
-
-            Text(
-                text = "$remaining",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = BentoPrimaryDark
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.HelpOutline,
+                contentDescription = "Scan Help",
+                tint = BentoPrimaryDark,
+                modifier = Modifier.size(20.dp)
             )
-        }
-    }
-}
-
-/**
- * Static four-corner framing guide. Never draws raw ML bounding boxes; it only brightens
- * when the real live detection list is non-empty.
- */
-@Composable
-private fun ScanFramingGuide(
-    isSignDetected: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val guideAlpha by animateFloatAsState(
-        targetValue = if (isSignDetected) 0.95f else 0.4f,
-        animationSpec = spring(),
-        label = "guideAlpha"
-    )
-    val guideColor = if (isSignDetected) BentoPeach else CurbWhite
-
-    Box(
-        modifier = modifier.size(width = 240.dp, height = 168.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val bracket = 30.dp.toPx()
-            val strokeWidth = 2.5.dp.toPx()
-            val color = guideColor.copy(alpha = guideAlpha)
-            val right = size.width
-            val bottom = size.height
-
-            // Top-left
-            drawLine(color, Offset(0f, 0f), Offset(bracket, 0f), strokeWidth, StrokeCap.Round)
-            drawLine(color, Offset(0f, 0f), Offset(0f, bracket), strokeWidth, StrokeCap.Round)
-            // Top-right
-            drawLine(color, Offset(right, 0f), Offset(right - bracket, 0f), strokeWidth, StrokeCap.Round)
-            drawLine(color, Offset(right, 0f), Offset(right, bracket), strokeWidth, StrokeCap.Round)
-            // Bottom-left
-            drawLine(color, Offset(0f, bottom), Offset(bracket, bottom), strokeWidth, StrokeCap.Round)
-            drawLine(color, Offset(0f, bottom), Offset(0f, bottom - bracket), strokeWidth, StrokeCap.Round)
-            // Bottom-right
-            drawLine(color, Offset(right, bottom), Offset(right - bracket, bottom), strokeWidth, StrokeCap.Round)
-            drawLine(color, Offset(right, bottom), Offset(right, bottom - bracket), strokeWidth, StrokeCap.Round)
-        }
-
-        Text(
-            text = "PARKING SIGN",
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 2.5.sp,
-            color = CurbWhite.copy(alpha = guideAlpha * 0.8f)
-        )
-    }
-}
-
-/**
- * Tiny contextual instruction driven by the real live detection result.
- */
-@Composable
-private fun ScanMicroCaption(isSignDetected: Boolean) {
-    val dotColor by animateColorAsState(
-        targetValue = if (isSignDetected) ScanSuccessOnDark else CurbWhite.copy(alpha = 0.5f),
-        animationSpec = spring(),
-        label = "captionDotColor"
-    )
-
-    Surface(
-        shape = RoundedCornerShape(RadiusChip),
-        color = CurbBlack.copy(alpha = 0.55f),
-        border = BorderStroke(
-            1.dp,
-            if (isSignDetected) ScanSuccessOnDark.copy(alpha = 0.55f) else CurbWhite.copy(alpha = 0.18f)
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .background(dotColor, CircleShape)
-            )
-
-            AnimatedContent(
-                targetState = isSignDetected,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "scanCaptionAnimation"
-            ) { detected ->
-                Text(
-                    text = if (detected) "Sign detected — tap to scan" else "Point at a parking sign",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (detected) ScanSuccessOnDark else CurbWhite.copy(alpha = 0.9f)
-                )
-            }
         }
     }
 }
@@ -888,9 +701,7 @@ private fun ScanAlert(message: String, onDismiss: () -> Unit) {
 }
 
 /**
- * Truthful camera-permission state. Camera authorization is requested elsewhere in the app,
- * so this screen explains the state and points at the working gallery path instead of
- * pretending the viewfinder is running.
+ * Camera unavailable state.
  */
 @Composable
 private fun ScanCameraUnavailable() {

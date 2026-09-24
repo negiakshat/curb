@@ -95,13 +95,6 @@ sealed class BottomNavItem(
         unselectedIcon = Icons.Outlined.CameraAlt,
         testTag = "nav_tab_scan"
     )
-    object Ask : BottomNavItem(
-        route = Routes.ASK_CURB,
-        label = "Ask",
-        selectedIcon = Icons.Filled.AutoAwesome,
-        unselectedIcon = Icons.Outlined.AutoAwesome,
-        testTag = "nav_tab_ask"
-    )
     object Find : BottomNavItem(
         route = Routes.FIND_MY_CAR,
         label = "Find",
@@ -153,7 +146,6 @@ fun CurbApp(
     val bottomNavItems = listOf(
         BottomNavItem.Home,
         BottomNavItem.Scan,
-        BottomNavItem.Ask,
         BottomNavItem.Find,
         BottomNavItem.You
     )
@@ -163,7 +155,6 @@ fun CurbApp(
     val showBottomBar = (currentRoute in listOf(
         Routes.HOME,
         Routes.SCAN,
-        Routes.ASK_CURB,
         Routes.FIND_MY_CAR,
         Routes.YOU,
         Routes.ACTIVITY

@@ -10,6 +10,7 @@ object Routes {
     const val SCAN_OUTPUT = "scan_output"
     const val PARKING_DETAILS = "parking_details"
     const val ASK_CURB = "ask_curb"
+    const val CONTEXTUAL_COPILOT = "contextual_copilot"
     const val ACTIVITY = "activity"
     const val YOU = "you"
     const val ACCOUNT_INFO = "account_info"

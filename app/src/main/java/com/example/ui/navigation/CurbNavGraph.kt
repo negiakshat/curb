@@ -16,6 +16,7 @@ import com.example.ui.screens.AboutCurbScreen
 import com.example.ui.screens.AccountInfoScreen
 import com.example.ui.screens.ActivityScreen
 import com.example.ui.screens.AskCurbScreen
+import com.example.ui.screens.ContextualCopilotScreen
 import com.example.ui.screens.CurbProPaywallScreen
 import com.example.ui.screens.FindMyCarScreen
 import com.example.ui.screens.HelpSupportScreen
@@ -122,7 +123,11 @@ fun CurbNavGraph(
                 onNameSubmitted = { name ->
                     viewModel.setUserName(name)
                     navController.navigate(Routes.PERMISSIONS)
-                }
+                },
+                onBack = {
+                    navController.popBackStack()
+                },
+                canNavigateBack = navController.previousBackStackEntry != null
             )
         }
 
@@ -134,6 +139,9 @@ fun CurbNavGraph(
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.WELCOME) { inclusive = true }
                     }
+                },
+                onBackToNameSetup = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -314,7 +322,7 @@ fun CurbNavGraph(
                     }
                 },
                 onAskCurb = {
-                    navController.navigate(Routes.ASK_CURB)
+                    navController.navigate(Routes.CONTEXTUAL_COPILOT)
                 },
                 onRetake = {
                     navController.popBackStack()
@@ -381,6 +389,9 @@ fun CurbNavGraph(
                 onReportIssue = {
                     Toast.makeText(context, "Thank you! Parking report submitted for review.", Toast.LENGTH_LONG).show()
                 },
+                onAskAboutThisSign = {
+                    navController.navigate(Routes.CONTEXTUAL_COPILOT)
+                },
                 onUpgradeToPro = {
                     navController.navigate(Routes.CURB_PRO_PAYWALL)
                 },
@@ -390,15 +401,38 @@ fun CurbNavGraph(
             )
         }
 
-        // 09. ASK CURB AI
-        composable(Routes.ASK_CURB) {
-            AskCurbScreen(
+        // 09. CONTEXTUAL COPILOT
+        composable(Routes.CONTEXTUAL_COPILOT) {
+            ContextualCopilotScreen(
                 messages = chatMessages,
                 isLoading = isChatLoading,
                 scanResult = currentScanResult,
                 usageInfo = chatUsageInfo,
                 isPro = isUserPro,
-                userName = userProfile.name,
+                onSendMessage = { query ->
+                    viewModel.sendChatMessage(query)
+                },
+                onUpgradeToPro = {
+                    navController.navigate(Routes.CURB_PRO_PAYWALL)
+                },
+                onBack = {
+                    if (!navController.popBackStack()) {
+                        navController.navigate(Routes.HOME) {
+                            popUpTo(Routes.HOME) { inclusive = true }
+                        }
+                    }
+                }
+            )
+        }
+
+        // 09b. ASK CURB (ALIAS / BACKWARD COMPATIBILITY)
+        composable(Routes.ASK_CURB) {
+            ContextualCopilotScreen(
+                messages = chatMessages,
+                isLoading = isChatLoading,
+                scanResult = currentScanResult,
+                usageInfo = chatUsageInfo,
+                isPro = isUserPro,
                 onSendMessage = { query ->
                     viewModel.sendChatMessage(query)
                 },
@@ -572,9 +606,6 @@ fun CurbNavGraph(
             HelpSupportScreen(
                 onPrivacyClicked = { navController.navigate(Routes.PRIVACY_POLICY) },
                 onTermsClicked = { navController.navigate(Routes.TERMS_OF_SERVICE) },
-                onContactSupport = {
-                    Toast.makeText(context, "Contacting support at support@curbparking.app", Toast.LENGTH_LONG).show()
-                },
                 onBack = { navController.popBackStack() }
             )
         }

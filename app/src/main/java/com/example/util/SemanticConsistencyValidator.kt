@@ -253,9 +253,8 @@ object SemanticConsistencyValidator {
     private fun isPermitOnlyOrRequired(ocrUpper: String): Boolean {
         val isPermitOnly = Regex("""PERMIT\s+(?:PARKING\s+)?ONLY""").containsMatchIn(ocrUpper)
         val isPermitRequired = Regex("""PERMIT\s+REQUIRED""").containsMatchIn(ocrUpper)
-        val isResidentPermit = Regex("""RESIDENT\s+PERMIT""").containsMatchIn(ocrUpper)
-        val isAreaPermit = Regex("""AREA\s+PERMIT""").containsMatchIn(ocrUpper)
-        return isPermitOnly || isPermitRequired || isResidentPermit || isAreaPermit
+        val isResidentOnly = Regex("""RESIDENT\s+(?:PERMIT\s+)?ONLY""").containsMatchIn(ocrUpper)
+        return isPermitOnly || isPermitRequired || isResidentOnly
     }
 
     private fun extractAllowedUntilFromOcr(ocrText: String): Pair<String, String>? {

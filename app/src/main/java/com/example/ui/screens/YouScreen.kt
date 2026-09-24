@@ -123,21 +123,18 @@ fun YouScreen(
                     shape = RoundedCornerShape(RadiusHero),
                     colors = CardDefaults.cardColors(containerColor = BentoWhite),
                     border = BorderStroke(1.dp, BentoBorder),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onAccountInfoClicked)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             // Avatar container
                             Box(
@@ -199,13 +196,6 @@ fun YouScreen(
                                 )
                             }
                         }
-
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = BentoTextSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
                     }
                 }
 
@@ -309,8 +299,8 @@ fun YouScreen(
                             CurbSettingsDivider()
                             CurbSettingsRow(
                                 icon = Icons.Default.Info,
-                                title = "About Curb AI",
-                                subtitle = "Version 1.0.0 • AI Parking Assistant",
+                                title = "About Curb",
+                                subtitle = "Version 1.0.0",
                                 onClick = onAboutCurbClicked,
                                 testTag = "setting_about_curb"
                             )

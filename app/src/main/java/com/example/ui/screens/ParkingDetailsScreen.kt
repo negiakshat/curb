@@ -63,6 +63,7 @@ import com.example.data.model.ScanVerdict
 import com.example.ui.components.CurbNoteDialog
 import com.example.ui.components.CurbNoteSection
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.components.CurbSecondaryButton
 import com.example.ui.components.CurbProFeatureBottomSheet
 import com.example.ui.components.CurbVerdictBadge
 import com.example.ui.components.IndividualSignDetailSheet
@@ -95,6 +96,7 @@ fun ParkingDetailsScreen(
     onDeleteNote: () -> Unit = {},
     onStartParkingSession: (durationMinutes: Int, allowedUntilTime: String, timerBasis: String, ruleSummary: String) -> Unit,
     onReportIssue: () -> Unit,
+    onAskAboutThisSign: () -> Unit = {},
     onUpgradeToPro: () -> Unit = {},
     onBack: () -> Unit
 ) {
@@ -525,10 +527,10 @@ fun ParkingDetailsScreen(
                 }
             }
 
-            // 9. CURB AI EXPLANATION
+            // 9. CURB EXPLANATION
             item {
                 Text(
-                    text = "Curb AI explanation",
+                    text = "Curb explanation",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = BentoTextPrimary,
@@ -551,6 +553,13 @@ fun ParkingDetailsScreen(
                         modifier = Modifier.padding(18.dp)
                     )
                 }
+                Spacer(modifier = Modifier.height(14.dp))
+
+                CurbSecondaryButton(
+                    text = "ASK ABOUT THIS SIGN",
+                    onClick = onAskAboutThisSign,
+                    testTag = "contextual_copilot_button"
+                )
                 Spacer(modifier = Modifier.height(20.dp))
             }
 

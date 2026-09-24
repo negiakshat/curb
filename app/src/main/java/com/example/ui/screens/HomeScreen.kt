@@ -38,7 +38,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -104,7 +109,7 @@ fun HomeScreen(
     onFindMyCarClicked: () -> Unit = {},
     onSavedPlacesClicked: () -> Unit,
     onActivityClicked: () -> Unit,
-    onAskCurbClicked: () -> Unit,
+    onAskCurbClicked: () -> Unit = {},
     onScanResultClicked: (ScanResult) -> Unit,
     onNotificationsClicked: () -> Unit,
     hasUnreadNotifications: Boolean = false,
@@ -124,6 +129,41 @@ fun HomeScreen(
         SimpleDateFormat("EEEE, MMM d", Locale.getDefault()).format(Date())
     }
 
+    // 1-second ticker for live active timer update
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(activeSession?.id, activeSession?.isActive) {
+        if (activeSession?.isActive == true) {
+            while (true) {
+                nowMillis = System.currentTimeMillis()
+                delay(1000)
+            }
+        }
+    }
+
+    val liveRemainingMillis = remember(nowMillis, activeSession) {
+        if (activeSession != null && activeSession.isActive) {
+            maxOf(0L, activeSession.endTime - nowMillis)
+        } else {
+            0L
+        }
+    }
+
+    val liveRemainingFormatted = remember(nowMillis, activeSession) {
+        if (activeSession != null && activeSession.isActive) {
+            val totalSeconds = liveRemainingMillis / 1000
+            val hours = totalSeconds / 3600
+            val minutes = (totalSeconds % 3600) / 60
+            if (hours > 0) {
+                "${hours}h ${minutes}m remaining"
+            } else {
+                "${minutes}m remaining"
+            }
+        } else {
+            ""
+        }
+    }
+
     val allowedCount = recentScans.count { it.verdict == ScanVerdict.ALLOWED }
     val restrictedCount = recentScans.count { it.verdict == ScanVerdict.RESTRICTED }
     val ambiguousCount = recentScans.count { it.verdict == ScanVerdict.AMBIGUOUS }
@@ -134,8 +174,8 @@ fun HomeScreen(
             .background(BentoCanvas)
             .statusBarsPadding()
             .testTag("home_screen"),
-        contentPadding = PaddingValues(bottom = 100.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // TOP APP BAR & USER IDENTITY
         item {
@@ -202,24 +242,7 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 val (dotColor, locationLabel) = remember(userLocationResult) {
-                    when (userLocationResult) {
-                        is com.example.data.location.UserLocationResult.Success -> {
-                            val loc = userLocationResult
-                            val cityOrLocality = loc.cityState.ifBlank { loc.locationName }
-                            Pair(CurbSuccess, if (cityOrLocality.isNotBlank() && cityOrLocality != "Current Location") cityOrLocality else "Location active")
-                        }
-                        is com.example.data.location.UserLocationResult.PermissionRequired -> {
-                            Pair(Color(0xFFFF9800), "Location unavailable")
-                        }
-                        is com.example.data.location.UserLocationResult.Unavailable -> {
-                            val msg = userLocationResult.message
-                            if (msg.contains("Checking", ignoreCase = true) || msg.contains("Getting", ignoreCase = true)) {
-                                Pair(Color(0xFFFF9800), "Getting location…")
-                            } else {
-                                Pair(Color(0xFFFF9800), "Location unavailable")
-                            }
-                        }
-                    }
+                    formatHomeLocationLabel(userLocationResult)
                 }
 
                 Row(
@@ -372,7 +395,7 @@ fun HomeScreen(
         }
 
         // ACTIVE PARKING SESSION PROMINENT BANNER (IF SESSION IS ACTIVE)
-        if (activeSession != null && activeSession.isActive && activeSession.remainingMillis > 0) {
+        if (activeSession != null && activeSession.isActive && liveRemainingMillis > 0) {
             item {
                 Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                     Card(
@@ -385,17 +408,15 @@ fun HomeScreen(
                         colors = CardDefaults.cardColors(containerColor = BentoPrimaryDark),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .padding(16.dp)
                         ) {
                             Row(
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                modifier = Modifier.weight(1f)
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -412,7 +433,7 @@ fun HomeScreen(
                                     )
                                 }
 
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -430,12 +451,14 @@ fun HomeScreen(
                                             letterSpacing = 0.5.sp
                                         )
                                     }
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = activeSession.remainingFormatted,
-                                        fontSize = 20.sp,
+                                        text = liveRemainingFormatted,
+                                        fontSize = 22.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = BentoWhite
                                     )
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = activeSession.locationName,
                                         fontSize = 12.sp,
@@ -446,37 +469,80 @@ fun HomeScreen(
                                 }
                             }
 
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                                horizontalAlignment = Alignment.End
-                            ) {
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            if (savedParkingSpot != null) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(38.dp)
+                                            .clip(RoundedCornerShape(RadiusChip))
+                                            .clickable { onParkingTimerClicked() },
+                                        shape = RoundedCornerShape(RadiusChip),
+                                        color = BentoPeach
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "VIEW TIMER",
+                                                color = BentoPrimaryDark,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        }
+                                    }
+
+                                    Surface(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(38.dp)
+                                            .clip(RoundedCornerShape(RadiusChip))
+                                            .clickable { onFindMyCarClicked() },
+                                        shape = RoundedCornerShape(RadiusChip),
+                                        color = BentoWhite.copy(alpha = 0.2f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "FIND CAR",
+                                                color = BentoWhite,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
                                 Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(38.dp)
+                                        .clip(RoundedCornerShape(RadiusChip))
+                                        .clickable { onParkingTimerClicked() },
                                     shape = RoundedCornerShape(RadiusChip),
                                     color = BentoPeach
                                 ) {
-                                    Text(
-                                        text = "VIEW TIMER",
-                                        color = BentoPrimaryDark,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.5.sp,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                    )
-                                }
-
-                                if (savedParkingSpot != null) {
-                                    Surface(
-                                        shape = RoundedCornerShape(RadiusChip),
-                                        color = BentoWhite.copy(alpha = 0.2f),
-                                        modifier = Modifier.clickable { onFindMyCarClicked() }
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = "FIND CAR",
-                                            color = BentoWhite,
-                                            fontSize = 10.sp,
+                                            text = "VIEW TIMER",
+                                            color = BentoPrimaryDark,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.5.sp,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                            letterSpacing = 0.5.sp
                                         )
                                     }
                                 }
@@ -495,7 +561,7 @@ fun HomeScreen(
                     .padding(horizontal = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // ROW 1: Saved Spots + Ask Curb AI
+                // ROW 1: Saved Spots + Parking Timer
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -557,70 +623,7 @@ fun HomeScreen(
                         }
                     }
 
-                    // Tile 2: Ask Curb AI
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(112.dp)
-                            .clip(RoundedCornerShape(RadiusCard))
-                            .clickable { onAskCurbClicked() }
-                            .testTag("bento_ask_curb_tile"),
-                        shape = RoundedCornerShape(RadiusCard),
-                        colors = CardDefaults.cardColors(containerColor = BentoSand),
-                        border = BorderStroke(1.dp, BentoBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(14.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(BentoWhite),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ChatBubbleOutline,
-                                    contentDescription = null,
-                                    tint = BentoPrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-
-                            Column {
-                                Text(
-                                    text = "Ask Curb AI",
-                                    fontSize = 14.sp,
-                                    lineHeight = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BentoTextPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Parking advice",
-                                    fontSize = 11.sp,
-                                    lineHeight = 14.sp,
-                                    color = BentoTextSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // ROW 2: Parking Timer + Find My Car (or Activity)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Tile 3: Parking Timer
+                    // Tile 2: Parking Timer
                     Card(
                         modifier = Modifier
                             .weight(1f)
@@ -676,118 +679,123 @@ fun HomeScreen(
                             }
                         }
                     }
+                }
 
-                    // Tile 4: Find My Car OR Activity History
-                    if (savedParkingSpot != null) {
-                        Card(
+                // ROW 2: Find My Car + Activity
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Tile 3: Find My Car
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(112.dp)
+                            .clip(RoundedCornerShape(RadiusCard))
+                            .clickable { onFindMyCarClicked() }
+                            .testTag("bento_find_my_car_tile"),
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoSand),
+                        border = BorderStroke(1.dp, BentoBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Column(
                             modifier = Modifier
-                                .weight(1f)
-                                .height(112.dp)
-                                .clip(RoundedCornerShape(RadiusCard))
-                                .clickable { onFindMyCarClicked() }
-                                .testTag("bento_find_my_car_tile"),
-                            shape = RoundedCornerShape(RadiusCard),
-                            colors = CardDefaults.cardColors(containerColor = BentoSand),
-                            border = BorderStroke(1.dp, BentoBorder),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                                .fillMaxSize()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(14.dp),
-                                verticalArrangement = Arrangement.SpaceBetween
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(BentoWhite),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(BentoWhite),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Place,
-                                        contentDescription = null,
-                                        tint = BentoPrimaryDark,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.Place,
+                                    contentDescription = null,
+                                    tint = BentoPrimaryDark,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
 
-                                Column {
-                                    Text(
-                                        text = "Find My Car",
-                                        fontSize = 14.sp,
-                                        lineHeight = 18.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = BentoTextPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "Parked location",
-                                        fontSize = 11.sp,
-                                        lineHeight = 14.sp,
-                                        color = BentoTextSecondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                            Column {
+                                Text(
+                                    text = "Find My Car",
+                                    fontSize = 14.sp,
+                                    lineHeight = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BentoTextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (savedParkingSpot != null) "Parked location" else "Save & locate",
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp,
+                                    color = BentoTextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
-                    } else {
-                        Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(112.dp)
-                                .clip(RoundedCornerShape(RadiusCard))
-                                .clickable { onActivityClicked() }
-                                .testTag("bento_activity_tile"),
-                            shape = RoundedCornerShape(RadiusCard),
-                            colors = CardDefaults.cardColors(containerColor = BentoSand),
-                            border = BorderStroke(1.dp, BentoBorder),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(14.dp),
-                                verticalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(BentoWhite),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.History,
-                                        contentDescription = null,
-                                        tint = BentoPrimary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                    }
 
-                                Column {
-                                    Text(
-                                        text = "Activity",
-                                        fontSize = 14.sp,
-                                        lineHeight = 18.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = BentoTextPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "Scan history",
-                                        fontSize = 11.sp,
-                                        lineHeight = 14.sp,
-                                        color = BentoTextSecondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                    // Tile 4: Activity History
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(112.dp)
+                            .clip(RoundedCornerShape(RadiusCard))
+                            .clickable { onActivityClicked() }
+                            .testTag("bento_activity_tile"),
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoSand),
+                        border = BorderStroke(1.dp, BentoBorder),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(BentoWhite),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.History,
+                                    contentDescription = null,
+                                    tint = BentoPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            Column {
+                                Text(
+                                    text = "Activity",
+                                    fontSize = 14.sp,
+                                    lineHeight = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BentoTextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Scan history",
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp,
+                                    color = BentoTextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
                     }
@@ -874,8 +882,8 @@ fun HomeScreen(
                                 )
                                 if (index < recentScans.take(3).lastIndex) {
                                     HorizontalDivider(
-                                        modifier = Modifier.padding(vertical = 10.dp),
-                                        color = BentoBorder.copy(alpha = 0.6f),
+                                        modifier = Modifier.padding(vertical = 8.dp),
+                                        color = BentoBorder.copy(alpha = 0.5f),
                                         thickness = 1.dp
                                     )
                                 }
@@ -951,22 +959,22 @@ fun RecentScanRowItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(RadiusNested))
             .clickable { onClick() }
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.weight(1f)
         ) {
             Box(
                 modifier = Modifier
-                    .size(10.dp)
+                    .size(8.dp)
                     .background(statusColor, CircleShape)
             )
 
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = scan.locationName,
                     fontSize = 14.sp,
@@ -986,7 +994,8 @@ fun RecentScanRowItem(
                         text = statusText,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = statusColor
+                        color = statusColor,
+                        maxLines = 1
                     )
                     Text(
                         text = "•",
@@ -996,13 +1005,15 @@ fun RecentScanRowItem(
                     Text(
                         text = dateStr,
                         fontSize = 11.sp,
-                        color = BentoTextSecondary
+                        color = BentoTextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         CurbVerdictBadge(verdict = scan.verdict)
     }
@@ -1014,4 +1025,54 @@ fun RecentScanCard(
     onClick: () -> Unit
 ) {
     RecentScanRowItem(scan = scan, onClick = onClick)
+}
+
+fun selectUserFacingLocationLabel(
+    locationName: String,
+    cityState: String,
+    formattedDisplay: String
+): String {
+    val rawCoordPattern = Regex("""^\-?\d+(\.\d+)?\s*,\s*\-?\d+(\.\d+)?$""")
+    val gpsPattern = Regex("""^GPS\s*\(.*\)""", RegexOption.IGNORE_CASE)
+
+    fun isValidLabel(text: String): Boolean {
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) return false
+        if (trimmed.equals("Current Location", ignoreCase = true)) return false
+        if (trimmed.equals("Location unavailable", ignoreCase = true)) return false
+        if (rawCoordPattern.matches(trimmed)) return false
+        if (gpsPattern.containsMatchIn(trimmed)) return false
+        if (trimmed.contains("IP", ignoreCase = true) || trimmed.contains("network-provider", ignoreCase = true)) return false
+        return true
+    }
+
+    if (isValidLabel(locationName)) return locationName.trim()
+    if (isValidLabel(cityState)) return cityState.trim()
+    if (isValidLabel(formattedDisplay)) return formattedDisplay.trim()
+
+    return "Location active"
+}
+
+fun formatHomeLocationLabel(result: com.example.data.location.UserLocationResult): Pair<Color, String> {
+    return when (result) {
+        is com.example.data.location.UserLocationResult.Success -> {
+            val label = selectUserFacingLocationLabel(
+                locationName = result.locationName,
+                cityState = result.cityState,
+                formattedDisplay = result.formattedDisplay
+            )
+            Pair(CurbSuccess, label)
+        }
+        is com.example.data.location.UserLocationResult.PermissionRequired -> {
+            Pair(Color(0xFFFF9800), "Location unavailable")
+        }
+        is com.example.data.location.UserLocationResult.Unavailable -> {
+            val msg = result.message
+            if (msg.contains("Checking", ignoreCase = true) || msg.contains("Getting", ignoreCase = true)) {
+                Pair(Color(0xFFFF9800), "Getting location…")
+            } else {
+                Pair(Color(0xFFFF9800), "Location unavailable")
+            }
+        }
+    }
 }

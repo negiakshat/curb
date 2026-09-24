@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.CurbLogo
 import com.example.ui.components.CurbPrimaryButton
+import com.example.ui.components.OnboardingHeader
 import com.example.ui.theme.CurbBackground
 import com.example.ui.theme.CurbBlack
 import com.example.ui.theme.CurbOnSurface
@@ -41,7 +42,9 @@ import com.example.ui.theme.CurbSurface
 @Composable
 fun NameSetupScreen(
     currentName: String,
-    onNameSubmitted: (String) -> Unit
+    onNameSubmitted: (String) -> Unit,
+    onBack: () -> Unit = {},
+    canNavigateBack: Boolean = true
 ) {
     var nameInput by remember { mutableStateOf(currentName.ifEmpty { "Alex" }) }
 
@@ -51,16 +54,23 @@ fun NameSetupScreen(
             .background(CurbBackground)
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 20.dp),
+            .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Spacer(modifier = Modifier.height(16.dp))
+            // SHARED ONBOARDING HEADER (STEP 1 OF 4)
+            OnboardingHeader(
+                currentStep = 1,
+                totalSteps = 4,
+                onBack = if (canNavigateBack) onBack else null
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
 
             CurbLogo(symbolSize = 32.dp, fontSize = 24)
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             Text(
                 text = "What should we call you?",
@@ -79,7 +89,7 @@ fun NameSetupScreen(
                 color = CurbOnSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(36.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             OutlinedTextField(
                 value = nameInput,
@@ -105,7 +115,9 @@ fun NameSetupScreen(
                 ),
                 keyboardActions = KeyboardActions(
                     onDone = {
-                        onNameSubmitted(nameInput)
+                        if (nameInput.isNotBlank()) {
+                            onNameSubmitted(nameInput)
+                        }
                     }
                 )
             )
@@ -115,7 +127,9 @@ fun NameSetupScreen(
             CurbPrimaryButton(
                 text = "Continue",
                 onClick = {
-                    onNameSubmitted(nameInput)
+                    if (nameInput.isNotBlank()) {
+                        onNameSubmitted(nameInput)
+                    }
                 },
                 enabled = nameInput.isNotBlank(),
                 testTag = "continue_button"
