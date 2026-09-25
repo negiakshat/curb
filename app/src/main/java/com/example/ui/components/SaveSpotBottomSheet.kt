@@ -39,6 +39,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -107,6 +109,23 @@ fun SaveSpotBottomSheet(
     var note by remember { mutableStateOf(initialNote) }
     var reminderEnabled by remember { mutableStateOf(initialReminderEnabled) }
     var selectedReminderMins by remember { mutableIntStateOf(initialReminderMins) }
+
+    val context = LocalContext.current
+    val locationService = remember(context) { com.example.data.location.LocationService(context) }
+    var currentLat by remember(rescanTargetPlace) { mutableStateOf<Double?>(rescanTargetPlace?.latitude) }
+    var currentLng by remember(rescanTargetPlace) { mutableStateOf<Double?>(rescanTargetPlace?.longitude) }
+
+    LaunchedEffect(rescanTargetPlace) {
+        if (locationService.hasLocationPermission()) {
+            try {
+                val result = locationService.fetchCurrentLocation()
+                if (result is com.example.data.location.UserLocationResult.Success) {
+                    currentLat = result.latitude
+                    currentLng = result.longitude
+                }
+            } catch (_: Exception) {}
+        }
+    }
 
     val hasUsableSchedule = remember(scanResult) {
         SemanticConsistencyValidator.canAuthorizeTimer(scanResult) &&
@@ -443,8 +462,8 @@ fun SaveSpotBottomSheet(
                         address = scanResult.locationName.ifBlank { scanResult.cityState },
                         parkingNote = note.trim(),
                         timestamp = rescanTargetPlace?.timestamp ?: System.currentTimeMillis(),
-                        latitude = null,
-                        longitude = null,
+                        latitude = currentLat,
+                        longitude = currentLng,
                         scanResultId = scanResult.id,
                         parkingRuleSummary = ruleSummary,
                         parkingSchedule = scheduleText,
