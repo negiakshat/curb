@@ -12,7 +12,7 @@ Curb reads physical parking signs using your phone's camera, interprets complex 
 - **Find My Car** — Save your parking spot location and get walking directions back.
 - **Saved Places** — Bookmark frequent parking spots with personal notes.
 - **Scan History** — Browse all your past sign scans and results.
-- **Ask Curb AI** — Chat with an AI assistant about parking rules for your current spot.
+- **Contextual Copilot** — Chat with an AI assistant about parking rules and contextual questions for your current spot.
 - **Curb Pro** — Unlock unlimited scans, exported reports, and notes via in-app subscription (RevenueCat).
 
 ## Tech Stack

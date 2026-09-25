@@ -43,7 +43,7 @@ class NavigationArchitectureTest {
             assertTrue("CurbNavGraph should declare SCAN route", navGraphText.contains("composable(Routes.SCAN)"))
             assertTrue("CurbNavGraph should declare PARKING_TIMER route", navGraphText.contains("composable(Routes.PARKING_TIMER)"))
             assertTrue("CurbNavGraph should declare FIND_MY_CAR route", navGraphText.contains("composable(Routes.FIND_MY_CAR)"))
-            assertTrue("CurbNavGraph should declare ASK_CURB route", navGraphText.contains("composable(Routes.ASK_CURB)"))
+            assertTrue("CurbNavGraph should declare CONTEXTUAL_COPILOT route", navGraphText.contains("composable(Routes.CONTEXTUAL_COPILOT)"))
         }
     }
 
@@ -62,7 +62,7 @@ class NavigationArchitectureTest {
                 "Routes.SCAN",
                 "Routes.SCAN_OUTPUT",
                 "Routes.PARKING_DETAILS",
-                "Routes.ASK_CURB",
+                "Routes.CONTEXTUAL_COPILOT",
                 "Routes.ACTIVITY",
                 "Routes.YOU",
                 "Routes.ACCOUNT_INFO",
