@@ -193,7 +193,7 @@ fun CurbNavGraph(
                 },
                 onScanResultClicked = { scan ->
                     viewModel.setCurrentScan(scan)
-                    navController.navigate(Routes.SCAN_OUTPUT)
+                    navigateToScanOutputSafely(navController)
                 },
                 onNotificationsClicked = {
                     navController.navigate(Routes.NOTIFICATIONS)
@@ -236,7 +236,7 @@ fun CurbNavGraph(
                             navController.navigate(Routes.CURB_PRO_PAYWALL)
                         },
                         onComplete = {
-                            navController.navigate(Routes.SCAN_OUTPUT)
+                            navigateToScanOutputSafely(navController)
                         },
                         onError = { err ->
                             Toast.makeText(context, err, Toast.LENGTH_LONG).show()
@@ -256,7 +256,7 @@ fun CurbNavGraph(
                             navController.navigate(Routes.CURB_PRO_PAYWALL)
                         },
                         onComplete = {
-                            navController.navigate(Routes.SCAN_OUTPUT)
+                            navigateToScanOutputSafely(navController)
                         },
                         onError = { err ->
                             Toast.makeText(context, err, Toast.LENGTH_LONG).show()
@@ -443,7 +443,7 @@ fun CurbNavGraph(
                 isPro = isUserPro,
                 onScanClicked = { scan ->
                     viewModel.setCurrentScan(scan)
-                    navController.navigate(Routes.SCAN_OUTPUT)
+                    navigateToScanOutputSafely(navController)
                 },
                 onUpgradeToPro = {
                     navController.navigate(Routes.CURB_PRO_PAYWALL)
@@ -739,5 +739,15 @@ fun CurbNavGraph(
                 }
             )
         }
+    }
+}
+
+private fun navigateToScanOutputSafely(navController: NavHostController) {
+    val currentEntry = navController.currentBackStackEntry ?: return
+    if (currentEntry.destination.route == Routes.SCAN_OUTPUT) return
+    if (!currentEntry.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) return
+
+    navController.navigate(Routes.SCAN_OUTPUT) {
+        launchSingleTop = true
     }
 }
