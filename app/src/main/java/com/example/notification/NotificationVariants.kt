@@ -7,7 +7,8 @@ import kotlin.math.abs
 
 enum class NotificationType {
     REMINDER,
-    EXPIRATION
+    EXPIRATION,
+    SAVED_PLACE
 }
 
 data class NotificationText(
@@ -105,5 +106,13 @@ object NotificationVariants {
         }
 
         return NotificationText(title = template.title, body = formattedBody)
+    }
+
+    fun getSavedPlaceVariant(locationName: String): NotificationText {
+        val safeLocation = locationName.ifBlank { "your spot" }
+        return NotificationText(
+            title = "Check your parking spot",
+            body = "$safeLocation · Your saved parking reminder is coming up."
+        )
     }
 }

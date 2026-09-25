@@ -46,9 +46,6 @@ fun NotificationSettingsScreen(
     onTogglePush: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
-    var expirationAlerts by remember { mutableStateOf(true) }
-    var streetCleaningAlerts by remember { mutableStateOf(true) }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -120,7 +117,7 @@ fun NotificationSettingsScreen(
 
             if (pushEnabled) {
                 Text(
-                    text = "Notification Types",
+                    text = "Active Alerts",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = CurbOnSurface,
@@ -131,68 +128,41 @@ fun NotificationSettingsScreen(
                     cornerRadius = 20.dp,
                     backgroundColor = CurbSurface
                 ) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Timer Expiration Reminders",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = CurbOnSurface
-                                )
-                                Text(
-                                    text = "Get warned before parking time runs out",
-                                    fontSize = 12.sp,
-                                    color = CurbOnSurfaceVariant
-                                )
-                            }
-                            Switch(
-                                checked = expirationAlerts,
-                                onCheckedChange = { expirationAlerts = it },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = CurbWhite,
-                                    checkedTrackColor = CurbBlack,
-                                    uncheckedThumbColor = CurbOutline,
-                                    uncheckedTrackColor = CurbSurfaceVariant
-                                )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Column {
+                            Text(
+                                text = "Active Session Alerts",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CurbOnSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Expiration and reminder alerts are automatically scheduled whenever you start or extend a parking session. Custom reminder timing (e.g. 15m, 30m) is configured on the Parking Timer.",
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                color = CurbOnSurfaceVariant
                             )
                         }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Street Cleaning Alerts",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = CurbOnSurface
-                                )
-                                Text(
-                                    text = "Alerts for upcoming street sweeping rules",
-                                    fontSize = 12.sp,
-                                    color = CurbOnSurfaceVariant
-                                )
-                            }
-                            Switch(
-                                checked = streetCleaningAlerts,
-                                onCheckedChange = { streetCleaningAlerts = it },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = CurbWhite,
-                                    checkedTrackColor = CurbBlack,
-                                    uncheckedThumbColor = CurbOutline,
-                                    uncheckedTrackColor = CurbSurfaceVariant
-                                )
+                        Column {
+                            Text(
+                                text = "Saved Spot Reminders",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CurbOnSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Reminders for saved parking locations use the verified parking rules and time limits for that specific spot.",
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                color = CurbOnSurfaceVariant
                             )
                         }
                     }

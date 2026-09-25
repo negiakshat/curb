@@ -23,23 +23,28 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val sessionId = intent.getLongExtra(ParkingNotificationScheduler.EXTRA_SESSION_ID, -1L)
+        val savedPlaceId = intent.getLongExtra(ParkingNotificationScheduler.EXTRA_SAVED_PLACE_ID, -1L)
         val typeStr = intent.getStringExtra(ParkingNotificationScheduler.EXTRA_NOTIFICATION_TYPE) ?: return
         val targetEndTime = intent.getLongExtra(ParkingNotificationScheduler.EXTRA_TARGET_END_TIME, 0L)
 
-        if (sessionId <= 0L) return
+        if (sessionId <= 0L && savedPlaceId <= 0L) return
 
         val pendingResult = goAsync()
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                processNotification(context, sessionId, typeStr, targetEndTime)
+                if (savedPlaceId > 0L) {
+                    processSavedPlaceNotification(context, savedPlaceId, intent)
+                } else if (sessionId > 0L) {
+                    processSessionNotification(context, sessionId, typeStr, targetEndTime)
+                }
             } finally {
                 pendingResult.finish()
             }
         }
     }
 
-    private suspend fun processNotification(
+    private suspend fun processSessionNotification(
         context: Context,
         sessionId: Long,
         typeStr: String,
@@ -140,5 +145,66 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
         }
 
         notificationManager?.notify(notificationId, notification)
+    }
+
+    private suspend fun processSavedPlaceNotification(
+        context: Context,
+        savedPlaceId: Long,
+        intent: Intent
+    ) {
+        val sessionPrefs = SessionPreferences(context)
+        val userProfile = sessionPrefs.getUserProfile()
+        if (!userProfile.pushNotificationsEnabled) return
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val permissionStatus = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            if (permissionStatus != PackageManager.PERMISSION_GRANTED) return
+        }
+
+        val database = CurbDatabase.getDatabase(context)
+        val entity = database.savedPlaceDao().getPlaceById(savedPlaceId) ?: return
+
+        if (!entity.reminderEnabled) return
+
+        val intentLastCheckedAt = intent.getLongExtra(ParkingNotificationScheduler.EXTRA_LAST_CHECKED_AT, 0L)
+        if (intentLastCheckedAt > 0L && entity.lastCheckedAt != intentLastCheckedAt) {
+            return
+        }
+
+        val verdict = entity.parkingVerdict.uppercase(java.util.Locale.ROOT)
+        if (verdict == "AMBIGUOUS" || verdict == "NOT_ALLOWED" || verdict == "RESTRICTED" || verdict == "UNRESTRICTED" || verdict == "NO_LIMIT") {
+            return
+        }
+
+        val placeName = entity.name.ifBlank { entity.address }
+        val notificationText = NotificationVariants.getSavedPlaceVariant(placeName)
+
+        val contentIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(ParkingNotificationScheduler.EXTRA_NAVIGATE_ROUTE, Routes.SAVED_PLACES)
+            putExtra(ParkingNotificationScheduler.EXTRA_SAVED_PLACE_ID, entity.id)
+        }
+
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            ParkingNotificationScheduler.getSavedPlaceRequestCode(entity.id),
+            contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        ParkingNotificationScheduler.createNotificationChannel(context)
+
+        val notification = NotificationCompat.Builder(context, ParkingNotificationScheduler.CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(notificationText.title)
+            .setContentText(notificationText.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(notificationText.body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(contentPendingIntent)
+            .build()
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        notificationManager?.notify(ParkingNotificationScheduler.getSavedPlaceRequestCode(entity.id), notification)
     }
 }

@@ -15,8 +15,10 @@ object ParkingNotificationScheduler {
     const val CHANNEL_NAME = "Parking Alerts"
 
     const val EXTRA_SESSION_ID = "extra_session_id"
+    const val EXTRA_SAVED_PLACE_ID = "extra_saved_place_id"
     const val EXTRA_NOTIFICATION_TYPE = "extra_notification_type"
     const val EXTRA_TARGET_END_TIME = "extra_target_end_time"
+    const val EXTRA_LAST_CHECKED_AT = "extra_last_checked_at"
     const val EXTRA_NAVIGATE_ROUTE = "navigate_route"
 
     fun createNotificationChannel(context: Context) {
@@ -154,32 +156,32 @@ object ParkingNotificationScheduler {
 
     fun scheduleSavedPlaceReminder(context: Context, place: com.example.data.model.SavedPlace) {
         try {
-            if (place.id <= 0L || !place.reminderEnabled) return
-            createNotificationChannel(context)
+            if (place.id <= 0L || !place.reminderEnabled) {
+                cancelSavedPlaceReminder(context, place.id)
+                return
+            }
+
             cancelSavedPlaceReminder(context, place.id)
 
+            val triggerTime = com.example.util.SavedPlaceReminderCalculator.calculateTriggerTime(place) ?: return
+
+            createNotificationChannel(context)
+
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-            val now = System.currentTimeMillis()
 
-            // Calculate trigger time if schedule has an explicit allowed time limit or target
-            // Default: 15 minutes before limit, or trigger if schedule is active
-            val reminderMins = if (place.reminderMinutesBefore > 0) place.reminderMinutesBefore else 15
-            val triggerTime = place.lastCheckedAt + (60 * 60 * 1000L) - (reminderMins * 60 * 1000L)
-
-            if (triggerTime > now) {
-                val intent = Intent(context, ParkingNotificationReceiver::class.java).apply {
-                    putExtra(EXTRA_SESSION_ID, place.id)
-                    putExtra(EXTRA_NOTIFICATION_TYPE, NotificationType.REMINDER.name)
-                    putExtra(EXTRA_NAVIGATE_ROUTE, "saved_places")
-                }
-                val pendingIntent = PendingIntent.getBroadcast(
-                    context,
-                    getSavedPlaceRequestCode(place.id),
-                    intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                setAlarm(alarmManager, triggerTime, pendingIntent)
+            val intent = Intent(context, ParkingNotificationReceiver::class.java).apply {
+                putExtra(EXTRA_SAVED_PLACE_ID, place.id)
+                putExtra(EXTRA_NOTIFICATION_TYPE, NotificationType.SAVED_PLACE.name)
+                putExtra(EXTRA_LAST_CHECKED_AT, place.lastCheckedAt)
+                putExtra(EXTRA_NAVIGATE_ROUTE, com.example.ui.navigation.Routes.SAVED_PLACES)
             }
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                getSavedPlaceRequestCode(place.id),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            setAlarm(alarmManager, triggerTime, pendingIntent)
         } catch (_: Throwable) {}
     }
 

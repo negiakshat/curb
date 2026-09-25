@@ -22,6 +22,14 @@ class BootReceiver : BroadcastReceiver() {
                     if (activeSession != null && !activeSession.isDemo && activeSession.isActive) {
                         ParkingNotificationScheduler.scheduleSessionNotifications(context, activeSession)
                     }
+
+                    val savedPlaceEntities = db.savedPlaceDao().getSavedPlacesList()
+                    savedPlaceEntities.forEach { entity ->
+                        if (entity.reminderEnabled) {
+                            val place = com.example.data.repository.CurbRepository.entityToSavedPlace(entity)
+                            ParkingNotificationScheduler.scheduleSavedPlaceReminder(context, place)
+                        }
+                    }
                 } finally {
                     pendingResult.finish()
                 }
