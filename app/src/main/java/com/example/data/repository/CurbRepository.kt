@@ -1,0 +1,589 @@
+package com.example.data.repository
+
+import android.content.Context
+import com.example.data.local.CurbDatabase
+import com.example.data.local.CurbNoteEntity
+import com.example.data.local.ParkingSessionEntity
+import com.example.data.local.ParkingSpotEntity
+import com.example.data.local.SavedPlaceEntity
+import com.example.data.local.ScanResultEntity
+import com.example.data.model.ActiveParkingSession
+import com.example.data.model.CurbNote
+import com.example.data.model.DetectedSign
+import com.example.data.model.ParkingSpot
+import com.example.data.model.SavedPlace
+import com.example.data.model.ScanResult
+import com.example.data.model.ScanVerdict
+import com.example.util.ParkingTimerCalculator
+import com.example.util.SavedSpotFingerprint
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+sealed class SavePlaceResult {
+    data class Success(val savedPlace: SavedPlace) : SavePlaceResult()
+    data class Duplicate(val existingPlace: SavedPlace) : SavePlaceResult()
+    data class Error(val message: String) : SavePlaceResult()
+}
+
+class CurbRepository(context: Context) {
+    private val appContext = context.applicationContext
+    private val database = CurbDatabase.getDatabase(context)
+    private val scanDao = database.scanDao()
+    private val parkingSessionDao = database.parkingSessionDao()
+    private val savedPlaceDao = database.savedPlaceDao()
+    private val noteDao = database.noteDao()
+    private val parkingSpotDao = database.parkingSpotDao()
+
+    private val moshi: Moshi by lazy {
+        try {
+            Moshi.Builder().build()
+        } catch (_: Throwable) {
+            Moshi.Builder().build()
+        }
+    }
+    private val stringListType = Types.newParameterizedType(List::class.java, String::class.java)
+    private val stringListAdapter by lazy { moshi.adapter<List<String>>(stringListType) }
+    private val signListType = Types.newParameterizedType(List::class.java, DetectedSign::class.java)
+    private val signListAdapter by lazy { moshi.adapter<List<DetectedSign>>(signListType) }
+
+    val allScans: Flow<List<ScanResult>> = scanDao.getAllScans().map { entities ->
+        entities.map { entityToScanResult(it) }
+    }.catch { emit(emptyList()) }
+
+    val activeSession: Flow<ActiveParkingSession?> = parkingSessionDao.getActiveSession().map { entity ->
+        entity?.let { entityToParkingSession(it) }
+    }.catch { emit(null) }
+
+    val allSessions: Flow<List<ActiveParkingSession>> = parkingSessionDao.getAllSessions().map { entities ->
+        entities.map { entityToParkingSession(it) }
+    }.catch { emit(emptyList()) }
+
+    val savedParkingSpot: Flow<ParkingSpot?> = parkingSpotDao.getActiveParkingSpot().map { entity ->
+        entity?.let { entityToParkingSpot(it) }
+    }.catch { emit(null) }
+
+    val demoSavedParkingSpot: Flow<ParkingSpot?> = parkingSpotDao.getDemoActiveParkingSpot().map { entity ->
+        entity?.let { entityToParkingSpot(it) }
+    }.catch { emit(null) }
+
+    val savedPlaces: Flow<List<SavedPlace>> = savedPlaceDao.getAllSavedPlaces().map { entities ->
+        entities.map { entityToSavedPlace(it) }
+    }.catch { emit(emptyList()) }
+
+    val allNotes: Flow<List<CurbNote>> = noteDao.getAllNotes().map { entities ->
+        entities.map { entityToCurbNote(it) }
+    }.catch { emit(emptyList()) }
+
+    fun getNoteFlow(targetType: String, targetId: Long): Flow<CurbNote?> {
+        return noteDao.getNoteFlow(targetType, targetId).map { it?.let { entityToCurbNote(it) } }.catch { emit(null) }
+    }
+
+    suspend fun getNote(targetType: String, targetId: Long): CurbNote? {
+        val entity = noteDao.getNote(targetType, targetId)
+        return entity?.let { entityToCurbNote(it) }
+    }
+
+    suspend fun saveNote(targetType: String, targetId: Long, text: String): Long {
+        val existing = noteDao.getNote(targetType, targetId)
+        val now = System.currentTimeMillis()
+        val entity = CurbNoteEntity(
+            id = existing?.id ?: 0,
+            targetType = targetType,
+            targetId = targetId,
+            text = text.trim(),
+            createdAt = existing?.createdAt ?: now,
+            updatedAt = now
+        )
+        return noteDao.insertOrUpdateNote(entity)
+    }
+
+    suspend fun deleteNote(targetType: String, targetId: Long) {
+        noteDao.deleteNoteByTarget(targetType, targetId)
+    }
+
+    suspend fun deleteNoteById(id: Long) {
+        noteDao.deleteNoteById(id)
+    }
+
+    suspend fun getScanById(id: Long): ScanResult? {
+        val entity = scanDao.getScanById(id)
+        return entity?.let { entityToScanResult(it) }
+    }
+
+    suspend fun saveScan(scan: ScanResult): Long = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val entity = scanResultToEntity(scan)
+        scanDao.insertScan(entity)
+    }
+
+    suspend fun deleteScan(id: Long) {
+        scanDao.deleteScanById(id)
+        noteDao.deleteNoteForScanResult(id)
+    }
+
+    suspend fun startParkingSession(
+        scanResultId: Long = 0,
+        locationName: String = "Parked Spot",
+        durationMinutes: Int = 0,
+        allowedUntilTime: String = "",
+        notes: String = "",
+        timerBasis: String = "",
+        parkingRuleSummary: String = "",
+        scanResult: ScanResult? = null,
+        maxAllowedEndTimeMillis: Long? = null
+    ): Long = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+
+        // 1. Resolve target scan result
+        val targetScan: ScanResult? = scanResult ?: if (scanResultId > 0) {
+            getScanById(scanResultId)
+        } else null
+
+        var canonicalMaxEndTime: Long? = maxAllowedEndTimeMillis
+        var finalTimerBasis = timerBasis
+        var finalRuleSummary = parkingRuleSummary
+        var finalAllowedUntil = allowedUntilTime
+        var finalTimerMode = "TIMED_LIMIT"
+
+        if (targetScan != null) {
+            // Must have timer authority based on verified physical sign evidence or demo preset
+            if (!com.example.util.ParkingAuthority.canAuthorizeTimer(targetScan)) {
+                return@withContext -1L // Reject scans without verified physical sign evidence!
+            }
+
+            // Must be ALLOWED verdict
+            if (targetScan.verdict != ScanVerdict.ALLOWED) {
+                return@withContext -1L // Reject AMBIGUOUS or RESTRICTED scans
+            }
+
+            val timerConfig = ParkingTimerCalculator.calculateConfig(targetScan, now)
+            if (!timerConfig.canStart) {
+                return@withContext -1L // Reject if timer creation is unauthorized or lacks explicit verified limit
+            }
+
+            canonicalMaxEndTime = timerConfig.maxAllowedEndTimeMillis
+            finalTimerMode = timerConfig.mode.name
+            if (finalTimerBasis.isBlank()) finalTimerBasis = timerConfig.timerBasis
+            if (finalRuleSummary.isBlank()) finalRuleSummary = timerConfig.ruleSummary
+            if (finalAllowedUntil.isBlank()) finalAllowedUntil = timerConfig.allowedUntilTimeFormatted
+        } else {
+            // No scan result provided -> Real timer session cannot be started without verified sign evidence!
+            return@withContext -1L
+        }
+
+        // Determine requested end time
+        val requestedEndTime = if (durationMinutes > 0) {
+            now + (durationMinutes * 60 * 1000L)
+        } else {
+            canonicalMaxEndTime ?: return@withContext -1L
+        }
+
+        // Clamp effective end time to canonical max authority
+        val effectiveEndTime = if (canonicalMaxEndTime != null) {
+            minOf(requestedEndTime, canonicalMaxEndTime)
+        } else {
+            requestedEndTime
+        }
+
+        if (effectiveEndTime <= now) {
+            return@withContext -1L
+        }
+
+        val sdf = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+        if (finalAllowedUntil.isBlank() && effectiveEndTime != Long.MAX_VALUE) {
+            finalAllowedUntil = sdf.format(java.util.Date(effectiveEndTime))
+        }
+
+        val isDemoSession = (targetScan?.isDemo == true) || (scanResult?.isDemo == true)
+
+        if (isDemoSession) {
+            parkingSessionDao.endAllDemoSessions()
+        } else {
+            parkingSessionDao.endAllRealSessions()
+        }
+
+        val markedTimerBasis = if (isDemoSession) {
+            if (finalTimerBasis.startsWith("[Demo]")) finalTimerBasis else if (finalTimerBasis.isBlank()) "[Demo] Simulation Timer" else "[Demo] $finalTimerBasis"
+        } else {
+            finalTimerBasis
+        }
+
+        val entity = ParkingSessionEntity(
+            scanResultId = scanResultId,
+            locationName = if (locationName != "Parked Spot" || targetScan == null) locationName else targetScan.locationName,
+            startTime = now,
+            endTime = effectiveEndTime,
+            allowedUntilTime = finalAllowedUntil,
+            reminderMinutesBefore = 15,
+            notes = notes,
+            timerBasis = markedTimerBasis,
+            parkingRuleSummary = finalRuleSummary,
+            isActive = true,
+            maxAllowedEndTimeMillis = canonicalMaxEndTime,
+            timerMode = finalTimerMode,
+            isDemo = isDemoSession
+        )
+        val id = parkingSessionDao.insertSession(entity)
+        if (!isDemoSession) {
+            val insertedSession = entity.copy(id = id)
+            com.example.notification.ParkingNotificationScheduler.scheduleSessionNotifications(appContext, insertedSession)
+        }
+        id
+    }
+
+    suspend fun endActiveSession(id: Long) {
+        parkingSessionDao.endSession(id)
+        com.example.notification.ParkingNotificationScheduler.cancelSessionNotifications(appContext, id)
+    }
+
+    suspend fun extendActiveSession(
+        id: Long,
+        additionalMinutes: Int,
+        currentEndTime: Long = 0
+    ): Boolean {
+        val session = parkingSessionDao.getSessionById(id) ?: return false
+        if (!session.isActive) return false
+
+        val maxAllowed = session.maxAllowedEndTimeMillis ?: return false // No reliable max -> reject extension
+        val baseEndTime = if (currentEndTime > 0) currentEndTime else session.endTime
+
+        if (baseEndTime >= maxAllowed) {
+            return false // Already at or beyond maximum authority
+        }
+
+        val requestedNewEndTime = baseEndTime + (additionalMinutes * 60 * 1000L)
+        val clampedEndTime = minOf(requestedNewEndTime, maxAllowed)
+
+        if (clampedEndTime <= session.endTime) {
+            return false // Clamping yields no additional time
+        }
+
+        val sdf = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+        val newAllowedUntil = sdf.format(java.util.Date(clampedEndTime))
+
+        val updatedSession = session.copy(
+            endTime = clampedEndTime,
+            allowedUntilTime = newAllowedUntil
+        )
+        parkingSessionDao.updateSession(updatedSession)
+        if (!updatedSession.isDemo) {
+            com.example.notification.ParkingNotificationScheduler.scheduleSessionNotifications(appContext, updatedSession)
+        }
+        return true
+    }
+
+    suspend fun updateSessionReminder(id: Long, reminderMinutes: Int) {
+        parkingSessionDao.updateReminder(id, reminderMinutes)
+        val session = parkingSessionDao.getSessionById(id)
+        if (session != null && !session.isDemo && session.isActive) {
+            com.example.notification.ParkingNotificationScheduler.scheduleSessionNotifications(appContext, session)
+        }
+    }
+
+    private val saveMutex = Mutex()
+
+    suspend fun findDuplicateSavedPlace(candidate: SavedPlace): SavedPlace? {
+        val existingEntities = savedPlaceDao.getSavedPlacesList()
+        val existingPlaces = existingEntities.map { entityToSavedPlace(it) }
+        return existingPlaces.firstOrNull { SavedSpotFingerprint.isDuplicate(candidate, it) }
+    }
+
+    suspend fun saveSavedPlaceWithCheck(place: SavedPlace): SavePlaceResult = saveMutex.withLock {
+        return try {
+            if (place.id > 0) {
+                updateSavedPlace(place)
+                val updated = getSavedPlaceById(place.id) ?: place
+                SavePlaceResult.Success(updated)
+            } else {
+                val duplicate = findDuplicateSavedPlace(place)
+                if (duplicate != null) {
+                    SavePlaceResult.Duplicate(duplicate)
+                } else {
+                    val newId = addSavedPlace(place)
+                    val inserted = getSavedPlaceById(newId) ?: place.copy(id = newId)
+                    SavePlaceResult.Success(inserted)
+                }
+            }
+        } catch (e: Throwable) {
+            SavePlaceResult.Error(e.message ?: "Failed to save place")
+        }
+    }
+
+    suspend fun addSavedPlace(place: SavedPlace): Long {
+        val durableImageUri = persistSignImage(place.signImageUri)
+        val placeToInsert = place.copy(
+            signImageUri = durableImageUri,
+            lastCheckedAt = if (place.lastCheckedAt > 0) place.lastCheckedAt else System.currentTimeMillis()
+        )
+        val id = savedPlaceDao.insertPlace(savedPlaceToEntity(placeToInsert))
+        val placeWithId = placeToInsert.copy(id = id)
+        if (placeWithId.reminderEnabled) {
+            com.example.notification.ParkingNotificationScheduler.scheduleSavedPlaceReminder(appContext, placeWithId)
+        } else {
+            com.example.notification.ParkingNotificationScheduler.cancelSavedPlaceReminder(appContext, id)
+        }
+        return id
+    }
+
+    suspend fun updateSavedPlace(place: SavedPlace) {
+        val durableImageUri = persistSignImage(place.signImageUri)
+        val placeToUpdate = place.copy(signImageUri = durableImageUri)
+        savedPlaceDao.updatePlace(savedPlaceToEntity(placeToUpdate))
+        if (placeToUpdate.reminderEnabled) {
+            com.example.notification.ParkingNotificationScheduler.scheduleSavedPlaceReminder(appContext, placeToUpdate)
+        } else {
+            com.example.notification.ParkingNotificationScheduler.cancelSavedPlaceReminder(appContext, placeToUpdate.id)
+        }
+    }
+
+    suspend fun deleteSavedPlace(id: Long) {
+        savedPlaceDao.deletePlaceById(id)
+        noteDao.deleteNoteForSavedPlace(id)
+        com.example.notification.ParkingNotificationScheduler.cancelSavedPlaceReminder(appContext, id)
+    }
+
+    suspend fun getSavedPlaceById(id: Long): SavedPlace? {
+        val entity = savedPlaceDao.getPlaceById(id) ?: return null
+        return entityToSavedPlace(entity)
+    }
+
+    fun persistSignImage(sourceUriString: String?): String {
+        if (sourceUriString.isNullOrBlank()) return ""
+        try {
+            if (sourceUriString.contains("saved_places_images")) return sourceUriString
+            val sourceUri = android.net.Uri.parse(sourceUriString)
+            val dir = java.io.File(appContext.filesDir, "saved_places_images")
+            if (!dir.exists()) dir.mkdirs()
+            val destFile = java.io.File(dir, "place_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(6)}.jpg")
+            appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
+                java.io.FileOutputStream(destFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            return android.net.Uri.fromFile(destFile).toString()
+        } catch (e: Exception) {
+            android.util.Log.w("CurbRepository", "Failed to persist sign image: ${e.message}")
+            return sourceUriString
+        }
+    }
+
+    suspend fun getSessionById(id: Long): ActiveParkingSession? {
+        val entity = parkingSessionDao.getSessionById(id)
+        return entity?.let { entityToParkingSession(it) }
+    }
+
+    suspend fun saveParkingSpot(
+        latitude: Double,
+        longitude: Double,
+        accuracy: Float? = null,
+        timestamp: Long = System.currentTimeMillis(),
+        locationName: String = "",
+        sessionId: Long? = null,
+        isDemo: Boolean = false
+    ): Long {
+        if (isDemo) {
+            parkingSpotDao.clearActiveDemoSpots()
+        } else {
+            parkingSpotDao.clearActiveRealSpots()
+        }
+        val entity = ParkingSpotEntity(
+            latitude = latitude,
+            longitude = longitude,
+            accuracy = accuracy,
+            timestamp = timestamp,
+            locationName = locationName,
+            sessionId = sessionId,
+            isActive = true,
+            isDemo = isDemo
+        )
+        return parkingSpotDao.insertParkingSpot(entity)
+    }
+
+    suspend fun clearActiveParkingSpots(isDemo: Boolean = false) {
+        if (isDemo) {
+            parkingSpotDao.clearActiveDemoSpots()
+        } else {
+            parkingSpotDao.clearActiveRealSpots()
+        }
+    }
+
+    suspend fun getActiveParkingSpotDirect(isDemo: Boolean = false): ParkingSpot? {
+        val entity = if (isDemo) {
+            parkingSpotDao.getDemoActiveParkingSpotDirect()
+        } else {
+            parkingSpotDao.getActiveParkingSpotDirect()
+        }
+        return entity?.let { entityToParkingSpot(it) }
+    }
+
+    suspend fun clearAllData() {
+        val activeSession = parkingSessionDao.getActiveSessionDirect()
+        if (activeSession != null) {
+            com.example.notification.ParkingNotificationScheduler.cancelSessionNotifications(appContext, activeSession.id)
+        }
+        scanDao.clearAllScans()
+        parkingSessionDao.clearAllSessions()
+        savedPlaceDao.clearAllSavedPlaces()
+        noteDao.clearAllNotes()
+        parkingSpotDao.clearAllSpots()
+    }
+
+    private fun entityToScanResult(entity: ScanResultEntity): ScanResult {
+        val rules: List<String> = try {
+            stringListAdapter.fromJson(entity.parkingRulesJson) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+        val signs: List<DetectedSign> = try {
+            signListAdapter.fromJson(entity.detectedSignsJson) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+        var verdict = try {
+            ScanVerdict.valueOf(entity.verdict)
+        } catch (e: Exception) {
+            ScanVerdict.AMBIGUOUS
+        }
+
+        val finalRules = if (rules.isNotEmpty()) rules else listOf("No verified parking rule has been established.")
+        val finalAllowedUntil = entity.allowedUntilTime.ifBlank { "Verify physical signage" }
+        val finalExplanation = entity.explanation.ifBlank { "Parking rules could not be determined from verified sign evidence." }
+        val finalStatusChip = entity.statusChipText.ifBlank { "Signage unclear" }
+
+        if (verdict == ScanVerdict.ALLOWED && (rules.isEmpty() || rules.all { it.contains("No verified parking rule") })) {
+            verdict = ScanVerdict.AMBIGUOUS
+        }
+
+        return ScanResult(
+            id = entity.id,
+            timestamp = entity.timestamp,
+            locationName = entity.locationName.ifBlank { "Location unavailable" },
+            cityState = entity.cityState,
+            verdict = verdict,
+            statusChipText = finalStatusChip,
+            allowedUntilTime = finalAllowedUntil,
+            timeRemaining = entity.timeRemaining.ifBlank { "--" },
+            parkingRules = finalRules,
+            explanation = finalExplanation,
+            detectedSigns = signs,
+            zoneType = entity.zoneType.ifBlank { "Parking zone" },
+            paymentInfo = entity.paymentInfo,
+            vehicleApplicability = entity.vehicleApplicability,
+            imageUri = entity.imageUri,
+            isDemo = entity.isDemo
+        )
+    }
+
+    private fun scanResultToEntity(scan: ScanResult): ScanResultEntity {
+        return ScanResultEntity(
+            id = scan.id,
+            timestamp = scan.timestamp,
+            locationName = scan.locationName,
+            cityState = scan.cityState,
+            verdict = scan.verdict.name,
+            statusChipText = scan.statusChipText,
+            allowedUntilTime = scan.allowedUntilTime,
+            timeRemaining = scan.timeRemaining,
+            parkingRulesJson = stringListAdapter.toJson(scan.parkingRules),
+            explanation = scan.explanation,
+            detectedSignsJson = signListAdapter.toJson(scan.detectedSigns),
+            zoneType = scan.zoneType,
+            paymentInfo = scan.paymentInfo,
+            vehicleApplicability = scan.vehicleApplicability,
+            imageUri = scan.imageUri,
+            isDemo = scan.isDemo
+        )
+    }
+
+    private fun entityToParkingSession(entity: ParkingSessionEntity): ActiveParkingSession {
+        return ActiveParkingSession(
+            id = entity.id,
+            scanResultId = entity.scanResultId,
+            locationName = entity.locationName,
+            startTime = entity.startTime,
+            endTime = entity.endTime,
+            allowedUntilTime = entity.allowedUntilTime,
+            reminderMinutesBefore = entity.reminderMinutesBefore,
+            notes = entity.notes,
+            timerBasis = entity.timerBasis,
+            parkingRuleSummary = entity.parkingRuleSummary,
+            isActive = entity.isActive,
+            maxAllowedEndTimeMillis = entity.maxAllowedEndTimeMillis,
+            timerMode = entity.timerMode,
+            isDemo = entity.isDemo
+        )
+    }
+
+    private fun entityToSavedPlace(entity: SavedPlaceEntity): SavedPlace {
+        return SavedPlace(
+            id = entity.id,
+            name = entity.name,
+            address = entity.address,
+            parkingNote = entity.parkingNote,
+            timestamp = entity.timestamp,
+            latitude = entity.latitude,
+            longitude = entity.longitude,
+            scanResultId = entity.scanResultId,
+            parkingRuleSummary = entity.parkingRuleSummary,
+            parkingSchedule = entity.parkingSchedule,
+            parkingVerdict = entity.parkingVerdict,
+            signImageUri = entity.signImageUri,
+            lastCheckedAt = if (entity.lastCheckedAt > 0) entity.lastCheckedAt else entity.timestamp,
+            reminderEnabled = entity.reminderEnabled,
+            reminderMinutesBefore = entity.reminderMinutesBefore,
+            reminderScheduleText = entity.reminderScheduleText
+        )
+    }
+
+    private fun savedPlaceToEntity(place: SavedPlace): SavedPlaceEntity {
+        return SavedPlaceEntity(
+            id = place.id,
+            name = place.name,
+            address = place.address,
+            parkingNote = place.parkingNote,
+            timestamp = place.timestamp,
+            latitude = place.latitude,
+            longitude = place.longitude,
+            scanResultId = place.scanResultId,
+            parkingRuleSummary = place.parkingRuleSummary,
+            parkingSchedule = place.parkingSchedule,
+            parkingVerdict = place.parkingVerdict,
+            signImageUri = place.signImageUri,
+            lastCheckedAt = if (place.lastCheckedAt > 0) place.lastCheckedAt else place.timestamp,
+            reminderEnabled = place.reminderEnabled,
+            reminderMinutesBefore = place.reminderMinutesBefore,
+            reminderScheduleText = place.reminderScheduleText
+        )
+    }
+
+    private fun entityToCurbNote(entity: CurbNoteEntity): CurbNote {
+        return CurbNote(
+            id = entity.id,
+            targetType = entity.targetType,
+            targetId = entity.targetId,
+            text = entity.text,
+            createdAt = entity.createdAt,
+            updatedAt = entity.updatedAt
+        )
+    }
+
+    private fun entityToParkingSpot(entity: ParkingSpotEntity): ParkingSpot {
+        return ParkingSpot(
+            id = entity.id,
+            latitude = entity.latitude,
+            longitude = entity.longitude,
+            timestamp = entity.timestamp,
+            accuracy = entity.accuracy,
+            locationName = entity.locationName,
+            sessionId = entity.sessionId,
+            isActive = entity.isActive,
+            isDemo = entity.isDemo
+        )
+    }
+}

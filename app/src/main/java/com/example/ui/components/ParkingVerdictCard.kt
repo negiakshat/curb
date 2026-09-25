@@ -1,0 +1,338 @@
+package com.example.ui.components
+
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.data.model.ScanResult
+import com.example.data.model.ScanVerdict
+import com.example.ui.theme.BentoBorder
+import com.example.ui.theme.BentoTextPrimary
+import com.example.ui.theme.BentoTextSecondary
+import com.example.ui.theme.BentoWhite
+import com.example.ui.theme.CurbError
+import com.example.ui.theme.CurbErrorContainer
+import com.example.ui.theme.CurbSuccess
+import com.example.ui.theme.CurbSuccessContainer
+import com.example.ui.theme.CurbWarning
+import com.example.ui.theme.CurbWarningContainer
+import com.example.ui.theme.RadiusCard
+import com.example.ui.theme.RadiusChip
+import com.example.ui.theme.RadiusHero
+
+@Composable
+fun ParkingVerdictCard(
+    scanResult: ScanResult,
+    modifier: Modifier = Modifier
+) {
+    var isAppeared by remember { mutableStateOf(false) }
+    LaunchedEffect(scanResult.verdict) {
+        isAppeared = true
+    }
+
+    val iconScale by animateFloatAsState(
+        targetValue = if (isAppeared) 1f else 0.7f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "iconScale"
+    )
+
+    val config = when (scanResult.verdict) {
+        ScanVerdict.ALLOWED -> VerdictCardConfig(
+            backgroundColor = CurbSuccessContainer,
+            iconBgColor = CurbSuccess,
+            iconVector = Icons.Default.CheckCircle,
+            verdictLabel = "PARKING ALLOWED",
+            supportingText = "You can park here under current rules.",
+            section1Header = "ALLOWED UNTIL",
+            section1HeaderColor = BentoTextSecondary,
+            section1PrimaryText = if (isUnrestrictedResult(scanResult)) "No Time Limit" else scanResult.allowedUntilTime.ifBlank { "Active Schedule" },
+            section1PrimaryColor = CurbSuccess,
+            section1ChipText = if (!isUnrestrictedResult(scanResult)) scanResult.timeRemaining.takeIf { it.isNotBlank() } else null,
+            section1ChipBgColor = CurbSuccessContainer,
+            section1ChipTextColor = CurbSuccess,
+            section2Header = "WHY PARKING IS ALLOWED",
+            section2Content = scanResult.explanation.ifBlank { "Active parking signage permits parking under the current posted schedule." }
+        )
+        ScanVerdict.RESTRICTED -> VerdictCardConfig(
+            backgroundColor = CurbErrorContainer,
+            iconBgColor = CurbError,
+            iconVector = Icons.Default.Error,
+            verdictLabel = "PARKING RESTRICTED",
+            supportingText = "An active rule prohibits parking right now.",
+            section1Header = "ACTIVE RESTRICTION IN EFFECT",
+            section1HeaderColor = CurbError,
+            section1PrimaryText = scanResult.parkingRules.firstOrNull() ?: "Active zone or municipal restrictions prohibit parking at this location.",
+            section1PrimaryColor = BentoTextPrimary,
+            section1ChipText = null,
+            section1ChipBgColor = CurbErrorContainer,
+            section1ChipTextColor = CurbError,
+            section2Header = "WHY PARKING IS RESTRICTED",
+            section2Content = scanResult.explanation.ifBlank { "Posted signage prohibits parking or stopping during the current time window." }
+        )
+        ScanVerdict.AMBIGUOUS -> {
+            // CRITICAL ISSUE 10: Differentiate between no verified sign evidence
+            // and sign detected but unreadable/conflicting
+            val hasDetectedSigns = scanResult.detectedSigns.isNotEmpty()
+            val hasUncertainSigns = scanResult.detectedSigns.any { it.isUncertain }
+
+            val ambiguousSupportingText = when {
+                !hasDetectedSigns -> "No verified parking sign evidence was resolved."
+                hasUncertainSigns -> "A sign was detected but its text is unclear or unreadable."
+                else -> "Verify physical street signs before parking."
+            }
+
+            val ambiguousSection2Content = when {
+                !hasDetectedSigns -> scanResult.explanation.ifBlank {
+                    "No distinct parking signs were resolved in the image. Parking rules could not be determined from verified sign evidence."
+                }
+                hasUncertainSigns -> scanResult.explanation.ifBlank {
+                    "A parking sign was detected but its text could not be clearly read. Please verify the physical sign on-site."
+                }
+                else -> scanResult.explanation.ifBlank {
+                    "Signage text was partially obscured, faded, or incomplete, preventing a definitive ruling."
+                }
+            }
+
+            VerdictCardConfig(
+                backgroundColor = CurbWarningContainer,
+                iconBgColor = CurbWarning,
+                iconVector = Icons.Default.Warning,
+                verdictLabel = "RULE UNCLEAR",
+                supportingText = ambiguousSupportingText,
+                section1Header = "VERIFY BEFORE PARKING",
+                section1HeaderColor = CurbWarning,
+                section1PrimaryText = "Check physical street signs before leaving your vehicle.",
+                section1PrimaryColor = BentoTextPrimary,
+                section1ChipText = null,
+                section1ChipBgColor = CurbWarningContainer,
+                section1ChipTextColor = CurbWarning,
+                section2Header = "REASON FOR UNCERTAINTY",
+                section2Content = ambiguousSection2Content
+            )
+        }
+    }
+
+    val animatedBgColor by animateColorAsState(
+        targetValue = config.backgroundColor,
+        label = "verdictBgColor"
+    )
+    val animatedIconBgColor by animateColorAsState(
+        targetValue = config.iconBgColor,
+        label = "verdictIconBgColor"
+    )
+
+    Card(
+        shape = RoundedCornerShape(RadiusHero),
+        colors = CardDefaults.cardColors(containerColor = animatedBgColor),
+        border = BorderStroke(1.dp, BentoBorder),
+        modifier = modifier
+            .fillMaxWidth()
+            .animateContentSize()
+            .testTag("parking_verdict_card")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp)
+        ) {
+            // 1. HEADER: ICON CONTAINER + VERDICT LABEL + SUPPORTING SUBTITLE
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .scale(iconScale)
+                        .background(animatedIconBgColor, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = config.iconVector,
+                        contentDescription = null,
+                        tint = BentoWhite,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = config.verdictLabel,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BentoTextPrimary,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = config.supportingText,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        color = BentoTextSecondary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 2. CONTEXT & TIMING TILE
+            Surface(
+                shape = RoundedCornerShape(RadiusCard),
+                color = BentoWhite,
+                border = BorderStroke(1.dp, BentoBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp)
+                ) {
+                    Text(
+                        text = config.section1Header,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        color = config.section1HeaderColor
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    if (scanResult.verdict == ScanVerdict.ALLOWED) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = config.section1PrimaryText,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = config.section1PrimaryColor,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+
+                            config.section1ChipText?.let { chipText ->
+                                Surface(
+                                    shape = RoundedCornerShape(RadiusChip),
+                                    color = config.section1ChipBgColor,
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
+                                    Text(
+                                        text = chipText,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = config.section1ChipTextColor,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = config.section1PrimaryText,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 20.sp,
+                            color = config.section1PrimaryColor
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 3. IMMEDIATE REASON ("WHY?")
+            Surface(
+                shape = RoundedCornerShape(RadiusCard),
+                color = BentoWhite,
+                border = BorderStroke(1.dp, BentoBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp)
+                ) {
+                    Text(
+                        text = config.section2Header,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        color = BentoTextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = config.section2Content,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        color = BentoTextPrimary
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun isUnrestrictedResult(scanResult: ScanResult): Boolean {
+    return scanResult.allowedUntilTime.contains("Unrestricted", ignoreCase = true) ||
+            scanResult.allowedUntilTime.contains("No Limit", ignoreCase = true) ||
+            scanResult.timeRemaining.contains("Unrestricted", ignoreCase = true) ||
+            scanResult.timeRemaining.contains("No Limit", ignoreCase = true)
+}
+
+private data class VerdictCardConfig(
+    val backgroundColor: androidx.compose.ui.graphics.Color,
+    val iconBgColor: androidx.compose.ui.graphics.Color,
+    val iconVector: ImageVector,
+    val verdictLabel: String,
+    val supportingText: String,
+    val section1Header: String,
+    val section1HeaderColor: androidx.compose.ui.graphics.Color,
+    val section1PrimaryText: String,
+    val section1PrimaryColor: androidx.compose.ui.graphics.Color,
+    val section1ChipText: String?,
+    val section1ChipBgColor: androidx.compose.ui.graphics.Color,
+    val section1ChipTextColor: androidx.compose.ui.graphics.Color,
+    val section2Header: String,
+    val section2Content: String
+)

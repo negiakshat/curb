@@ -1,0 +1,19 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp"
+    android:height="40dp"
+    android:viewportWidth="40"
+    android:viewportHeight="40">
+    <!-- Outer halo -->
+    <path
+        android:fillColor="#4285F4"
+        android:fillAlpha="0.25"
+        android:pathData="M20,20 m-18,0 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0"/>
+    <!-- White border circle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20,20 m-11,0 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0"/>
+    <!-- Blue core dot -->
+    <path
+        android:fillColor="#1A73E8"
+        android:pathData="M20,20 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0"/>
+</vector>
