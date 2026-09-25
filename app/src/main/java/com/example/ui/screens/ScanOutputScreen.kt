@@ -568,19 +568,41 @@ private fun ParkingDetailsCard(
                 )
             }
 
-            // 3. MAXIMUM STAY / TIME LIMIT
-            val timeLimitText = remember(scanResult) {
+            // 3. ALLOWED UNTIL
+            val allowedUntilText = remember(scanResult) {
                 if (scanResult.verdict == ScanVerdict.ALLOWED) {
                     val allowedTime = scanResult.allowedUntilTime
-                    if (allowedTime.isNotBlank() && allowedTime != "Verify physical signage") {
+                    if (allowedTime.isNotBlank() && !allowedTime.contains("Verify physical signage", ignoreCase = true)) {
                         allowedTime
                     } else null
                 } else null
             }
-            if (!timeLimitText.isNullOrBlank()) {
+            if (!allowedUntilText.isNullOrBlank()) {
                 DetailSectionRow(
-                    label = "MAXIMUM STAY / TIME LIMIT",
-                    value = timeLimitText
+                    label = "ALLOWED UNTIL",
+                    value = allowedUntilText
+                )
+            }
+
+            // 4. MAXIMUM STAY
+            val durationSources = remember(scanResult) {
+                buildList {
+                    addAll(scanResult.parkingRules)
+                    scanResult.detectedSigns.forEach { sign ->
+                        if (sign.ruleText.isNotBlank()) add(sign.ruleText)
+                        if (sign.restrictions.isNotBlank()) add(sign.restrictions)
+                        if (sign.subtitle.isNotBlank()) add(sign.subtitle)
+                        if (sign.title.isNotBlank()) add(sign.title)
+                    }
+                }
+            }
+            val maxStayText = remember(durationSources) {
+                findExplicitDuration(durationSources)
+            }
+            if (!maxStayText.isNullOrBlank()) {
+                DetailSectionRow(
+                    label = "MAXIMUM STAY",
+                    value = maxStayText
                 )
             }
 
@@ -718,5 +740,40 @@ private fun DetailSectionRow(
             color = valueColor,
             lineHeight = 19.sp
         )
+    }
+}
+
+private fun findExplicitDuration(sources: List<String>): String? {
+    val durationRegex = Regex(
+        """(?i)\b(?:max(?:imum)?\s+(?:stay\s+|limit\s+|parking\s+)?)?(\d+(?:\.\d+)?\s*(?:-\s*)?(?:hours?|hrs?|minutes?|mins?))\b"""
+    )
+
+    for (source in sources) {
+        if (source.isBlank()) continue
+        val match = durationRegex.find(source)
+        if (match != null) {
+            val matchedValue = match.groupValues[1].trim()
+            if (matchedValue.isNotBlank()) {
+                return formatDurationString(matchedValue)
+            }
+        }
+    }
+    return null
+}
+
+private fun formatDurationString(raw: String): String {
+    val cleaned = raw.lowercase().trim()
+    val numberMatch = Regex("""^(\d+(?:\.\d+)?)""").find(cleaned) ?: return raw
+    val numStr = numberMatch.groupValues[1]
+    val num = numStr.toDoubleOrNull() ?: 0.0
+
+    return when {
+        cleaned.contains("hour") || cleaned.contains("hr") -> {
+            if (num == 1.0) "$numStr hour" else "$numStr hours"
+        }
+        cleaned.contains("minute") || cleaned.contains("min") -> {
+            if (num == 1.0) "$numStr minute" else "$numStr minutes"
+        }
+        else -> raw
     }
 }
