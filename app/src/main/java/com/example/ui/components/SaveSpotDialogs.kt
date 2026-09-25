@@ -218,7 +218,7 @@ fun DeleteSavedSpotConfirmationDialog(
                     )
 
                     Text(
-                        text = if (spotName.isNotBlank()) "This will remove \"$spotName\" and its stored parking information from Curb." else "This will remove the saved parking spot and its stored parking information from Curb.",
+                        text = if (spotName.isNotBlank()) "This will remove “$spotName” and its saved parking information from Curb." else "This will remove this saved parking spot and its saved parking information from Curb.",
                         fontSize = 13.sp,
                         color = BentoTextSecondary,
                         textAlign = TextAlign.Center,
@@ -254,7 +254,7 @@ fun DeleteSavedSpotConfirmationDialog(
                         )
                     ) {
                         Text(
-                            text = "DELETE SPOT",
+                            text = "Delete",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp,

@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -471,9 +472,9 @@ private fun ActivityScanRowItem(
         val now = System.currentTimeMillis()
         val diff = now - scan.timestamp
         when {
-            diff < 24 * 60 * 60 * 1000L -> "Today • " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(scan.timestamp))
-            diff < 48 * 60 * 60 * 1000L -> "Yesterday • " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(scan.timestamp))
-            else -> SimpleDateFormat("MMM d • h:mm a", Locale.getDefault()).format(Date(scan.timestamp))
+            diff < 24 * 60 * 60 * 1000L -> "Today · " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(scan.timestamp))
+            diff < 48 * 60 * 60 * 1000L -> "Yesterday · " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(scan.timestamp))
+            else -> SimpleDateFormat("MMM d · h:mm a", Locale.getDefault()).format(Date(scan.timestamp))
         }
     }
 
@@ -483,65 +484,68 @@ private fun ActivityScanRowItem(
         ScanVerdict.AMBIGUOUS -> Pair(CurbWarning, "Rule unclear")
     }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(RadiusNested))
             .clickable { onClick() }
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        // Line 1: Location name on left, Time/date on right
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .background(statusColor, CircleShape)
+            Text(
+                text = scan.locationName,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = BentoTextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = dateStr,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = BentoTextSecondary,
+                maxLines = 1,
+                textAlign = TextAlign.End
+            )
+        }
 
-            Column {
+        // Line 2: Verdict description on left, CurbVerdictBadge on right
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f, fill = false)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(statusColor, CircleShape)
+                )
                 Text(
-                    text = scan.locationName,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = BentoTextPrimary,
+                    text = statusText,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = statusColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = statusText,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = statusColor
-                    )
-                    Text(
-                        text = "•",
-                        fontSize = 11.sp,
-                        color = BentoTextSecondary
-                    )
-                    Text(
-                        text = dateStr,
-                        fontSize = 11.sp,
-                        color = BentoTextSecondary
-                    )
-                }
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            CurbVerdictBadge(verdict = scan.verdict)
         }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        CurbVerdictBadge(verdict = scan.verdict)
     }
 }
 

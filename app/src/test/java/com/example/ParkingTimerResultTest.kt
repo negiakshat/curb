@@ -95,7 +95,7 @@ class ParkingTimerResultTest {
     }
 
     @Test
-    fun `viewModel startParkingSession propagates success result`() = runBlocking {
+    fun `viewModel startParkingSession propagates success result`() = runTest {
         println("Starting viewModel success test")
         val allowedScan = ScanResult(
             verdict = ScanVerdict.ALLOWED,
@@ -109,7 +109,7 @@ class ParkingTimerResultTest {
         val scanId = repository.saveScan(allowedScan)
         println("Saved scan for VM test: $scanId")
         
-        val deferredId = kotlinx.coroutines.CompletableDeferred<Long>()
+        var capturedId = -2L
         viewModel.startParkingSession(
             scanResultId = scanId,
             scanResult = allowedScan,
@@ -117,19 +117,18 @@ class ParkingTimerResultTest {
             durationMinutes = 60,
             onResult = { id -> 
                 println("onResult called with: $id")
-                deferredId.complete(id)
+                capturedId = id
             }
         )
 
-        println("Waiting for VM success to finish...")
-        val capturedId = withTimeout(5000) { deferredId.await() }
+        advanceUntilIdle()
         println("Finished waiting success. capturedId: $capturedId")
         
         assertTrue("Expected positive session ID, got $capturedId", capturedId > 0)
     }
 
     @Test
-    fun `viewModel startParkingSession propagates failure result`() = runBlocking {
+    fun `viewModel startParkingSession propagates failure result`() = runTest {
         println("Starting viewModel failure test")
         val restrictedScan = ScanResult(
             verdict = ScanVerdict.RESTRICTED,
@@ -143,7 +142,7 @@ class ParkingTimerResultTest {
         val scanId = repository.saveScan(restrictedScan)
         println("Saved scan for VM failure test: $scanId")
 
-        val deferredId = kotlinx.coroutines.CompletableDeferred<Long>()
+        var capturedId = -2L
         viewModel.startParkingSession(
             scanResultId = scanId,
             scanResult = restrictedScan,
@@ -151,12 +150,11 @@ class ParkingTimerResultTest {
             durationMinutes = 60,
             onResult = { id -> 
                 println("onResult called with: $id")
-                deferredId.complete(id)
+                capturedId = id
             }
         )
 
-        println("Waiting for VM failure to finish...")
-        val capturedId = withTimeout(5000) { deferredId.await() }
+        advanceUntilIdle()
         println("Finished waiting failure. capturedId: $capturedId")
         
         assertEquals(-1L, capturedId)

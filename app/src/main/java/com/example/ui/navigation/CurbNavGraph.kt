@@ -15,7 +15,6 @@ import com.example.data.model.ScanVerdict
 import com.example.ui.screens.AboutCurbScreen
 import com.example.ui.screens.AccountInfoScreen
 import com.example.ui.screens.ActivityScreen
-import com.example.ui.screens.AskCurbScreen
 import com.example.ui.screens.ContextualCopilotScreen
 import com.example.ui.screens.CurbProPaywallScreen
 import com.example.ui.screens.FindMyCarScreen
@@ -184,7 +183,7 @@ fun CurbNavGraph(
                     }
                 },
                 onAskCurbClicked = {
-                    navController.navigate(Routes.ASK_CURB) {
+                    navController.navigate(Routes.CONTEXTUAL_COPILOT) {
                         popUpTo(navController.graph.findStartDestination().id) {
                             saveState = true
                         }
@@ -415,30 +414,6 @@ fun CurbNavGraph(
 
         // 09. CONTEXTUAL COPILOT
         composable(Routes.CONTEXTUAL_COPILOT) {
-            ContextualCopilotScreen(
-                messages = chatMessages,
-                isLoading = isChatLoading,
-                scanResult = currentScanResult,
-                usageInfo = chatUsageInfo,
-                isPro = isUserPro,
-                onSendMessage = { query ->
-                    viewModel.sendChatMessage(query)
-                },
-                onUpgradeToPro = {
-                    navController.navigate(Routes.CURB_PRO_PAYWALL)
-                },
-                onBack = {
-                    if (!navController.popBackStack()) {
-                        navController.navigate(Routes.HOME) {
-                            popUpTo(Routes.HOME) { inclusive = true }
-                        }
-                    }
-                }
-            )
-        }
-
-        // 09b. ASK CURB (ALIAS / BACKWARD COMPATIBILITY)
-        composable(Routes.ASK_CURB) {
             ContextualCopilotScreen(
                 messages = chatMessages,
                 isLoading = isChatLoading,
