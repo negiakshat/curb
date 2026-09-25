@@ -16,14 +16,14 @@ class NavigationHierarchyTest {
     fun `verify top level destinations`() {
         val topLevelRoutes = listOf(
             Routes.HOME,
-            Routes.ASK_CURB,
-            Routes.ACTIVITY,
+            Routes.SCAN,
+            Routes.FIND_MY_CAR,
             Routes.YOU
         )
         assertEquals(4, topLevelRoutes.size)
         assertTrue(topLevelRoutes.contains(Routes.HOME))
-        assertTrue(topLevelRoutes.contains(Routes.ASK_CURB))
-        assertTrue(topLevelRoutes.contains(Routes.ACTIVITY))
+        assertTrue(topLevelRoutes.contains(Routes.SCAN))
+        assertTrue(topLevelRoutes.contains(Routes.FIND_MY_CAR))
         assertTrue(topLevelRoutes.contains(Routes.YOU))
     }
 
@@ -68,7 +68,6 @@ class NavigationHierarchyTest {
             Routes.SCAN,
             Routes.SCAN_OUTPUT,
             Routes.PARKING_DETAILS,
-            Routes.ASK_CURB,
             Routes.ACTIVITY,
             Routes.YOU,
             Routes.ACCOUNT_INFO,
