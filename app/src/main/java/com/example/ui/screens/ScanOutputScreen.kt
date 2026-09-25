@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -70,6 +71,9 @@ import com.example.ui.theme.BentoSand
 import com.example.ui.theme.BentoTextPrimary
 import com.example.ui.theme.BentoTextSecondary
 import com.example.ui.theme.BentoWhite
+import com.example.ui.theme.CurbError
+import com.example.ui.theme.CurbSuccess
+import com.example.ui.theme.CurbWarning
 import com.example.ui.theme.RadiusCard
 import com.example.util.ParkingTimerCalculator
 
@@ -213,7 +217,7 @@ fun ScanOutputScreen(
                 }
             }
 
-            // 2. EVIDENCE & FULL DETAILS BANNER
+            // 2. PARKING DETAILS SUMMARY CARD
             item {
                 AnimatedVisibility(
                     visible = isContentVisible,
@@ -223,67 +227,10 @@ fun ScanOutputScreen(
                     )
                 ) {
                     Column {
-                        Card(
-                            shape = RoundedCornerShape(RadiusCard),
-                            colors = CardDefaults.cardColors(containerColor = BentoWhite),
-                            border = BorderStroke(1.dp, BentoBorder),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(RadiusCard))
-                                .clickable { onViewDetails() }
-                                .testTag("view_details_card")
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(42.dp)
-                                            .clip(CircleShape)
-                                            .background(BentoSand),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
-                                            contentDescription = "View evidence details",
-                                            tint = BentoPrimaryDark,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                    Column {
-                                        Text(
-                                            text = "View full evidence & details",
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = BentoTextPrimary
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = "${scanResult.detectedSigns.size} sign(s) read • Complete rule analysis",
-                                            fontSize = 12.sp,
-                                            color = BentoTextSecondary
-                                        )
-                                    }
-                                }
-
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = "View Details",
-                                    tint = BentoTextSecondary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
+                        ParkingDetailsCard(
+                            scanResult = scanResult,
+                            onViewDetails = onViewDetails
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
@@ -371,12 +318,6 @@ fun ScanOutputScreen(
                         )
                     }
 
-                    CurbSecondaryButton(
-                        text = "ASK ABOUT THIS SIGN",
-                        onClick = onAskCurb,
-                        testTag = "contextual_copilot_button"
-                    )
-
                     CurbTertiaryButton(
                         text = "Retake scan",
                         onClick = onRetake,
@@ -390,11 +331,6 @@ fun ScanOutputScreen(
                         backgroundColor = BentoPrimaryDark,
                         testTag = "retake_scan_button"
                     )
-                    CurbSecondaryButton(
-                        text = "ASK ABOUT THIS SIGN",
-                        onClick = onAskCurb,
-                        testTag = "contextual_copilot_button"
-                    )
                 }
                 ScanVerdict.AMBIGUOUS -> {
                     CurbPrimaryButton(
@@ -402,11 +338,6 @@ fun ScanOutputScreen(
                         onClick = onRetake,
                         backgroundColor = BentoPrimaryDark,
                         testTag = "retake_scan_button"
-                    )
-                    CurbSecondaryButton(
-                        text = "ASK ABOUT THIS SIGN",
-                        onClick = onAskCurb,
-                        testTag = "contextual_copilot_button"
                     )
                 }
             }
@@ -549,4 +480,243 @@ private fun exportScanResult(context: Context, scan: ScanResult) {
         putExtra(Intent.EXTRA_TEXT, builder.toString())
     }
     context.startActivity(Intent.createChooser(intent, "Export Parking Spot Details"))
+}
+
+@Composable
+private fun ParkingDetailsCard(
+    scanResult: ScanResult,
+    onViewDetails: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(RadiusCard),
+        colors = CardDefaults.cardColors(containerColor = BentoWhite),
+        border = BorderStroke(1.dp, BentoBorder),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("parking_details_card")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(BentoSand),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = BentoPrimaryDark,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    text = "PARKING DETAILS",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp,
+                    color = BentoPrimaryDark
+                )
+            }
+
+            // 1. CURRENT STATUS
+            val statusText = when (scanResult.verdict) {
+                ScanVerdict.ALLOWED -> if (scanResult.statusChipText.isNotBlank() && scanResult.statusChipText != "Signage unclear") scanResult.statusChipText else "Parking allowed under current rules"
+                ScanVerdict.RESTRICTED -> if (scanResult.statusChipText.isNotBlank() && scanResult.statusChipText != "Signage unclear") scanResult.statusChipText else "No parking allowed at this time"
+                ScanVerdict.AMBIGUOUS -> if (scanResult.statusChipText.isNotBlank()) scanResult.statusChipText else "Rule unclear — verify physical signage"
+            }
+            val statusColor = when (scanResult.verdict) {
+                ScanVerdict.ALLOWED -> CurbSuccess
+                ScanVerdict.RESTRICTED -> CurbError
+                ScanVerdict.AMBIGUOUS -> CurbWarning
+            }
+            DetailSectionRow(
+                label = "CURRENT STATUS",
+                value = statusText,
+                valueColor = statusColor
+            )
+
+            // 2. WHEN THIS RULE APPLIES
+            val whenAppliesText = remember(scanResult) {
+                val applicableFromSign = scanResult.detectedSigns
+                    .map { it.applicableDaysHours }
+                    .firstOrNull { it.isNotBlank() }
+                if (!applicableFromSign.isNullOrBlank()) {
+                    applicableFromSign
+                } else {
+                    scanResult.detectedSigns
+                        .map { it.subtitle }
+                        .firstOrNull { it.isNotBlank() && !it.contains("allowed", ignoreCase = true) && !it.contains("restricted", ignoreCase = true) }
+                        .orEmpty()
+                }
+            }
+            if (whenAppliesText.isNotBlank()) {
+                DetailSectionRow(
+                    label = "WHEN THIS RULE APPLIES",
+                    value = whenAppliesText
+                )
+            }
+
+            // 3. MAXIMUM STAY / TIME LIMIT
+            val timeLimitText = remember(scanResult) {
+                if (scanResult.verdict == ScanVerdict.ALLOWED) {
+                    val allowedTime = scanResult.allowedUntilTime
+                    if (allowedTime.isNotBlank() && allowedTime != "Verify physical signage") {
+                        allowedTime
+                    } else null
+                } else null
+            }
+            if (!timeLimitText.isNullOrBlank()) {
+                DetailSectionRow(
+                    label = "MAXIMUM STAY / TIME LIMIT",
+                    value = timeLimitText
+                )
+            }
+
+            // 4. PAYMENT
+            if (scanResult.paymentInfo.isNotBlank()) {
+                DetailSectionRow(
+                    label = "PAYMENT",
+                    value = scanResult.paymentInfo
+                )
+            }
+
+            // 5. VEHICLE / PERMIT APPLICABILITY
+            if (scanResult.vehicleApplicability.isNotBlank()) {
+                DetailSectionRow(
+                    label = "VEHICLE & PERMIT APPLICABILITY",
+                    value = scanResult.vehicleApplicability
+                )
+            }
+
+            // 6. KEY PARKING RULES
+            val rules = remember(scanResult) {
+                scanResult.parkingRules
+                    .filter { it.isNotBlank() && !it.contains("No verified parking rule", ignoreCase = true) }
+                    .distinct()
+            }
+            if (rules.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "KEY PARKING RULES",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp,
+                        color = BentoTextSecondary
+                    )
+                    rules.forEach { rule ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Text(
+                                text = "•",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BentoPrimaryDark
+                            )
+                            Text(
+                                text = rule,
+                                fontSize = 14.sp,
+                                color = BentoTextPrimary,
+                                lineHeight = 19.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 7. WHY CURB DECIDED THIS
+            if (scanResult.explanation.isNotBlank()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "WHY CURB DECIDED THIS",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp,
+                        color = BentoTextSecondary
+                    )
+                    Text(
+                        text = scanResult.explanation,
+                        fontSize = 13.sp,
+                        color = BentoTextPrimary,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            // 8. VIEW FULL EVIDENCE LINK
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(BentoSand)
+                    .clickable { onViewDetails() }
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                    .testTag("view_details_card"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
+                        contentDescription = null,
+                        tint = BentoPrimaryDark,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "View full evidence & details (${scanResult.detectedSigns.size} sign(s) read)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BentoPrimaryDark
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = BentoPrimaryDark,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailSectionRow(
+    label: String,
+    value: String,
+    valueColor: androidx.compose.ui.graphics.Color = BentoTextPrimary
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.8.sp,
+            color = BentoTextSecondary
+        )
+        Text(
+            text = value,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = valueColor,
+            lineHeight = 19.sp
+        )
+    }
 }
