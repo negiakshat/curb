@@ -108,6 +108,13 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
                     endTimeMillis = session.endTime
                 )
             }
+            else -> {
+                NotificationVariants.getReminderVariant(
+                    sessionId = session.id,
+                    locationName = session.locationName,
+                    minutesRemaining = session.reminderMinutesBefore.coerceAtLeast(1)
+                )
+            }
         }
 
         // 6. BUILD CONTENT INTENT FOR NAVIGATION & CONTEXT RESTORATION

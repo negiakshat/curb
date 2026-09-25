@@ -26,7 +26,24 @@ class BootReceiver : BroadcastReceiver() {
                     val savedPlaceEntities = db.savedPlaceDao().getSavedPlacesList()
                     savedPlaceEntities.forEach { entity ->
                         if (entity.reminderEnabled) {
-                            val place = com.example.data.repository.CurbRepository.entityToSavedPlace(entity)
+                            val place = com.example.data.model.SavedPlace(
+                                id = entity.id,
+                                name = entity.name,
+                                address = entity.address,
+                                parkingNote = entity.parkingNote,
+                                timestamp = entity.timestamp,
+                                latitude = entity.latitude,
+                                longitude = entity.longitude,
+                                scanResultId = entity.scanResultId,
+                                parkingRuleSummary = entity.parkingRuleSummary,
+                                parkingSchedule = entity.parkingSchedule,
+                                parkingVerdict = entity.parkingVerdict,
+                                signImageUri = entity.signImageUri,
+                                lastCheckedAt = entity.lastCheckedAt,
+                                reminderEnabled = entity.reminderEnabled,
+                                reminderMinutesBefore = entity.reminderMinutesBefore,
+                                reminderScheduleText = entity.reminderScheduleText
+                            )
                             ParkingNotificationScheduler.scheduleSavedPlaceReminder(context, place)
                         }
                     }
