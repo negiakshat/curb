@@ -1,7 +1,5 @@
 package com.example.ui.screens
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -454,16 +452,8 @@ fun PaymentSubscriptionScreen(
                         CurbPrimaryButton(
                             text = "Manage Subscription",
                             onClick = {
-                                try {
-                                    val intent = Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse("https://play.google.com/store/account/subscriptions")
-                                    )
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Could not open Play Store subscription settings.")
-                                    }
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Subscription management is unavailable in the Test Store.")
                                 }
                             },
                             testTag = "manage_subscription_button"
