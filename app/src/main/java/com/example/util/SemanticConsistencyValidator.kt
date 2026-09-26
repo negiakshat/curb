@@ -138,26 +138,22 @@ object SemanticConsistencyValidator {
                     .filterNot { isConfidentRestrictionClaim(it) }
                     .ifEmpty { listOf("Parking permitted according to posted signage.") }
 
-                // Check for usable duration in rawResult or extract from OCR
-                val extractedTime = extractAllowedUntilFromOcr(combinedOcrText)
-
-                // CRITICAL ISSUE 4: Before accepting Gemini's allowedUntilTime, verify it
-                // against OCR evidence. If OCR only has a duration (e.g., "2 HOUR") without
-                // a specific clock cutoff, reject any invented clock time.
-                val geminiTimeSupported = isUsableClockTimeOrDuration(rawResult.allowedUntilTime) &&
-                    rawResult.timeRemaining != "--" &&
-                    EvidenceAnchoringValidator.isAllowedUntilTimeSupportedByEvidence(
-                        rawResult.allowedUntilTime, combinedOcrText
-                    )
-
-                val (allowedUntil, remaining) = when {
-                    geminiTimeSupported -> {
-                        Pair(rawResult.allowedUntilTime, rawResult.timeRemaining)
+                val evidence = ParkingTimeEvidenceBuilder.buildParkingTimeEvidence(rawResult)
+                val (allowedUntil, remaining) = when (evidence.type) {
+                    ParkingTimeEvidenceType.BOTH -> {
+                        val formattedCutoff = evidence.cutoffTimeString ?: "Verify physical signage"
+                        Pair(formattedCutoff, "${evidence.durationMinutes?.let { ParkingTimeEvidenceBuilder.formatMinutesToDisplay(it) } ?: "2h 00m"} remaining")
                     }
-                    extractedTime != null -> {
-                        extractedTime
+                    ParkingTimeEvidenceType.POSTED_DURATION -> {
+                        val mins = evidence.durationMinutes ?: 120
+                        val durationStr = ParkingTimeEvidenceBuilder.formatMinutesToDisplay(mins)
+                        Pair("$durationStr Parking", "$durationStr remaining")
                     }
-                    else -> {
+                    ParkingTimeEvidenceType.CLOCK_CUTOFF -> {
+                        val formattedCutoff = evidence.cutoffTimeString ?: "Verify physical signage"
+                        Pair(formattedCutoff, "Until $formattedCutoff")
+                    }
+                    ParkingTimeEvidenceType.UNKNOWN -> {
                         Pair("Verify physical signage", "--")
                     }
                 }
@@ -184,15 +180,8 @@ object SemanticConsistencyValidator {
         if (scanResult.isDemo) return true
         if (scanResult.verdict != ScanVerdict.ALLOWED) return false
 
-        if (scanResult.allowedUntilTime == "Verify physical signage" ||
-            scanResult.allowedUntilTime == "No parking permitted" ||
-            scanResult.allowedUntilTime == "No duration limit" ||
-            scanResult.allowedUntilTime.isBlank()
-        ) {
-            return false
-        }
-
-        if (scanResult.timeRemaining == "--" || scanResult.timeRemaining.isBlank()) {
+        val evidence = ParkingTimeEvidenceBuilder.buildParkingTimeEvidence(scanResult)
+        if (evidence.type == ParkingTimeEvidenceType.UNKNOWN) {
             return false
         }
 

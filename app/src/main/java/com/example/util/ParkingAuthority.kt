@@ -173,15 +173,21 @@ object ParkingAuthority {
             return false
         }
 
-        if (scanResult.detectedSigns.isNotEmpty()) {
-            return scanResult.detectedSigns.any { sign ->
-                !SignCandidateValidator.isDemoOrSampleCrop(sign.croppedImageUri, sign.isDemo, sign.id) &&
-                        (sign.isUncertain || SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid)
-            }
+        val evidence = ParkingTimeEvidenceBuilder.buildParkingTimeEvidence(scanResult)
+        if (evidence.type == ParkingTimeEvidenceType.UNKNOWN) {
+            return false
         }
 
-        // Standalone scanResult with empty detectedSigns must have time rule evidence in parkingRules
-        val combinedRules = scanResult.parkingRules.joinToString(" ")
-        return EvidenceAnchoringValidator.hasTimeRuleEvidence(combinedRules)
+        if (evidence.source == "OCR") {
+            return true
+        }
+
+        if (evidence.source == "GEMINI") {
+            val hasSignEvidence = scanResult.detectedSigns.isNotEmpty() &&
+                    scanResult.detectedSigns.any { !it.isUncertain && !it.isRestrictingNow }
+            return hasSignEvidence
+        }
+
+        return false
     }
 }
