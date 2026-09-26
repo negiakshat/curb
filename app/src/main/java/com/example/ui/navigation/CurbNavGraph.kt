@@ -1,6 +1,8 @@
 package com.example.ui.navigation
 
 import android.widget.Toast
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -82,7 +84,11 @@ fun CurbNavGraph(
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        modifier = modifier
+        modifier = modifier,
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None },
+        popEnterTransition = { EnterTransition.None },
+        popExitTransition = { ExitTransition.None }
     ) {
         // 01. SPLASH
         composable(Routes.SPLASH) {
@@ -399,9 +405,6 @@ fun CurbNavGraph(
                 },
                 onReportIssue = {
                     Toast.makeText(context, "Thank you! Parking report submitted for review.", Toast.LENGTH_LONG).show()
-                },
-                onAskAboutThisSign = {
-                    navController.navigate(Routes.CONTEXTUAL_COPILOT)
                 },
                 onUpgradeToPro = {
                     navController.navigate(Routes.CURB_PRO_PAYWALL)

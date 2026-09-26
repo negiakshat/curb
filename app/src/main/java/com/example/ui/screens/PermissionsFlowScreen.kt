@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -102,6 +103,14 @@ private fun checkPhotosPermissionGranted(context: Context): Boolean {
     }
 }
 
+private fun checkNotificationPermissionGranted(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    } else {
+        true
+    }
+}
+
 @Composable
 fun PermissionsFlowScreen(
     onPermissionsFinished: () -> Unit,
@@ -115,7 +124,8 @@ fun PermissionsFlowScreen(
             !checkLocationPermissionGranted(context) -> 2
             !checkCameraPermissionGranted(context) -> 3
             !checkPhotosPermissionGranted(context) -> 4
-            else -> 4
+            !checkNotificationPermissionGranted(context) -> 5
+            else -> 5
         }
     }
 
@@ -126,7 +136,8 @@ fun PermissionsFlowScreen(
     LaunchedEffect(Unit) {
         if (checkLocationPermissionGranted(context) &&
             checkCameraPermissionGranted(context) &&
-            checkPhotosPermissionGranted(context)
+            checkPhotosPermissionGranted(context) &&
+            checkNotificationPermissionGranted(context)
         ) {
             onPermissionsFinished()
         }
@@ -140,7 +151,8 @@ fun PermissionsFlowScreen(
                 when (currentStep) {
                     2 -> if (checkLocationPermissionGranted(context)) currentStep = 3
                     3 -> if (checkCameraPermissionGranted(context)) currentStep = 4
-                    4 -> if (checkPhotosPermissionGranted(context)) onPermissionsFinished()
+                    4 -> if (checkPhotosPermissionGranted(context)) currentStep = 5
+                    5 -> if (checkNotificationPermissionGranted(context)) onPermissionsFinished()
                 }
             }
         }
@@ -204,7 +216,7 @@ fun PermissionsFlowScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ ->
         if (checkPhotosPermissionGranted(context)) {
-            onPermissionsFinished()
+            currentStep = 5
         } else {
             val activity = findActivity(context)
             val isPermanent = activity != null &&
@@ -216,6 +228,28 @@ fun PermissionsFlowScreen(
                     "Enable Photo permission in Settings to continue using Curb."
                 else
                     "Allow Curb to access your photo library so you can select and analyze saved parking sign photos.",
+                isPermanent = isPermanent
+            )
+        }
+    }
+
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        if (checkNotificationPermissionGranted(context)) {
+            onPermissionsFinished()
+        } else {
+            val activity = findActivity(context)
+            val isPermanent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && activity != null) {
+                !ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)
+            } else false
+
+            permissionDialogData = PermissionDialogData(
+                title = "Notification permission is required",
+                message = if (isPermanent)
+                    "Enable Notification permission in Settings to continue using Curb."
+                else
+                    "Curb will nudge you before your parking time runs out. Future-you will thank you.",
                 isPermanent = isPermanent
             )
         }
@@ -234,11 +268,17 @@ fun PermissionsFlowScreen(
             "Curb uses your camera to scan parking signs, detect restrictions, and understand their rules instantly.",
             "Allow Camera"
         )
-        else -> Quad(
+        4 -> Quad(
             Icons.Default.PhotoLibrary,
             "Enable Photo Access",
             "Allow Curb to access your photo library so you can select and analyze saved parking sign photos.",
-            "Allow Photos & Finish"
+            "Allow Photos"
+        )
+        else -> Quad(
+            Icons.Default.Notifications,
+            "Enable Notifications",
+            "Curb will nudge you before your parking time runs out. Future-you will thank you.",
+            "Allow Notifications"
         )
     }
 
@@ -253,15 +293,16 @@ fun PermissionsFlowScreen(
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // SHARED ONBOARDING HEADER (STEPS 2, 3, 4 OF 4)
+            // SHARED ONBOARDING HEADER (STEPS 2, 3, 4, 5 OF 5)
             OnboardingHeader(
                 currentStep = currentStep,
-                totalSteps = 4,
+                totalSteps = 5,
                 onBack = {
                     when (currentStep) {
                         2 -> onBackToNameSetup()
                         3 -> currentStep = 2
                         4 -> currentStep = 3
+                        5 -> currentStep = 4
                     }
                 }
             )
@@ -351,12 +392,23 @@ fun PermissionsFlowScreen(
                         }
                         4 -> {
                             if (checkPhotosPermissionGranted(context)) {
-                                onPermissionsFinished()
+                                currentStep = 5
                             } else {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                     photoLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
                                 } else {
                                     photoLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                                }
+                            }
+                        }
+                        5 -> {
+                            if (checkNotificationPermissionGranted(context)) {
+                                onPermissionsFinished()
+                            } else {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    onPermissionsFinished()
                                 }
                             }
                         }

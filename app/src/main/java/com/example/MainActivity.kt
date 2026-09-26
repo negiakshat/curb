@@ -163,11 +163,7 @@ fun CurbApp(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            AnimatedVisibility(
-                visible = showBottomBar,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
+            if (showBottomBar) {
                 NavigationBar(
                     modifier = Modifier.drawBehind {
                         drawLine(

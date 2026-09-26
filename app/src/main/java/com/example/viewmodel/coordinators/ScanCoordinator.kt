@@ -16,6 +16,7 @@ import com.example.data.model.SignBoundingBox
 import com.example.data.remote.GeminiService
 import com.example.data.repository.CurbRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -101,72 +102,70 @@ class ScanCoordinator(
             val totalScanStart = System.currentTimeMillis()
 
             try {
-                // Stage 1: Fast Crop Generation / Local Sign Detection
                 _processingStage.value = ScanProcessingStage.LOCAL_DETECTION
                 _processingStatusText.value = ScanProcessingStage.LOCAL_DETECTION.statusText
 
-                val stage1Start = System.currentTimeMillis()
-                val detectedCrops = if (localDetections.isNotEmpty()) {
-                    Log.d("CurbPipeline", "Using pre-supplied local detections: ${localDetections.size}")
-                    localDetections
-                } else if (bitmap != null) {
-                    val detectionResult = SignDetectionService.detectAndCropSigns(
-                        application,
-                        bitmap
-                    )
-                    detectionResult.signs
-                } else {
-                    emptyList()
-                }
-
-                _processingStage.value = ScanProcessingStage.CROP_CREATION
-                _processingStatusText.value = ScanProcessingStage.CROP_CREATION.statusText
-
-                val stage1Time = System.currentTimeMillis() - stage1Start
-                Log.d("CurbTiming", "Stage 1 (Detection & Cropping) finished in $stage1Time ms. Validated crops: ${detectedCrops.size}")
-
-                // Stage 2: Location Resolution
-                _processingStage.value = ScanProcessingStage.LOCATION_RESOLUTION
-                _processingStatusText.value = ScanProcessingStage.LOCATION_RESOLUTION.statusText
-
-                val stage2Start = System.currentTimeMillis()
-                val (resolvedLocName, resolvedCityState, isKnown) = if (!explicitLocationName.isNullOrBlank()) {
-                    Triple(explicitLocationName, explicitCityState ?: "", true)
-                } else {
-                    val currentLoc = if (userLocationState.value !is UserLocationResult.Success && locationService.hasLocationPermission()) {
-                        locationService.fetchCurrentLocation()
+                // Step 1: Initiate Location Resolution concurrently
+                val locationDeferred = async {
+                    if (!explicitLocationName.isNullOrBlank()) {
+                        Triple(explicitLocationName, explicitCityState ?: "", true)
                     } else {
-                        userLocationState.value
-                    }
+                        val currentLoc = if (userLocationState.value !is UserLocationResult.Success && locationService.hasLocationPermission()) {
+                            locationService.fetchCurrentLocation()
+                        } else {
+                            userLocationState.value
+                        }
 
-                    when (currentLoc) {
-                        is UserLocationResult.Success -> {
-                            Triple(currentLoc.locationName, currentLoc.cityState, true)
-                        }
-                        is UserLocationResult.PermissionRequired -> {
-                            Triple("Location access needed", "", false)
-                        }
-                        is UserLocationResult.Unavailable -> {
-                            Triple("Location unavailable", "", false)
+                        when (currentLoc) {
+                            is UserLocationResult.Success -> {
+                                Triple(currentLoc.locationName, currentLoc.cityState, true)
+                            }
+                            is UserLocationResult.PermissionRequired -> {
+                                Triple("Location access needed", "", false)
+                            }
+                            is UserLocationResult.Unavailable -> {
+                                Triple("Location unavailable", "", false)
+                            }
                         }
                     }
                 }
-                val stage2Time = System.currentTimeMillis() - stage2Start
-                Log.d("CurbTiming", "Stage 2 (Location Resolution) finished in $stage2Time ms: $resolvedLocName")
 
-                // Stage 3: Gemini / Evidence-Anchored Analysis
+                // Step 2: Initiate Local OCR / Crop Detection concurrently
+                val detectionDeferred = async {
+                    if (localDetections.isNotEmpty()) {
+                        Log.d("CurbPipeline", "Using pre-supplied local detections: ${localDetections.size}")
+                        localDetections
+                    } else if (bitmap != null) {
+                        val detectionResult = SignDetectionService.detectAndCropSigns(
+                            application,
+                            bitmap
+                        )
+                        detectionResult.signs
+                    } else {
+                        emptyList()
+                    }
+                }
+
+                // Step 3: Initiate Gemini analysis immediately with captured bitmap
                 _processingStage.value = ScanProcessingStage.GEMINI_REQUEST
                 _processingStatusText.value = ScanProcessingStage.GEMINI_REQUEST.statusText
 
+                val geminiDeferred = async {
+                    val (resolvedLocName, resolvedCityState, isKnown) = locationDeferred.await()
+                    val detectedCrops = detectionDeferred.await()
+
+                    GeminiService.analyzeParkingSigns(
+                        bitmap = bitmap,
+                        locationName = resolvedLocName,
+                        cityState = resolvedCityState,
+                        isLocationKnown = isKnown,
+                        localDetections = detectedCrops,
+                        context = application
+                    )
+                }
+
                 val stage3Start = System.currentTimeMillis()
-                val result = GeminiService.analyzeParkingSigns(
-                    bitmap = bitmap,
-                    locationName = resolvedLocName,
-                    cityState = resolvedCityState,
-                    isLocationKnown = isKnown,
-                    localDetections = detectedCrops,
-                    context = application
-                )
+                val result = geminiDeferred.await()
 
                 _processingStage.value = ScanProcessingStage.EVIDENCE_VALIDATION
                 _processingStatusText.value = ScanProcessingStage.EVIDENCE_VALIDATION.statusText

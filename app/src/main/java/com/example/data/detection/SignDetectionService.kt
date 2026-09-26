@@ -593,9 +593,10 @@ object SignDetectionService {
         return when {
             upper.contains("TOW") || upper.contains("CLEAN") || upper.contains("SWEEP") || upper.contains("NO STOP") -> "STREET_RESTRICTION"
             upper.contains("NO PARK") || upper.contains("NO STAND") -> "NO_PARKING"
-            upper.contains("HOUR") || upper.contains("HR") || upper.contains("METER") || upper.contains("PAY") -> "PARKING_LIMIT"
-            upper.contains("PERMIT") || upper.contains("RESIDENT") || upper.contains("ZONE") -> "PERMIT_ZONE"
-            upper.contains("PASSENGER") || upper.contains("LOADING") || upper.contains("COMMERCIAL") -> "LOADING_ZONE"
+            upper.contains("LOADING") || upper.contains("PASSENGER") || upper.contains("COMMERCIAL") -> "LOADING_ZONE"
+            upper.contains("METER") || upper.contains("PAY") || upper.contains("RATE") || upper.contains("COIN") || upper.contains("FEE") -> "METERED_PARKING"
+            upper.contains("PERMIT") || upper.contains("RESIDENT") -> "PERMIT_ZONE"
+            upper.contains("HOUR") || upper.contains("HR") || upper.contains("MIN") -> "PARKING_LIMIT"
             else -> "STREET_SIGN"
         }
     }
@@ -608,9 +609,10 @@ object SignDetectionService {
         return when {
             upper.contains("TOW") || upper.contains("CLEAN") || upper.contains("SWEEP") || upper.contains("NO STOP") -> "STREET RESTRICTION"
             upper.contains("NO PARK") || upper.contains("NO STAND") -> "NO PARKING"
-            upper.contains("HOUR") || upper.contains("HR") || upper.contains("METER") || upper.contains("PAY") -> "PARKING LIMIT"
-            upper.contains("PERMIT") || upper.contains("RESIDENT") || upper.contains("ZONE") -> "PERMIT ZONE"
-            upper.contains("PASSENGER") || upper.contains("LOADING") || upper.contains("COMMERCIAL") -> "LOADING ZONE"
+            upper.contains("LOADING") || upper.contains("PASSENGER") || upper.contains("COMMERCIAL") -> "LOADING ZONE"
+            upper.contains("METER") || upper.contains("PAY") || upper.contains("RATE") || upper.contains("COIN") || upper.contains("FEE") -> "METERED PARKING"
+            upper.contains("PERMIT") || upper.contains("RESIDENT") -> "PERMIT ZONE"
+            upper.contains("HOUR") || upper.contains("HR") || upper.contains("MIN") -> "PARKING LIMIT"
             else -> "PARKING SIGN"
         }
     }

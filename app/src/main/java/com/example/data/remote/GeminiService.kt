@@ -28,7 +28,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 object GeminiService {
-    private const val MODEL_NAME = "gemini-3.5-flash"
+    private const val MODEL_NAME = "gemini-3.5-flash-lite"
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
     private val client = OkHttpClient.Builder()
@@ -79,6 +79,8 @@ object GeminiService {
         val currentTimeStr = SimpleDateFormat("EEEE, h:mm a", Locale.getDefault()).format(Date())
         val locationContextText = ParkingAuthority.buildLocationContextPrompt(locationName, cityState, isLocationKnown)
 
+        val isBitmapValid = bitmap != null && !bitmap.isRecycled && bitmap.width > 0 && bitmap.height > 0
+
         val validDetections = localDetections.filter { crop ->
             !SignCandidateValidator.isDemoOrSampleCrop(crop.fileUri, crop.isDemo, crop.id) &&
             SignCandidateValidator.validateOcr(crop.ocrText).isValid &&
@@ -86,10 +88,10 @@ object GeminiService {
         }
 
         // PREFLIGHT GATE BEFORE GEMINI:
-        // Critical Invariant: NO VERIFIED PHYSICAL SIGN EVIDENCE -> NO GEMINI CALL
-        if (validDetections.isEmpty()) {
+        // Only skip Gemini if BOTH local sign crops AND the captured camera image bitmap are missing/invalid.
+        if (validDetections.isEmpty() && !isBitmapValid) {
             val totalTime = System.currentTimeMillis() - totalScanStartTime
-            android.util.Log.d("CurbTiming", "PREFLIGHT GATE: Gemini SKIPPED! Zero valid sign candidates detected. Total scan time: ${totalTime} ms")
+            android.util.Log.d("CurbTiming", "PREFLIGHT GATE: Gemini SKIPPED! Zero valid sign candidates and no valid bitmap. Total scan time: ${totalTime} ms")
 
             val neutralExplanation = if (isLocationKnown && locationName.isNotBlank() && locationName != "Location unavailable" && locationName != "Location access needed") {
                 "No distinct parking signs were resolved in the image at $locationName. Parking rules could not be determined from verified sign evidence."
@@ -115,17 +117,21 @@ object GeminiService {
             return@withContext EvidenceAnchoringValidator.sanitizeAndAnchorResult(unanchoredResult, emptyList())
         }
 
-        android.util.Log.d("CurbTiming", "PREFLIGHT GATE: Passed. Proceeding to Gemini request with ${validDetections.size} validated sign crop(s).")
+        android.util.Log.d("CurbTiming", "PREFLIGHT GATE: Passed. Proceeding to Gemini request (crops=${validDetections.size}, hasBitmap=$isBitmapValid).")
 
-        val signContextText = """
-            SCANNED PARKING SIGNS:
+        val signContextText = if (validDetections.isNotEmpty()) {
+            """
+            SCANNED PARKING SIGNS (AUXILIARY LOCAL DETECTIONS):
             ${validDetections.size} distinct sign plate(s) were captured at this parking spot:
             ${validDetections.mapIndexed { idx, crop ->
                 "- Sign #${idx + 1} (${crop.normalizedBox.label}): Visible text: \"${crop.ocrText.replace("\n", " ")}\""
             }.joinToString("\n")}
             
-            Note: All cropped signs belong to the same post and location. Evaluate how they interact and apply together.
-        """.trimIndent()
+            Note: Local OCR is auxiliary only and may contain character errors. Inspect the actual image pixels as primary evidence.
+            """.trimIndent()
+        } else {
+            "SCANNED PARKING SIGNS: Local OCR candidates were incomplete or unavailable. Inspect the physical parking sign image directly to read all posted rules and schedules."
+        }
 
         if (!apiKey.isNullOrBlank() && apiKey != "MY_GEMINI_API_KEY") {
             try {
@@ -138,7 +144,8 @@ object GeminiService {
                     $signContextText
                     
                     TASK:
-                    Interpret all visible parking rules from the provided sign images, including where applicable:
+                    Analyze the physical parking sign image directly from its actual pixels as your PRIMARY evidence.
+                    Interpret all visible parking rules, including where applicable:
                     - Whether parking is currently allowed or restricted at this moment
                     - Time limit restrictions (e.g. 2 Hour, 30 Min)
                     - Active days and enforcement hours
@@ -150,10 +157,13 @@ object GeminiService {
                     - Visual symbols and curb rules
                     - Stated exceptions (holidays, weekends)
                     
-                    ACCURACY & SAFETY RULES:
-                    - CRITICAL: Never interpret URLs, web addresses, hashes, UUIDs, filenames, machine tokens, image metadata, or random alphanumeric noise as parking signs or rules.
-                    - Rely strictly on visible parking sign text and symbols. Do NOT invent unreadable text or imagined rules.
-                    - If signs are conflicting, damaged, unreadable, or insufficient, set verdict to "AMBIGUOUS" and explain that signage is unclear.
+                    ACCURACY & VISUAL SENSITIVITY RULES:
+                    - ACTUAL IMAGE PIXELS ARE PRIMARY EVIDENCE. Local OCR is auxiliary and may contain character mistakes.
+                    - Carefully distinguish visually similar characters such as 7/T, 0/O, 1/I, 5/S, 8/B, and AM/PM.
+                    - Read small text, numbers, schedules, days, arrows, permit codes, and exceptions directly from the sign image.
+                    - CRITICAL: Never interpret URLs, web addresses, hashes, UUIDs, filenames, machine tokens, image metadata, or random noise as parking rules.
+                    - Do NOT mark AMBIGUOUS merely because OCR text is imperfect. Return AMBIGUOUS only when the visual sign itself is genuinely unreadable, obstructed, contradictory, or insufficient.
+                    - Do NOT invent unreadable text or imagined rules.
                     - If parking is prohibited right now, set verdict to "RESTRICTED".
                     - If parking is permitted right now, set verdict to "ALLOWED".
                     
@@ -188,7 +198,7 @@ object GeminiService {
                 val partsArray = JSONArray()
                 partsArray.put(JSONObject().apply { put("text", prompt) })
 
-                // 1. Add real cropped sign images (authoritative visual evidence)
+                // 1. Add real cropped sign images if available (supporting visual evidence)
                 for (crop in validDetections) {
                     val cropBmp = if (crop.bitmap != null && !crop.bitmap.isRecycled && crop.bitmap.width > 0) {
                         crop.bitmap
@@ -210,9 +220,9 @@ object GeminiService {
                     }
                 }
 
-                // 2. Add full captured photo context only when multiple signs exist and contextual relationship is genuinely useful
-                if (validDetections.size > 1 && bitmap != null && !bitmap.isRecycled) {
-                    val fullB64 = bitmap.toOptimizedBase64(maxDimension = 960, quality = 70)
+                // 2. Add full captured photo (primary visual evidence)
+                if (isBitmapValid) {
+                    val fullB64 = bitmap.toOptimizedBase64(maxDimension = 1280, quality = 85)
                     if (!fullB64.isNullOrBlank()) {
                         partsArray.put(JSONObject().apply {
                             put("inlineData", JSONObject().apply {
@@ -223,7 +233,7 @@ object GeminiService {
                     }
                 }
 
-                android.util.Log.d("CurbTiming", "Image payload encoding completed in ${System.currentTimeMillis() - encodeStartTime} ms (crops=${validDetections.size}, fullContext=${validDetections.size > 1})")
+                android.util.Log.d("CurbTiming", "Image payload encoding completed in ${System.currentTimeMillis() - encodeStartTime} ms (crops=${validDetections.size}, fullPhoto=$isBitmapValid)")
 
                 val geminiRequestStart = System.currentTimeMillis()
                 android.util.Log.d("CurbTiming", "Gemini API request started")
@@ -238,7 +248,9 @@ object GeminiService {
                     put("contents", contentsArray)
                     put("generationConfig", JSONObject().apply {
                         put("responseMimeType", "application/json")
-                        put("temperature", 0.1)
+                        put("thinkingConfig", JSONObject().apply {
+                            put("thinkingLevel", "minimal")
+                        })
                     })
                 }
 
@@ -323,6 +335,43 @@ object GeminiService {
                                     rawText = crop.ocrText,
                                     croppedImageUri = crop.fileUri,
                                     confidence = crop.normalizedBox.confidence
+                                )
+                            )
+                        }
+                    } else if (signsArray != null && signsArray.length() > 0) {
+                        for (i in 0 until signsArray.length()) {
+                            val signObj = signsArray.optJSONObject(i) ?: continue
+                            val title = signObj.optString("title").ifBlank { "Sign #${i + 1}" }
+                            val subtitle = signObj.optString("subtitle", "")
+                            val daysHours = signObj.optString("applicableDaysHours").ifBlank { subtitle }
+                            val restrictions = signObj.optString("restrictions").ifBlank { signObj.optString("ruleText", "Unspecified rule") }
+                            val exceptions = signObj.optString("exceptions", "")
+                            val isRestrictingNow = signObj.optBoolean("isRestrictingNow", false)
+                            val isUncertain = signObj.optBoolean("isUncertain", false)
+                            val badge = signObj.optString("statusBadge").ifBlank {
+                                when {
+                                    isUncertain -> "Unclear / Obstructed"
+                                    isRestrictingNow -> "Active Restriction"
+                                    exceptions.isNotBlank() -> "Permit / Time Limit"
+                                    else -> "Inactive Schedule"
+                                }
+                            }
+
+                            signsList.add(
+                                DetectedSign(
+                                    id = signObj.optString("id", "${i + 1}"),
+                                    title = title,
+                                    subtitle = subtitle,
+                                    applicableDaysHours = daysHours,
+                                    restrictions = restrictions,
+                                    exceptions = exceptions,
+                                    ruleText = restrictions,
+                                    isRestrictingNow = isRestrictingNow,
+                                    isUncertain = isUncertain,
+                                    statusBadge = badge,
+                                    rawText = restrictions,
+                                    croppedImageUri = "",
+                                    confidence = 0.9f
                                 )
                             )
                         }
@@ -482,6 +531,11 @@ object GeminiService {
                     put("systemInstruction", JSONObject().apply {
                         put("parts", JSONArray().apply {
                             put(JSONObject().apply { put("text", systemPrompt) })
+                        })
+                    })
+                    put("generationConfig", JSONObject().apply {
+                        put("thinkingConfig", JSONObject().apply {
+                            put("thinkingLevel", "minimal")
                         })
                     })
                 }

@@ -29,8 +29,38 @@ object EvidenceAnchoringValidator {
             return rawScanResult
         }
 
-        // Rule 12 & 15: Without valid physical sign evidence, result must remain AMBIGUOUS
+        // When local OCR detections are empty, check if Gemini provided valid visual sign evidence
         if (!ParkingAuthority.hasVerifiedSignEvidence(validDetections)) {
+            val hasGeminiVisualSigns = rawScanResult.detectedSigns.isNotEmpty() &&
+                rawScanResult.detectedSigns.any { sign ->
+                    SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid ||
+                    SignCandidateValidator.containsExplicitParkingRule(sign.restrictions.ifBlank { sign.ruleText })
+                }
+
+            if (hasGeminiVisualSigns || (rawScanResult.verdict != ScanVerdict.AMBIGUOUS && rawScanResult.parkingRules.any { hasTimeRuleEvidence(it) })) {
+                // Preserve Gemini's visual result when internally consistent
+                val cleanSigns = rawScanResult.detectedSigns.map { sign ->
+                    sign.copy(
+                        title = SignCandidateValidator.sanitizeText(sign.title, "Sign plate"),
+                        subtitle = SignCandidateValidator.sanitizeText(sign.subtitle, ""),
+                        restrictions = SignCandidateValidator.sanitizeText(sign.restrictions, "Unspecified rule"),
+                        ruleText = SignCandidateValidator.sanitizeText(sign.ruleText, "Unspecified rule")
+                    )
+                }
+                val cleanRules = rawScanResult.parkingRules
+                    .map { SignCandidateValidator.sanitizeText(it, "") }
+                    .filter { it.isNotBlank() }
+                val cleanExp = SignCandidateValidator.sanitizeText(rawScanResult.explanation, "Parking rules established from visible signage.")
+
+                val preservedResult = rawScanResult.copy(
+                    detectedSigns = cleanSigns,
+                    parkingRules = cleanRules.ifEmpty { listOf("No verified parking rule has been established.") },
+                    explanation = cleanExp
+                )
+
+                return SemanticConsistencyValidator.enforceSemanticConsistency(preservedResult, emptyList())
+            }
+
             return ParkingAuthority.sanitizeAndEnforceAuthority(rawScanResult, validDetections, isLiveScanPipeline = true)
         }
 

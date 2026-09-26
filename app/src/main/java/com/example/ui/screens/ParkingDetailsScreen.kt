@@ -96,7 +96,6 @@ fun ParkingDetailsScreen(
     onDeleteNote: () -> Unit = {},
     onStartParkingSession: (durationMinutes: Int, allowedUntilTime: String, timerBasis: String, ruleSummary: String) -> Unit,
     onReportIssue: () -> Unit,
-    onAskAboutThisSign: () -> Unit = {},
     onUpgradeToPro: () -> Unit = {},
     onBack: () -> Unit
 ) {
@@ -553,13 +552,6 @@ fun ParkingDetailsScreen(
                         modifier = Modifier.padding(18.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(14.dp))
-
-                CurbSecondaryButton(
-                    text = "ASK ABOUT THIS SIGN",
-                    onClick = onAskAboutThisSign,
-                    testTag = "contextual_copilot_button"
-                )
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
