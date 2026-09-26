@@ -337,7 +337,7 @@ object ParkingTimerCalculator {
 
         // 2. If AMBIGUOUS or any detected sign is uncertain -> No timer allowed
         val hasUncertainty = scanResult.verdict == ScanVerdict.AMBIGUOUS ||
-                scanResult.detectedSigns.any { it.isUncertain || it.isRestrictingNow }
+                scanResult.detectedSigns.any { it.isUncertain }
 
         if (hasUncertainty) {
             return ParkingTimerConfig(

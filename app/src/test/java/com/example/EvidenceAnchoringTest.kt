@@ -321,4 +321,97 @@ class EvidenceAnchoringTest {
         assertEquals("Demo scan retains allowed until time", "6:00 PM", anchored.allowedUntilTime)
         assertTrue("Demo scan retains timer authority", ParkingAuthority.canAuthorizeTimer(anchored))
     }
+
+    @Test
+    fun testK_ExactRegression_5MinLimitActive_DoesNotBecomeRuleUnclear() {
+        val ocrText = "5 MINUTE PARKING 5:30 PM TO 10:00 PM ALL DAYS"
+        val crop = createValidCrop("crop_5min", ocrText)
+        val validCrops = listOf(crop)
+
+        val rawGeminiResult = ScanResult(
+            locationName = "Market St",
+            verdict = ScanVerdict.ALLOWED,
+            allowedUntilTime = "10:00 PM",
+            timeRemaining = "5m remaining",
+            parkingRules = listOf("5 minute parking limit"),
+            detectedSigns = listOf(
+                DetectedSign(
+                    id = "crop_5min",
+                    title = "5 Minute Parking",
+                    subtitle = "5:30 PM - 10:00 PM • All Days",
+                    restrictions = "5 minute parking limit",
+                    ruleText = "5 minute parking limit",
+                    isRestrictingNow = true,
+                    isUncertain = false,
+                    rawText = ocrText,
+                    croppedImageUri = crop.fileUri
+                )
+            )
+        )
+
+        // 1. Run through normal evidence and anchoring validation flow
+        val anchored = EvidenceAnchoringValidator.sanitizeAndAnchorResult(rawGeminiResult, validCrops)
+        assertEquals(ScanVerdict.ALLOWED, anchored.verdict)
+        assertFalse(anchored.detectedSigns[0].isUncertain)
+        assertTrue(anchored.detectedSigns[0].isRestrictingNow)
+
+        // 2. Calculate configuration using a deterministic test time of 5:31 PM
+        val cal = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 17) // 5 PM
+            set(java.util.Calendar.MINUTE, 31)      // 31
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val testTimeMillis = cal.timeInMillis
+
+        val config = ParkingTimerCalculator.calculateConfig(anchored, testTimeMillis)
+
+        // Expectations:
+        assertTrue("canStart must be true", config.canStart)
+        assertEquals("verdict must be ALLOWED", ScanVerdict.ALLOWED, anchored.verdict)
+        assertEquals("Timer mode must be TIMED_LIMIT", com.example.util.TimerSemanticMode.TIMED_LIMIT, config.mode)
+        assertEquals("calculatedMinutes must be 5", 5, config.calculatedMinutes)
+        assertTrue("timerBasis must contain 5m", config.timerBasis.contains("5m") || config.timerBasis.contains("5 min") || config.timerBasis.contains("5 minute"))
+        
+        val expectedExpiry = testTimeMillis + (5 * 60000L)
+        assertEquals("Expiry must correspond to 5-minute limit", expectedExpiry, config.endTime)
+
+        // Verify timer authority can be authorized
+        assertTrue("Timer authority must be true", ParkingAuthority.canAuthorizeTimer(anchored))
+    }
+
+    @Test
+    fun testL_SafetyRegression_NoParkingActive_RemainsBlocked() {
+        val ocrText = "NO PARKING TOW AWAY ZONE"
+        val crop = createValidCrop("crop_nopark", ocrText)
+        val validCrops = listOf(crop)
+
+        val rawGeminiResult = ScanResult(
+            locationName = "Market St",
+            verdict = ScanVerdict.RESTRICTED,
+            allowedUntilTime = "No parking permitted",
+            timeRemaining = "--",
+            parkingRules = listOf("No parking permitted at this location"),
+            detectedSigns = listOf(
+                DetectedSign(
+                    id = "crop_nopark",
+                    title = "No Parking",
+                    subtitle = "Tow Away Zone",
+                    restrictions = "No parking",
+                    ruleText = "No parking",
+                    isRestrictingNow = true,
+                    isUncertain = false,
+                    rawText = ocrText,
+                    croppedImageUri = crop.fileUri
+                )
+            )
+        )
+
+        val anchored = EvidenceAnchoringValidator.sanitizeAndAnchorResult(rawGeminiResult, validCrops)
+        
+        // Calculate config
+        val config = ParkingTimerCalculator.calculateConfig(anchored)
+        assertFalse("canStart must be false for hard prohibition", config.canStart)
+        assertFalse("canAuthorizeTimer must be false for hard prohibition", ParkingAuthority.canAuthorizeTimer(anchored))
+    }
 }

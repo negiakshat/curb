@@ -184,7 +184,7 @@ object ParkingAuthority {
 
         if (evidence.source == "GEMINI") {
             val hasSignEvidence = scanResult.detectedSigns.isNotEmpty() &&
-                    scanResult.detectedSigns.any { !it.isUncertain && !it.isRestrictingNow }
+                    scanResult.detectedSigns.any { !it.isUncertain }
             return hasSignEvidence
         }
 

@@ -185,7 +185,7 @@ object SemanticConsistencyValidator {
             return false
         }
 
-        if (scanResult.detectedSigns.any { it.isUncertain || it.isRestrictingNow }) {
+        if (scanResult.detectedSigns.any { it.isUncertain }) {
             return false
         }
 

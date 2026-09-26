@@ -72,7 +72,7 @@ class CurbAiAndRuleConsistencyTest {
         val config = ParkingTimerCalculator.calculateConfig(scan)
         assertFalse("Recurring schedule without explicit stay limit should NOT allow countdown timer", config.canStart)
         assertEquals(TimerSemanticMode.UNRESTRICTED_OR_NO_VERIFIED_LIMIT, config.mode)
-        assertEquals("Parking allowed — no fixed time limit detected", config.confirmationHeadline)
+        assertEquals("Parking allowed — verify physical signage", config.confirmationHeadline)
     }
 
     @Test
