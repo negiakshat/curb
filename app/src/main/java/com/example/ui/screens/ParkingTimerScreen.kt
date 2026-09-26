@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -312,13 +313,28 @@ fun ParkingTimerScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // Large Remaining Time Display (Hero Information)
-                        Text(
-                            text = remainingText,
-                            fontSize = 38.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isExpired) CurbError else BentoTextPrimary,
-                            letterSpacing = (-0.5).sp
-                        )
+                        Column {
+                            Text(
+                                text = if (isExpired) "Expired" else if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m",
+                                fontSize = 38.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isExpired) CurbError else BentoTextPrimary,
+                                letterSpacing = (-0.5).sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (!isExpired) {
+                                Text(
+                                    text = "remaining",
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BentoTextSecondary,
+                                    letterSpacing = (-0.5).sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
 
                         Spacer(modifier = Modifier.height(4.dp))
 
@@ -385,9 +401,7 @@ fun ParkingTimerScreen(
                                         text = ruleText,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = BentoTextPrimary,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
+                                        color = BentoTextPrimary
                                     )
                                 }
                             }
@@ -535,7 +549,9 @@ fun ParkingTimerScreen(
                                 Text(
                                     text = "Today",
                                     fontSize = 13.sp,
-                                    color = BentoTextSecondary
+                                    color = BentoTextSecondary,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         )
@@ -595,7 +611,7 @@ fun ParkingTimerScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(32.dp))
             }
 
             // STICKY BOTTOM ACTIONS FOR ACTIVE SESSION
@@ -1086,23 +1102,34 @@ private fun TimerDetailRow(
                 )
             }
 
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = BentoTextPrimary
+                    color = BentoTextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     fontSize = 13.sp,
-                    color = BentoTextSecondary
+                    color = BentoTextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
-        trailingContent()
+        Box(
+            modifier = Modifier
+                .padding(start = 12.dp)
+                .wrapContentWidth(Alignment.End),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            trailingContent()
+        }
     }
 }
 

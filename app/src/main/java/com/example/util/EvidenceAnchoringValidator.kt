@@ -407,24 +407,19 @@ object EvidenceAnchoringValidator {
     fun hasMeaningfulGeminiEvidence(rawScanResult: ScanResult): Boolean {
         if (rawScanResult.isDemo) return true
 
-        // Check detectedSigns for explicit parking rules or valid titles/categories
-        val hasSignEvidence = rawScanResult.detectedSigns.isNotEmpty() &&
-            rawScanResult.detectedSigns.any { sign ->
-                val combinedText = "${sign.title} ${sign.subtitle} ${sign.restrictions} ${sign.ruleText} ${sign.rawText}"
-                SignCandidateValidator.containsExplicitParkingRule(combinedText) ||
-                SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid ||
-                isParkingCategoryOrRuleTitle(sign.title) ||
-                isParkingCategoryOrRuleTitle(sign.statusBadge)
-            }
+        // Must have at least one detected sign to preserve visual results when OCR is empty
+        if (rawScanResult.detectedSigns.isEmpty()) return false
 
-        // Check parkingRules for explicit parking rules or categories
-        val hasRuleEvidence = rawScanResult.parkingRules.any { rule ->
-            if (rule.isBlank() || rule.contains("No verified parking rule", ignoreCase = true)) return@any false
-            if (rule.contains("Assumed", ignoreCase = true) || rule.contains("Derived", ignoreCase = true) || rule.contains("city center rule", ignoreCase = true)) return@any false
-            SignCandidateValidator.containsExplicitParkingRule(rule) || isParkingCategoryOrRuleTitle(rule)
+        // Check detectedSigns for explicit parking rules or valid titles/categories
+        val hasSignEvidence = rawScanResult.detectedSigns.any { sign ->
+            val combinedText = "${sign.title} ${sign.subtitle} ${sign.restrictions} ${sign.ruleText} ${sign.rawText}"
+            SignCandidateValidator.containsExplicitParkingRule(combinedText) ||
+            SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid ||
+            isParkingCategoryOrRuleTitle(sign.title) ||
+            isParkingCategoryOrRuleTitle(sign.statusBadge)
         }
 
-        return hasSignEvidence || hasRuleEvidence
+        return hasSignEvidence
     }
 
     private fun isParkingCategoryOrRuleTitle(text: String): Boolean {
