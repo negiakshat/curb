@@ -94,7 +94,7 @@ object ParkingTimerCalculator {
                 calculatedMinutes = 0,
                 formattedDuration = "Rule unclear",
                 timerBasis = "Uncertain signage",
-                allowedUntilTimeFormatted = "Uncertain",
+                allowedUntilTimeFormatted = "Verify physical signage",
                 confirmationHeadline = "Parking rule is uncertain",
                 confirmationSubtext = "Curb could not establish the active rule with certainty. Verify physical signs on-site before parking.",
                 ruleSummary = "Uncertain signage"
@@ -104,30 +104,19 @@ object ParkingTimerCalculator {
         // Authority gate validation for non-demo scans
         if (!scanResult.isDemo) {
             if (!ParkingAuthority.canAuthorizeTimer(scanResult) || !SemanticConsistencyValidator.canAuthorizeTimer(scanResult)) {
-                val combined = buildString {
-                    append(scanResult.allowedUntilTime).append(" ")
-                    append(scanResult.paymentInfo).append(" ")
-                    scanResult.parkingRules.forEach { append(it).append(" ") }
-                }.lowercase(Locale.US)
-                val isPayment = (scanResult.paymentInfo.isNotBlank() &&
-                        !scanResult.paymentInfo.contains("free", ignoreCase = true) &&
-                        !scanResult.paymentInfo.contains("no fee", ignoreCase = true)) ||
-                        combined.contains("meter") || combined.contains("pay")
-                val mode = if (isPayment) TimerSemanticMode.METERED_WITHOUT_VERIFIED_TIME_LIMIT else TimerSemanticMode.UNRESTRICTED_OR_NO_VERIFIED_LIMIT
-
                 return ParkingTimerConfig(
                     canStart = false,
-                    mode = mode,
+                    mode = TimerSemanticMode.AMBIGUOUS_OR_RESTRICTED,
                     reason = "Scan lacks verified time-limit signage evidence.",
                     startTime = currentTimeMillis,
                     endTime = currentTimeMillis,
                     maxAllowedEndTimeMillis = null,
                     calculatedMinutes = 0,
-                    formattedDuration = if (isPayment) "Pay to park" else "No fixed time limit",
-                    timerBasis = if (isPayment) "Metered parking" else "Unrestricted parking",
-                    allowedUntilTimeFormatted = scanResult.allowedUntilTime,
-                    confirmationHeadline = if (isPayment) "Pay to park" else "Parking allowed — no fixed time limit detected",
-                    confirmationSubtext = if (isPayment) "Metered parking detected, but no verified time limit was established by signage." else "You can park here without a fixed time limit countdown.",
+                    formattedDuration = "--",
+                    timerBasis = "Uncertain time basis",
+                    allowedUntilTimeFormatted = "Verify physical signage",
+                    confirmationHeadline = "Uncertain time basis",
+                    confirmationSubtext = "Curb could not establish a reliable duration or cutoff from validated physical evidence. Verify physical signs on-site.",
                     ruleSummary = scanResult.parkingRules.firstOrNull() ?: "No verified time limit"
                 )
             }
@@ -183,8 +172,20 @@ object ParkingTimerCalculator {
             scanResult.detectedSigns.forEach { append(it.title).append(" ").append(it.restrictions).append(" ").append(it.subtitle).append(" ") }
         }.lowercase(Locale.US)
 
+        // Prioritize parsing posted limit from validated physical signs first!
+        val physicalSignsText = scanResult.detectedSigns.filter { sign ->
+            !SignCandidateValidator.isDemoOrSampleCrop(sign.croppedImageUri, sign.isDemo, sign.id) &&
+                    SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid
+        }.joinToString(" ") { "${it.title} ${it.restrictions} ${it.rawText}" }.lowercase(Locale.US)
+
+        val parsedPhysicalLimit = parsePostedDurationLimitMinutes(physicalSignsText)
+
         // Step A: Parse posted duration limit (e.g., "2 Hour Parking" -> 120 mins)
-        val postedLimitMinutes = parsePostedDurationLimitMinutes(signText)
+        val postedLimitMinutes = if (parsedPhysicalLimit != null) {
+            parsedPhysicalLimit
+        } else {
+            parsePostedDurationLimitMinutes(signText)
+        }
 
         // Step B: Parse clock cutoff time (e.g., "ALLOWED UNTIL 6:00 PM", "NO PARKING AFTER 4:00 PM")
         val clockCutoffMillis = parseClockEndTime(scanResult.allowedUntilTime, combinedText, nowCal, currentTimeMillis)

@@ -307,4 +307,161 @@ class ParkingTimerCalculatorTest {
         assertEquals(0, config.calculatedMinutes)
         assertEquals("Rule unclear", config.formattedDuration)
     }
+
+    @Test
+    fun testCaseA_ExplicitDurationLimitAt435PM() {
+        // "1 HOUR PARKING, 8 AM–6 PM, ALL DAYS"
+        // Current time: 4:35 PM
+        val result = createBaseScanResult(
+            verdict = ScanVerdict.ALLOWED,
+            allowedUntilTime = "6:00 PM",
+            timeRemaining = "1h 00m remaining",
+            parkingRules = listOf("1 Hour Parking 8 AM - 6 PM All Days"),
+            detectedSigns = listOf(
+                DetectedSign(
+                    id = "sign_1",
+                    title = "1 Hour Parking",
+                    croppedImageUri = "data:image/jpeg;base64,valid_crop",
+                    confidence = 0.95f,
+                    rawText = "1 HOUR PARKING 8 AM - 6 PM ALL DAYS"
+                )
+            ),
+            isDemo = false // Real scan (not demo) to run full authority check!
+        )
+
+        val cal = Calendar.getInstance().apply {
+            set(2026, Calendar.SEPTEMBER, 6, 16, 35, 0) // 4:35 PM
+            set(Calendar.MILLISECOND, 0)
+        }
+        val config = ParkingTimerCalculator.calculateConfig(result, cal.timeInMillis)
+
+        assertTrue("Timer should be authorized since physical evidence is validated", config.canStart)
+        assertEquals(TimerSemanticMode.TIMED_LIMIT, config.mode)
+        assertEquals(60, config.calculatedMinutes)
+        assertEquals("5:35 PM", config.allowedUntilTimeFormatted)
+    }
+
+    @Test
+    fun testCaseB_ClockWindowNoDuration() {
+        // "8 AM–6 PM" with no duration
+        val result = createBaseScanResult(
+            verdict = ScanVerdict.ALLOWED,
+            allowedUntilTime = "6:00 PM",
+            timeRemaining = "1h 25m remaining",
+            parkingRules = listOf("Parking allowed until 6:00 PM"),
+            detectedSigns = listOf(
+                DetectedSign(
+                    id = "sign_1",
+                    title = "Parking sign",
+                    croppedImageUri = "data:image/jpeg;base64,valid_crop",
+                    confidence = 0.95f,
+                    rawText = "8 AM - 6 PM"
+                )
+            ),
+            isDemo = false
+        )
+
+        val cal = Calendar.getInstance().apply {
+            set(2026, Calendar.SEPTEMBER, 6, 16, 35, 0) // 4:35 PM
+            set(Calendar.MILLISECOND, 0)
+        }
+        val config = ParkingTimerCalculator.calculateConfig(result, cal.timeInMillis)
+
+        assertTrue(config.canStart)
+        assertEquals(TimerSemanticMode.CLOCK_CUTOFF, config.mode)
+        assertEquals(85, config.calculatedMinutes) // 4:35 PM to 6:00 PM = 85 mins
+        assertEquals("6:00 PM", config.allowedUntilTimeFormatted)
+    }
+
+    @Test
+    fun testCaseC_GeminiInferredDurationWithoutPhysicalDuration() {
+        // Gemini says "you can probably park for an hour" but validated physical evidence contains no duration limit
+        val result = createBaseScanResult(
+            verdict = ScanVerdict.ALLOWED,
+            allowedUntilTime = "1 Hour Parking",
+            timeRemaining = "1h 00m remaining",
+            parkingRules = listOf("Assumed standard parking rule"),
+            detectedSigns = listOf(
+                DetectedSign(
+                    id = "sign_1",
+                    title = "Generic board",
+                    croppedImageUri = "data:image/jpeg;base64,valid_crop",
+                    confidence = 0.95f,
+                    rawText = "WELCOME TO PARKING ZONE" // No duration in OCR!
+                )
+            ),
+            isDemo = false
+        )
+
+        val cal = Calendar.getInstance().apply {
+            set(2026, Calendar.SEPTEMBER, 6, 16, 35, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val config = ParkingTimerCalculator.calculateConfig(result, cal.timeInMillis)
+
+        assertFalse("Timer must not start because physical sign contains no duration limit", config.canStart)
+        assertEquals(TimerSemanticMode.AMBIGUOUS_OR_RESTRICTED, config.mode)
+        assertEquals("Uncertain time basis", config.timerBasis)
+        assertEquals("Verify physical signage", config.allowedUntilTimeFormatted)
+    }
+
+    @Test
+    fun testCaseD_UnclearOrContradictorySign() {
+        // Unclear/contradictory sign
+        val result = createBaseScanResult(
+            verdict = ScanVerdict.AMBIGUOUS,
+            allowedUntilTime = "Unclear",
+            timeRemaining = "--",
+            parkingRules = listOf("Contradictory signage detected"),
+            detectedSigns = listOf(
+                DetectedSign(
+                    id = "sign_1",
+                    title = "Temporary sign",
+                    croppedImageUri = "data:image/jpeg;base64,valid_crop",
+                    confidence = 0.95f,
+                    rawText = "NO PARKING",
+                    isUncertain = true
+                )
+            ),
+            isDemo = false
+        )
+
+        val config = ParkingTimerCalculator.calculateConfig(result)
+
+        assertFalse("Unclear sign must disable the timer", config.canStart)
+        assertEquals(TimerSemanticMode.AMBIGUOUS_OR_RESTRICTED, config.mode)
+        assertEquals("Verify physical signage", config.allowedUntilTimeFormatted)
+    }
+
+    @Test
+    fun testCaseE_PhysicalOcrWinsOverGeminiDuration() {
+        // Validated OCR says "1 HOUR PARKING" but Gemini says "2 Hour Parking"
+        val result = createBaseScanResult(
+            verdict = ScanVerdict.ALLOWED,
+            allowedUntilTime = "2 Hour Parking",
+            timeRemaining = "2h 00m remaining",
+            parkingRules = listOf("2 Hour Parking allowed"),
+            detectedSigns = listOf(
+                DetectedSign(
+                    id = "sign_1",
+                    title = "1 Hour Parking",
+                    croppedImageUri = "data:image/jpeg;base64,valid_crop",
+                    confidence = 0.95f,
+                    rawText = "1 HOUR PARKING" // 1 Hour strictly in physical OCR!
+                )
+            ),
+            isDemo = false
+        )
+
+        val cal = Calendar.getInstance().apply {
+            set(2026, Calendar.SEPTEMBER, 6, 16, 35, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val config = ParkingTimerCalculator.calculateConfig(result, cal.timeInMillis)
+
+        assertTrue(config.canStart)
+        assertEquals("Physical validated sign limit of 1 hour should win", 60, config.calculatedMinutes)
+        assertEquals("1h 00m limit", config.timerBasis)
+        assertEquals("5:35 PM", config.allowedUntilTimeFormatted)
+    }
 }
