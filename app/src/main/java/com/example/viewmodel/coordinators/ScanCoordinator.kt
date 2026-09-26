@@ -15,6 +15,7 @@ import com.example.data.model.ScanVerdict
 import com.example.data.model.SignBoundingBox
 import com.example.data.remote.GeminiService
 import com.example.data.repository.CurbRepository
+import com.example.util.EvidenceAnchoringValidator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -152,23 +153,25 @@ class ScanCoordinator(
 
                 val geminiDeferred = async {
                     val (resolvedLocName, resolvedCityState, isKnown) = locationDeferred.await()
-                    val detectedCrops = detectionDeferred.await()
 
                     GeminiService.analyzeParkingSigns(
                         bitmap = bitmap,
                         locationName = resolvedLocName,
                         cityState = resolvedCityState,
                         isLocationKnown = isKnown,
-                        localDetections = detectedCrops,
+                        localDetections = localDetections,
                         context = application
                     )
                 }
 
                 val stage3Start = System.currentTimeMillis()
-                val result = geminiDeferred.await()
+                val rawGeminiResult = geminiDeferred.await()
+                val detectedCrops = detectionDeferred.await()
 
                 _processingStage.value = ScanProcessingStage.EVIDENCE_VALIDATION
                 _processingStatusText.value = ScanProcessingStage.EVIDENCE_VALIDATION.statusText
+
+                val result = EvidenceAnchoringValidator.sanitizeAndAnchorResult(rawGeminiResult, detectedCrops)
 
                 val stage3Time = System.currentTimeMillis() - stage3Start
                 Log.d("CurbTiming", "Stage 3 (Gemini & Evidence Anchoring) finished in $stage3Time ms. Verdict: ${result.verdict}")

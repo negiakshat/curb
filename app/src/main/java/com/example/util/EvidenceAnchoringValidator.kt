@@ -31,34 +31,34 @@ object EvidenceAnchoringValidator {
 
         // When local OCR detections are empty, check if Gemini provided valid visual sign evidence
         if (!ParkingAuthority.hasVerifiedSignEvidence(validDetections)) {
-            val hasGeminiVisualSigns = rawScanResult.detectedSigns.isNotEmpty() &&
-                rawScanResult.detectedSigns.any { sign ->
-                    SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid ||
-                    SignCandidateValidator.containsExplicitParkingRule(sign.restrictions.ifBlank { sign.ruleText })
-                }
-
-            if (hasGeminiVisualSigns || (rawScanResult.verdict != ScanVerdict.AMBIGUOUS && rawScanResult.parkingRules.any { hasTimeRuleEvidence(it) })) {
+            if (hasMeaningfulGeminiEvidence(rawScanResult)) {
                 // Preserve Gemini's visual result when internally consistent
                 val cleanSigns = rawScanResult.detectedSigns.map { sign ->
+                    val cleanTitle = SignCandidateValidator.sanitizeText(sign.title, "Sign plate")
+                    val cleanSubtitle = SignCandidateValidator.sanitizeText(sign.subtitle, "")
+                    val cleanRest = SignCandidateValidator.sanitizeText(sign.restrictions, "Unspecified rule")
+                    val cleanRule = SignCandidateValidator.sanitizeText(sign.ruleText, cleanRest)
                     sign.copy(
-                        title = SignCandidateValidator.sanitizeText(sign.title, "Sign plate"),
-                        subtitle = SignCandidateValidator.sanitizeText(sign.subtitle, ""),
-                        restrictions = SignCandidateValidator.sanitizeText(sign.restrictions, "Unspecified rule"),
-                        ruleText = SignCandidateValidator.sanitizeText(sign.ruleText, "Unspecified rule")
+                        title = cleanTitle,
+                        subtitle = cleanSubtitle,
+                        applicableDaysHours = cleanSubtitle.ifBlank { sign.applicableDaysHours },
+                        restrictions = cleanRest,
+                        ruleText = cleanRule
                     )
                 }
                 val cleanRules = rawScanResult.parkingRules
                     .map { SignCandidateValidator.sanitizeText(it, "") }
-                    .filter { it.isNotBlank() }
+                    .filter { it.isNotBlank() && !it.contains("No verified parking rule", ignoreCase = true) }
                 val cleanExp = SignCandidateValidator.sanitizeText(rawScanResult.explanation, "Parking rules established from visible signage.")
 
                 val preservedResult = rawScanResult.copy(
                     detectedSigns = cleanSigns,
-                    parkingRules = cleanRules.ifEmpty { listOf("No verified parking rule has been established.") },
+                    parkingRules = cleanRules.ifEmpty { rawScanResult.parkingRules.filter { it.isNotBlank() } },
                     explanation = cleanExp
                 )
 
-                return SemanticConsistencyValidator.enforceSemanticConsistency(preservedResult, emptyList())
+                val semanticallyConsistent = SemanticConsistencyValidator.enforceSemanticConsistency(preservedResult, emptyList())
+                return ParkingAuthority.sanitizeAndEnforceAuthority(semanticallyConsistent, emptyList(), isLiveScanPipeline = false)
             }
 
             return ParkingAuthority.sanitizeAndEnforceAuthority(rawScanResult, validDetections, isLiveScanPipeline = true)
@@ -402,5 +402,40 @@ object EvidenceAnchoringValidator {
         if (!hasVehicleKeyword) return ""
 
         return if (vehicleTypes.any { combinedOcrText.contains(it) }) applicability else ""
+    }
+
+    fun hasMeaningfulGeminiEvidence(rawScanResult: ScanResult): Boolean {
+        if (rawScanResult.isDemo) return true
+
+        // Check detectedSigns for explicit parking rules or valid titles/categories
+        val hasSignEvidence = rawScanResult.detectedSigns.isNotEmpty() &&
+            rawScanResult.detectedSigns.any { sign ->
+                val combinedText = "${sign.title} ${sign.subtitle} ${sign.restrictions} ${sign.ruleText} ${sign.rawText}"
+                SignCandidateValidator.containsExplicitParkingRule(combinedText) ||
+                SignCandidateValidator.validateOcr(sign.rawText.ifBlank { sign.title }).isValid ||
+                isParkingCategoryOrRuleTitle(sign.title) ||
+                isParkingCategoryOrRuleTitle(sign.statusBadge)
+            }
+
+        // Check parkingRules for explicit parking rules or categories
+        val hasRuleEvidence = rawScanResult.parkingRules.any { rule ->
+            if (rule.isBlank() || rule.contains("No verified parking rule", ignoreCase = true)) return@any false
+            if (rule.contains("Assumed", ignoreCase = true) || rule.contains("Derived", ignoreCase = true) || rule.contains("city center rule", ignoreCase = true)) return@any false
+            SignCandidateValidator.containsExplicitParkingRule(rule) || isParkingCategoryOrRuleTitle(rule)
+        }
+
+        return hasSignEvidence || hasRuleEvidence
+    }
+
+    private fun isParkingCategoryOrRuleTitle(text: String): Boolean {
+        if (text.isBlank()) return false
+        val upper = text.uppercase(Locale.US)
+        val keywords = listOf(
+            "PARK", "PERMIT", "LOADING", "METER", "PAY", "LIMIT",
+            "TOW", "SWEEP", "CLEAN", "STOP", "STAND", "NO ", "ZONE",
+            "RESERVED", "HOUR", "HR", "MIN", "PASSENGER", "COMMERCIAL",
+            "RESIDENT", "DISABLED", "HANDICAPPED", "TAXI", "BUS", "VALET"
+        )
+        return keywords.any { upper.contains(it) }
     }
 }

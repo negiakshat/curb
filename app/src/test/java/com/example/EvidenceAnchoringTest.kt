@@ -244,6 +244,64 @@ class EvidenceAnchoringTest {
     }
 
     @Test
+    fun testA_GeminiPipelineConcurrency_GeminiCanBeInvokedWithoutAwaitingOcr() {
+        val geminiResult = ScanResult(
+            locationName = "Pine St",
+            verdict = ScanVerdict.ALLOWED,
+            allowedUntilTime = "6:00 PM",
+            parkingRules = listOf("2 Hour Parking 8 AM - 6 PM"),
+            detectedSigns = listOf(
+                DetectedSign(id = "1", title = "2 Hour Parking", restrictions = "2 hour limit")
+            )
+        )
+
+        assertTrue("Meaningful Gemini evidence recognized immediately without local OCR", EvidenceAnchoringValidator.hasMeaningfulGeminiEvidence(geminiResult))
+    }
+
+    @Test
+    fun testB_GeminiValidVisualResult_OcrEmpty_ResultPreserved() {
+        val rawGeminiResult = ScanResult(
+            locationName = "Market St",
+            verdict = ScanVerdict.RESTRICTED,
+            allowedUntilTime = "No parking permitted",
+            timeRemaining = "--",
+            parkingRules = listOf("Commercial Loading Zone 7 AM - 4 PM"),
+            detectedSigns = listOf(
+                DetectedSign(
+                    id = "1",
+                    title = "Commercial Loading Zone",
+                    subtitle = "Mon-Fri 7 AM - 4 PM",
+                    restrictions = "Commercial loading only",
+                    ruleText = "Commercial loading zone",
+                    statusBadge = "Active Restriction"
+                )
+            )
+        )
+
+        val anchored = EvidenceAnchoringValidator.sanitizeAndAnchorResult(rawGeminiResult, emptyList())
+        assertEquals("Valid Gemini visual result preserved when OCR returns empty", ScanVerdict.RESTRICTED, anchored.verdict)
+        assertEquals(1, anchored.detectedSigns.size)
+        assertEquals("Commercial Loading Zone", anchored.detectedSigns[0].title)
+    }
+
+    @Test
+    fun testC_GeminiNoMeaningfulEvidence_OcrEmpty_ResultRemainsAmbiguous() {
+        val rawGeminiResult = ScanResult(
+            locationName = "Unknown Spot",
+            verdict = ScanVerdict.ALLOWED,
+            allowedUntilTime = "2:00 PM",
+            timeRemaining = "1h 00m remaining",
+            parkingRules = listOf("Assumed location rule"),
+            detectedSigns = listOf(
+                DetectedSign(id = "1", title = "Uncertain Object", restrictions = "No clear text")
+            )
+        )
+
+        val anchored = EvidenceAnchoringValidator.sanitizeAndAnchorResult(rawGeminiResult, emptyList())
+        assertEquals("Result must remain AMBIGUOUS when no meaningful visual evidence", ScanVerdict.AMBIGUOUS, anchored.verdict)
+    }
+
+    @Test
     fun testJ_DemoSampleSignsRemainIsolatedAndWork() {
         val demoScanResult = ScanResult(
             locationName = "Demo Metered Spot",
