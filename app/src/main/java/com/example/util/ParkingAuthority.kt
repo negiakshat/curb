@@ -183,8 +183,12 @@ object ParkingAuthority {
         }
 
         if (evidence.source == "GEMINI") {
-            val hasSignEvidence = scanResult.detectedSigns.isNotEmpty() &&
-                    scanResult.detectedSigns.any { !it.isUncertain }
+            val hasSignEvidence = (scanResult.detectedSigns.isNotEmpty() &&
+                    scanResult.detectedSigns.any { !it.isUncertain }) ||
+                    (scanResult.detectedSigns.isEmpty() && scanResult.parkingRules.any { rule ->
+                        val upper = rule.uppercase(java.util.Locale.US)
+                        upper.contains("PARK") || upper.contains("LIMIT") || upper.contains("HOUR") || upper.contains("MIN")
+                    })
             return hasSignEvidence
         }
 

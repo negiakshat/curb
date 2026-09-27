@@ -83,7 +83,9 @@ object ParkingTimeEvidenceBuilder {
         // 2. Fallback to STRUCTURED GEMINI VISUAL EVIDENCE
         // Only allow if verdict is ALLOWED and signs are not marked uncertain
         val canUseGemini = scanResult.verdict == ScanVerdict.ALLOWED &&
-                scanResult.detectedSigns.none { it.isUncertain || it.isRestrictingNow }
+                scanResult.detectedSigns.none { sign ->
+                    sign.isUncertain || (sign.isRestrictingNow && ParkingTimerCalculator.isHardProhibition(sign))
+                }
 
         if (canUseGemini) {
             val geminiText = buildString {
@@ -294,6 +296,15 @@ data class ParkingTimerConfig(
 
 object ParkingTimerCalculator {
 
+    fun isHardProhibition(sign: DetectedSign): Boolean {
+        val text = "${sign.title} ${sign.subtitle} ${sign.restrictions} ${sign.ruleText} ${sign.rawText}".uppercase(Locale.US)
+        val restrictingKeywords = listOf(
+            "NO PARK", "NO STOP", "TOW AWAY", "TOW-AWAY", "STREET CLEAN",
+            "STREET SWEEP", "CONSTRUCTION", "NO STANDING", "BUS STOP", "LOADING ONLY"
+        )
+        return restrictingKeywords.any { text.contains(it) }
+    }
+
     fun calculateConfig(
         scanResult: ScanResult?,
         currentTimeMillis: Long = System.currentTimeMillis()
@@ -337,7 +348,9 @@ object ParkingTimerCalculator {
 
         // 2. If AMBIGUOUS or any detected sign is uncertain -> No timer allowed
         val hasUncertainty = scanResult.verdict == ScanVerdict.AMBIGUOUS ||
-                scanResult.detectedSigns.any { it.isUncertain }
+                scanResult.detectedSigns.any { sign ->
+                    sign.isUncertain || (sign.isRestrictingNow && isHardProhibition(sign))
+                }
 
         if (hasUncertainty) {
             return ParkingTimerConfig(

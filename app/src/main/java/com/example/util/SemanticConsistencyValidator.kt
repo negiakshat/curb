@@ -172,6 +172,11 @@ object SemanticConsistencyValidator {
         }
     }
 
+    private fun isHardProhibition(sign: DetectedSign): Boolean {
+        val text = "${sign.title} ${sign.subtitle} ${sign.restrictions} ${sign.ruleText} ${sign.rawText}".uppercase(Locale.US)
+        return isRestrictingText(text)
+    }
+
     /**
      * Authoritative decision for timer validity.
      */
@@ -185,7 +190,7 @@ object SemanticConsistencyValidator {
             return false
         }
 
-        if (scanResult.detectedSigns.any { it.isUncertain }) {
+        if (scanResult.detectedSigns.any { it.isUncertain || (it.isRestrictingNow && isHardProhibition(it)) }) {
             return false
         }
 

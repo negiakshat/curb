@@ -90,7 +90,19 @@ class TimerAuthorityTest {
             allowedUntilTime = "2 Hour Parking",
             timeRemaining = "2h 00m remaining",
             parkingRules = listOf("2 Hour Parking 8 AM - 6 PM"),
-            explanation = "Park up to 2 hours"
+            explanation = "Park up to 2 hours",
+            detectedSigns = listOf(
+                com.example.data.model.DetectedSign(
+                    id = "sign_1",
+                    title = "2 Hour Parking",
+                    subtitle = "8 AM - 6 PM",
+                    restrictions = "2 Hour Parking 8 AM - 6 PM",
+                    ruleText = "2 Hour Parking 8 AM - 6 PM",
+                    isRestrictingNow = false,
+                    isUncertain = false,
+                    rawText = "2 HOUR PARKING 8 AM - 6 PM"
+                )
+            )
         )
         val scanId = repository.saveScan(allowed2hScan)
 
@@ -121,7 +133,19 @@ class TimerAuthorityTest {
             allowedUntilTime = "2 Hour Parking",
             timeRemaining = "2h 00m remaining",
             parkingRules = listOf("2 Hour Parking 8 AM - 6 PM"),
-            explanation = "Park up to 2 hours"
+            explanation = "Park up to 2 hours",
+            detectedSigns = listOf(
+                com.example.data.model.DetectedSign(
+                    id = "sign_1",
+                    title = "2 Hour Parking",
+                    subtitle = "8 AM - 6 PM",
+                    restrictions = "2 Hour Parking 8 AM - 6 PM",
+                    ruleText = "2 Hour Parking 8 AM - 6 PM",
+                    isRestrictingNow = false,
+                    isUncertain = false,
+                    rawText = "2 HOUR PARKING 8 AM - 6 PM"
+                )
+            )
         )
         val scanId = repository.saveScan(allowed2hScan)
 
@@ -179,7 +203,19 @@ class TimerAuthorityTest {
             allowedUntilTime = "1 Hour Parking",
             timeRemaining = "1h 00m remaining",
             parkingRules = listOf("1 Hour Parking 9 AM - 5 PM"),
-            explanation = "1 hour limit"
+            explanation = "1 hour limit",
+            detectedSigns = listOf(
+                com.example.data.model.DetectedSign(
+                    id = "sign_1",
+                    title = "1 Hour Parking",
+                    subtitle = "9 AM - 5 PM",
+                    restrictions = "1 Hour Parking 9 AM - 5 PM",
+                    ruleText = "1 Hour Parking 9 AM - 5 PM",
+                    isRestrictingNow = false,
+                    isUncertain = false,
+                    rawText = "1 HOUR PARKING 9 AM - 5 PM"
+                )
+            )
         )
         val scanId = repository.saveScan(allowedScan)
 
@@ -204,7 +240,19 @@ class TimerAuthorityTest {
             allowedUntilTime = "2 Hour Parking",
             timeRemaining = "2h 00m remaining",
             parkingRules = listOf("2 Hour Parking 8 AM - 6 PM"),
-            explanation = "2 hour limit"
+            explanation = "2 hour limit",
+            detectedSigns = listOf(
+                com.example.data.model.DetectedSign(
+                    id = "sign_1",
+                    title = "2 Hour Parking",
+                    subtitle = "8 AM - 6 PM",
+                    restrictions = "2 Hour Parking 8 AM - 6 PM",
+                    ruleText = "2 Hour Parking 8 AM - 6 PM",
+                    isRestrictingNow = false,
+                    isUncertain = false,
+                    rawText = "2 HOUR PARKING 8 AM - 6 PM"
+                )
+            )
         )
         val scanId = repository.saveScan(allowedScan)
 
@@ -251,7 +299,19 @@ class TimerAuthorityTest {
             allowedUntilTime = preset.allowedUntil,
             timeRemaining = "2h 00m remaining",
             parkingRules = preset.rules,
-            explanation = preset.explanation
+            explanation = preset.explanation,
+            detectedSigns = listOf(
+                com.example.data.model.DetectedSign(
+                    id = "sign_1",
+                    title = "2 Hour Parking",
+                    subtitle = "8 AM - 6 PM",
+                    restrictions = "2 Hour Parking 8 AM - 6 PM",
+                    ruleText = "2 Hour Parking 8 AM - 6 PM",
+                    isRestrictingNow = false,
+                    isUncertain = false,
+                    rawText = "2 HOUR PARKING 8 AM - 6 PM"
+                )
+            )
         )
         val scanId = repository.saveScan(scanResult)
 

@@ -350,42 +350,69 @@ fun SaveSpotBottomSheet(
                     }
 
                     if (reminderEnabled) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "REMIND ME BEFORE LIMIT",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = BentoTextSecondary,
-                            modifier = Modifier.padding(bottom = 6.dp)
-                        )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            listOf(15, 30, 45, 60).forEach { mins ->
-                                val selected = selectedReminderMins == mins
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (selected) CurbSuccessContainer else BentoCanvas)
-                                        .border(
-                                            1.dp,
-                                            if (selected) CurbSuccess else BentoBorder,
-                                            RoundedCornerShape(10.dp)
-                                        )
-                                        .clickable { selectedReminderMins = mins }
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "${mins}m",
-                                        fontSize = 12.sp,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (selected) CurbSuccess else BentoPrimaryDark
-                                    )
+                        val timerConfig = remember(scanResult) {
+                            com.example.util.ParkingTimerCalculator.calculateConfig(scanResult)
+                        }
+                        val verifiedDurationMins = remember(timerConfig) {
+                            if (timerConfig.canStart) timerConfig.calculatedMinutes else 0
+                        }
+                        val reminderPresets = remember(verifiedDurationMins) {
+                            listOf(5, 10, 15, 30).filter { it < verifiedDurationMins }
+                        }
+
+                        if (reminderPresets.isNotEmpty()) {
+                            // Ensure selectedReminderMins is a valid option
+                            LaunchedEffect(reminderPresets) {
+                                if (selectedReminderMins !in reminderPresets) {
+                                    selectedReminderMins = reminderPresets.lastOrNull() ?: 5
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "REMIND ME BEFORE LIMIT",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BentoTextSecondary,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                reminderPresets.forEach { mins ->
+                                    val selected = selectedReminderMins == mins
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (selected) CurbSuccessContainer else BentoCanvas)
+                                            .border(
+                                                1.dp,
+                                                if (selected) CurbSuccess else BentoBorder,
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .clickable { selectedReminderMins = mins }
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "${mins}m",
+                                            fontSize = 12.sp,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (selected) CurbSuccess else BentoPrimaryDark
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "No early reminder options available for short sessions.",
+                                fontSize = 12.sp,
+                                color = BentoTextSecondary,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
                         }
                     }
                 } else {

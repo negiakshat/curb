@@ -812,13 +812,15 @@ fun ParkingTimerScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                val reminderOptions = listOf(
-                    5 to "5 minutes before",
-                    10 to "10 minutes before",
-                    15 to "15 minutes before (Recommended)",
-                    30 to "30 minutes before",
-                    0 to "Turn off reminders"
-                )
+                val sessionDurationMins = ((effectiveSession.endTime - effectiveSession.startTime) / 60000L).toInt()
+                val presets = listOf(5, 10, 15, 30).filter { it < sessionDurationMins }
+                val reminderOptions = presets.map { mins ->
+                    val label = when (mins) {
+                        15 -> "15 minutes before (Recommended)"
+                        else -> "$mins minutes before"
+                    }
+                    mins to label
+                } + (0 to "Turn off reminders")
 
                 val currentSelectedMins = effectiveSession.reminderMinutesBefore
                 reminderOptions.forEach { (mins, label) ->
