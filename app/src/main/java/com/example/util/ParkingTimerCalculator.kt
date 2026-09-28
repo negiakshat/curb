@@ -160,7 +160,7 @@ object ParkingTimeEvidenceBuilder {
         val minMatcher = Pattern.compile("(\\d+)\\s*(?:-?\\s*min|minute|mins|minutes|m)").matcher(lower)
         while (minMatcher.find()) {
             val mins = minMatcher.group(1)?.toIntOrNull()
-            if (mins != null && mins in 5..300) {
+            if (mins != null && mins in 1..300) {
                 if (lowestMinutes == null || mins < lowestMinutes) {
                     lowestMinutes = mins
                 }
@@ -258,7 +258,7 @@ object ParkingTimeEvidenceBuilder {
             }
         }
 
-        return if (found && totalMins in 5..720) totalMins else null
+        return if (found && totalMins in 1..720) totalMins else null
     }
 
     fun formatMinutesToDisplay(minutes: Int): String {

@@ -164,7 +164,7 @@ class ParkingSessionStartResultTest {
     }
 
     @Test
-    fun `ViewModel callback defaults to identity when no onResult provided`() {
+    fun `ViewModel callback defaults to identity when no onResult provided`() = runBlocking {
         // Verify the function doesn't crash when called without onResult
         val viewModel = CurbViewModel(app)
         viewModel.startParkingSession(

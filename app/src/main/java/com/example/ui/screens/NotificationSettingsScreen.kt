@@ -40,12 +40,52 @@ import com.example.ui.theme.CurbSurface
 import com.example.ui.theme.CurbSurfaceVariant
 import com.example.ui.theme.CurbWhite
 
+import android.app.AlarmManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
+
 @Composable
 fun NotificationSettingsScreen(
     pushEnabled: Boolean,
     onTogglePush: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val alarmManager = remember { context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager }
+    var canScheduleExact by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                alarmManager?.canScheduleExactAlarms() == true
+            } else {
+                true
+            }
+        )
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                canScheduleExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    alarmManager?.canScheduleExactAlarms() == true
+                } else {
+                    true
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -116,6 +156,61 @@ fun NotificationSettingsScreen(
             }
 
             if (pushEnabled) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !canScheduleExact) {
+                    CurbCard(
+                        cornerRadius = 20.dp,
+                        backgroundColor = CurbSurface
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp)
+                        ) {
+                            Text(
+                                text = "Precise Alarms Required",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CurbOnSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Curb needs permission to schedule precise parking alarms. Without this, notifications may be delayed by Android to save battery.",
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                color = CurbOnSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                        try {
+                                            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                                data = Uri.fromParts("package", context.packageName, null)
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {
+                                            try {
+                                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                    data = Uri.fromParts("package", context.packageName, null)
+                                                }
+                                                context.startActivity(intent)
+                                            } catch (_: Exception) {}
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = CurbBlack,
+                                    contentColor = CurbWhite
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.testTag("enable_exact_alarms_button")
+                            ) {
+                                Text("Enable Precise Alerts")
+                            }
+                        }
+                    }
+                }
+
                 Text(
                     text = "Active Alerts",
                     fontSize = 16.sp,

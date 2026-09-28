@@ -10,6 +10,8 @@ import com.example.util.EvidenceAnchoringValidator
 import com.example.util.ParkingAuthority
 import com.example.util.ParkingTimerCalculator
 import com.example.util.TimerSemanticMode
+import com.example.util.ParkingTimeEvidenceBuilder
+import com.example.util.ParkingTimeEvidenceType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -172,6 +174,90 @@ class CurbRegressionTests {
         
         // Assert sorting is ascending
         assertTrue(presetsVarious == presetsVarious.sorted())
+    }
+
+    @Test
+    fun testRegressionActive1MinuteLimit() {
+        val ocrText = "1 MINUTE PARKING 5:30 PM TO 10:00 PM ALL DAYS"
+        val mockBitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+
+        val crop = LocalSignCrop(
+            id = "crop_1m",
+            normalizedBox = SignBoundingBox("crop_1m", 0.1f, 0.1f, 0.9f, 0.9f, "1 MINUTE PARKING", ocrText),
+            ocrText = ocrText,
+            fileUri = "file://test/crop_1m.png",
+            bitmap = mockBitmap,
+            isDemo = false,
+            isUncertain = false
+        )
+
+        val geminiSign = DetectedSign(
+            id = "crop_1m",
+            title = "1 Minute Parking",
+            subtitle = "5:30 PM - 10:00 PM • All Days",
+            applicableDaysHours = "5:30 PM - 10:00 PM • All Days",
+            restrictions = "1 minute parking limit",
+            ruleText = "1 minute parking limit",
+            isRestrictingNow = true,
+            isUncertain = false,
+            rawText = ocrText
+        )
+
+        val rawScanResult = ScanResult(
+            verdict = ScanVerdict.ALLOWED,
+            locationName = "123 Test St",
+            allowedUntilTime = "1 Minute Parking",
+            timeRemaining = "1m remaining",
+            parkingRules = listOf("1 minute parking limit"),
+            explanation = "1 minute parking limit is active",
+            detectedSigns = listOf(geminiSign),
+            isDemo = false
+        )
+
+        // Run through anchoring validator
+        val anchoredResult = EvidenceAnchoringValidator.sanitizeAndAnchorResult(rawScanResult, listOf(crop))
+
+        // Deterministic test time at 5:45 PM (17:45)
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 17)
+            set(Calendar.MINUTE, 45)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val testTimeMillis = cal.timeInMillis
+
+        // Calculate config
+        val config = ParkingTimerCalculator.calculateConfig(anchoredResult, testTimeMillis)
+
+        // Expectations
+        // - Sign/rule is considered active
+        assertEquals(ScanVerdict.ALLOWED, anchoredResult.verdict)
+        assertEquals(TimerSemanticMode.TIMED_LIMIT, config.mode)
+        assertTrue(config.canStart)
+        
+        // - Timer calculation returns 1 minute
+        assertEquals(1, config.calculatedMinutes)
+        assertTrue(config.timerBasis.lowercase().contains("1m") || config.timerBasis.lowercase().contains("1 min"))
+
+        // - Expiry should be approximately 5:46 PM
+        val calExpiry = Calendar.getInstance().apply { timeInMillis = config.endTime }
+        assertEquals(17, calExpiry.get(Calendar.HOUR_OF_DAY))
+        assertEquals(46, calExpiry.get(Calendar.MINUTE))
+
+        // - Timer authorization is allowed when all other evidence/authority checks pass
+        val canAuthorize = ParkingAuthority.canAuthorizeTimer(anchoredResult)
+        assertTrue(canAuthorize)
+
+        // - It must NOT return "Verify physical signage" merely because the duration is only 1 minute
+        assertFalse(anchoredResult.allowedUntilTime.contains("Verify physical signage"))
+
+        // - It must NOT classify the 1-minute duration as UNKNOWN
+        val evidence = ParkingTimeEvidenceBuilder.buildParkingTimeEvidence(anchoredResult, testTimeMillis)
+        assertTrue(evidence.type != ParkingTimeEvidenceType.UNKNOWN)
+
+        // - Reminder presets are separate: a 1-minute session must have NO early-reminder preset
+        val presets = getPresetsForDuration(1)
+        assertTrue(presets.isEmpty())
     }
 
     private fun getPresetsForDuration(durationMins: Int): List<Int> {

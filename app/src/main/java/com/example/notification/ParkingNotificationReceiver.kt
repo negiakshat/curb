@@ -21,6 +21,16 @@ import kotlinx.coroutines.launch
 
 class ParkingNotificationReceiver : BroadcastReceiver() {
 
+    companion object {
+        var postNotificationsPermissionChecker: (Context) -> Boolean = { ctx ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        }
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         val sessionId = intent.getLongExtra(ParkingNotificationScheduler.EXTRA_SESSION_ID, -1L)
         val savedPlaceId = intent.getLongExtra(ParkingNotificationScheduler.EXTRA_SAVED_PLACE_ID, -1L)
@@ -58,11 +68,8 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
         }
 
         // 2. CHECK POST_NOTIFICATIONS PERMISSION ON API 33+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val permissionStatus = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
-            if (permissionStatus != PackageManager.PERMISSION_GRANTED) {
-                return
-            }
+        if (!postNotificationsPermissionChecker(context)) {
+            return
         }
 
         // 3. QUERY DATABASE FOR AUTHORITATIVE SESSION STATE
@@ -134,12 +141,23 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
         // 7. BUILD AND POST NATIVE NOTIFICATION
         ParkingNotificationScheduler.createNotificationChannel(context)
 
-        val notification = NotificationCompat.Builder(context, ParkingNotificationScheduler.CHANNEL_ID)
+        val resId = context.resources.getIdentifier("hatching", "raw", context.packageName)
+        val soundUri = if (resId != 0) {
+            android.net.Uri.parse("android.resource://${context.packageName}/$resId")
+        } else {
+            android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+        }
+
+        val notification = NotificationCompat.Builder(context, ParkingNotificationScheduler.CUSTOM_SOUND_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(notificationText.title)
             .setContentText(notificationText.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(notificationText.body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setSound(soundUri)
+            .setVibrate(longArrayOf(0, 250, 250, 250))
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
             .build()
@@ -163,10 +181,7 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
         val userProfile = sessionPrefs.getUserProfile()
         if (!userProfile.pushNotificationsEnabled) return
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val permissionStatus = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
-            if (permissionStatus != PackageManager.PERMISSION_GRANTED) return
-        }
+        if (!postNotificationsPermissionChecker(context)) return
 
         val database = CurbDatabase.getDatabase(context)
         val entity = database.savedPlaceDao().getPlaceById(savedPlaceId) ?: return
@@ -201,12 +216,23 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
 
         ParkingNotificationScheduler.createNotificationChannel(context)
 
-        val notification = NotificationCompat.Builder(context, ParkingNotificationScheduler.CHANNEL_ID)
+        val resId = context.resources.getIdentifier("hatching", "raw", context.packageName)
+        val soundUri = if (resId != 0) {
+            android.net.Uri.parse("android.resource://${context.packageName}/$resId")
+        } else {
+            android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+        }
+
+        val notification = NotificationCompat.Builder(context, ParkingNotificationScheduler.CUSTOM_SOUND_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(notificationText.title)
             .setContentText(notificationText.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(notificationText.body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setSound(soundUri)
+            .setVibrate(longArrayOf(0, 250, 250, 250))
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
             .build()

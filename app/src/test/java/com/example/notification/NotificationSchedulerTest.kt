@@ -1,14 +1,17 @@
 package com.example.notification
 
 import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.ParkingSessionEntity
 import com.example.ui.navigation.Routes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,6 +30,7 @@ class NotificationSchedulerTest {
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        ParkingNotificationReceiver.postNotificationsPermissionChecker = { true }
     }
 
     @Test
@@ -179,5 +183,202 @@ class NotificationSchedulerTest {
 
         assertTrue(id1Reminder != id1Expiration)
         assertTrue(id1Reminder != id2Reminder)
+    }
+
+    @Test
+    fun testSetAlarmPathAndFallbackSelection() {
+        val shadowAlarmManager = shadowOf(alarmManager)
+        shadowAlarmManager.scheduledAlarms.clear()
+
+        val triggerTime = System.currentTimeMillis() + 10000L
+        val intent = Intent(context, ParkingNotificationReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            5001,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Reset to default
+        val originalChecker = ParkingNotificationScheduler.exactAlarmPermissionChecker
+        try {
+            // Test with exact permission granted
+            ParkingNotificationScheduler.exactAlarmPermissionChecker = { true }
+            val isExact = ParkingNotificationScheduler.setAlarm(alarmManager, triggerTime, pendingIntent)
+            assertTrue(isExact)
+
+            // Test with exact permission denied
+            ParkingNotificationScheduler.exactAlarmPermissionChecker = { false }
+            val isExactFallback = ParkingNotificationScheduler.setAlarm(alarmManager, triggerTime, pendingIntent)
+            assertFalse(isExactFallback)
+        } finally {
+            // Restore original checker
+            ParkingNotificationScheduler.exactAlarmPermissionChecker = originalChecker
+        }
+    }
+
+    @Test
+    fun testVersionedNotificationChannelDetails() {
+        ParkingNotificationScheduler.createNotificationChannel(context)
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val shadowNM = shadowOf(notificationManager)
+        
+        val channels = shadowNM.notificationChannels
+        val channel = channels.find { it.id == "curb_parking_alerts_v2" }
+        assertNotNull(channel)
+        val nonNullChannel = channel!!
+        assertEquals(android.app.NotificationManager.IMPORTANCE_HIGH, nonNullChannel.importance)
+        assertNotNull(nonNullChannel.sound)
+        val hasIntendedSound = nonNullChannel.sound.toString().contains("hatching") || 
+                nonNullChannel.sound.toString().contains("notification") ||
+                nonNullChannel.sound.toString().contains("default") ||
+                nonNullChannel.sound.toString().contains("android")
+        assertTrue(hasIntendedSound)
+    }
+
+    @Test
+    fun testReceiverStaleSessionDoesNotNotify() = org.robolectric.Robolectric.buildActivity(com.example.MainActivity::class.java).use { controller ->
+        val database = com.example.data.local.CurbDatabase.getDatabase(context)
+        val dao = database.parkingSessionDao()
+        
+        // Stale target end time doesn't match current session end time
+        val session = com.example.data.local.ParkingSessionEntity(
+            id = 802L,
+            locationName = "Test Stale Loc",
+            startTime = System.currentTimeMillis(),
+            endTime = System.currentTimeMillis() + 3600000L,
+            allowedUntilTime = "4:00 PM",
+            isActive = true,
+            isDemo = false
+        )
+        
+        // Run blocking database operation
+        kotlinx.coroutines.runBlocking {
+            dao.insertSession(session)
+        }
+
+        val intent = Intent(context, ParkingNotificationReceiver::class.java).apply {
+            putExtra(ParkingNotificationScheduler.EXTRA_SESSION_ID, 802L)
+            putExtra(ParkingNotificationScheduler.EXTRA_NOTIFICATION_TYPE, NotificationType.REMINDER.name)
+            putExtra(ParkingNotificationScheduler.EXTRA_TARGET_END_TIME, session.endTime - 1000L) // different!
+        }
+
+        val receiver = ParkingNotificationReceiver()
+        receiver.onReceive(context, intent)
+        
+        // Wait for coroutine inside Receiver's IO scope to finish
+        org.robolectric.shadows.ShadowLooper.runUiThreadTasksIncludingDelayedTasks()
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val shadowNM = shadowOf(notificationManager)
+        val notification = shadowNM.getNotification(ParkingNotificationScheduler.getReminderRequestCode(802L))
+        
+        // Should not have notified because stale alarm check rejected it
+        org.junit.Assert.assertNull(notification)
+    }
+
+    @Test
+    fun testReceiverEndedSessionDoesNotNotify() = org.robolectric.Robolectric.buildActivity(com.example.MainActivity::class.java).use { controller ->
+        val database = com.example.data.local.CurbDatabase.getDatabase(context)
+        val dao = database.parkingSessionDao()
+
+        // Session is not active anymore
+        val session = com.example.data.local.ParkingSessionEntity(
+            id = 803L,
+            locationName = "Test Ended Loc",
+            startTime = System.currentTimeMillis(),
+            endTime = System.currentTimeMillis() + 3600000L,
+            allowedUntilTime = "4:00 PM",
+            isActive = false, // INACTIVE
+            isDemo = false
+        )
+
+        kotlinx.coroutines.runBlocking {
+            dao.insertSession(session)
+        }
+
+        val intent = Intent(context, ParkingNotificationReceiver::class.java).apply {
+            putExtra(ParkingNotificationScheduler.EXTRA_SESSION_ID, 803L)
+            putExtra(ParkingNotificationScheduler.EXTRA_NOTIFICATION_TYPE, NotificationType.REMINDER.name)
+            putExtra(ParkingNotificationScheduler.EXTRA_TARGET_END_TIME, session.endTime)
+        }
+
+        val receiver = ParkingNotificationReceiver()
+        receiver.onReceive(context, intent)
+
+        org.robolectric.shadows.ShadowLooper.runUiThreadTasksIncludingDelayedTasks()
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val shadowNM = shadowOf(notificationManager)
+        val notification = shadowNM.getNotification(ParkingNotificationScheduler.getReminderRequestCode(803L))
+
+        // Should not have notified because session is inactive
+        org.junit.Assert.assertNull(notification)
+    }
+
+    @Test
+    fun testReceiverValidAlarmsNotifyCorrectly() = org.robolectric.Robolectric.buildActivity(com.example.MainActivity::class.java).use { controller ->
+        val database = com.example.data.local.CurbDatabase.getDatabase(context)
+        val dao = database.parkingSessionDao()
+
+        val session = com.example.data.local.ParkingSessionEntity(
+            id = 801L,
+            locationName = "Test Active Loc",
+            startTime = System.currentTimeMillis(),
+            endTime = System.currentTimeMillis() + 3600000L,
+            allowedUntilTime = "4:00 PM",
+            isActive = true,
+            isDemo = false,
+            reminderMinutesBefore = 15
+        )
+
+        kotlinx.coroutines.runBlocking {
+            dao.insertSession(session)
+        }
+
+        // Test REMINDER
+        val reminderIntent = Intent(context, ParkingNotificationReceiver::class.java).apply {
+            putExtra(ParkingNotificationScheduler.EXTRA_SESSION_ID, 801L)
+            putExtra(ParkingNotificationScheduler.EXTRA_NOTIFICATION_TYPE, NotificationType.REMINDER.name)
+            putExtra(ParkingNotificationScheduler.EXTRA_TARGET_END_TIME, session.endTime)
+        }
+
+        val receiver = ParkingNotificationReceiver()
+        receiver.onReceive(context, reminderIntent)
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val shadowNM = shadowOf(notificationManager)
+
+        var reminderNotification: android.app.Notification? = null
+        val startTime = System.currentTimeMillis()
+        while (reminderNotification == null && System.currentTimeMillis() - startTime < 3000L) {
+            Thread.sleep(50)
+            org.robolectric.shadows.ShadowLooper.runUiThreadTasksIncludingDelayedTasks()
+            reminderNotification = shadowNM.getNotification(ParkingNotificationScheduler.getReminderRequestCode(801L))
+        }
+
+        assertNotNull("Reminder notification should not be null", reminderNotification)
+        
+        // Verify Title and Content visibility
+        assertEquals(android.app.Notification.VISIBILITY_PUBLIC, reminderNotification!!.visibility)
+
+        // Test EXPIRATION
+        val expirationIntent = Intent(context, ParkingNotificationReceiver::class.java).apply {
+            putExtra(ParkingNotificationScheduler.EXTRA_SESSION_ID, 801L)
+            putExtra(ParkingNotificationScheduler.EXTRA_NOTIFICATION_TYPE, NotificationType.EXPIRATION.name)
+            putExtra(ParkingNotificationScheduler.EXTRA_TARGET_END_TIME, session.endTime)
+        }
+
+        receiver.onReceive(context, expirationIntent)
+
+        var expirationNotification: android.app.Notification? = null
+        val expirationStartTime = System.currentTimeMillis()
+        while (expirationNotification == null && System.currentTimeMillis() - expirationStartTime < 3000L) {
+            Thread.sleep(50)
+            org.robolectric.shadows.ShadowLooper.runUiThreadTasksIncludingDelayedTasks()
+            expirationNotification = shadowNM.getNotification(ParkingNotificationScheduler.getExpirationRequestCode(801L))
+        }
+
+        assertNotNull("Expiration notification should not be null", expirationNotification)
     }
 }

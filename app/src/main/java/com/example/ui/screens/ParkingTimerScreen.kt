@@ -1,8 +1,18 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.app.AlarmManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.content.pm.PackageManager
 import android.widget.Toast
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -196,6 +206,10 @@ fun ParkingTimerScreen(
         }
 
         if (effectiveSession != null && effectiveSession.isActive) {
+            val totalDuration = (effectiveSession.endTime - effectiveSession.startTime).coerceAtLeast(1000L)
+            val remaining = (effectiveSession.endTime - currentTimeMillis)
+            val isExpired = remaining <= 0
+
             // MAIN SCROLLABLE CONTENT AREA (ACTIVE SESSION)
             Column(
                 modifier = Modifier
@@ -205,11 +219,89 @@ fun ParkingTimerScreen(
                     .padding(horizontal = 20.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Pre-calculated timer state
-                val totalDuration = (effectiveSession.endTime - effectiveSession.startTime).coerceAtLeast(1000L)
-                val remaining = (effectiveSession.endTime - currentTimeMillis)
-                val isExpired = remaining <= 0
+                val alarmManager = remember { context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager }
+                var canScheduleExact by remember {
+                    mutableStateOf(
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            alarmManager?.canScheduleExactAlarms() == true
+                        } else {
+                            true
+                        }
+                    )
+                }
 
+                val lifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME) {
+                            canScheduleExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                alarmManager?.canScheduleExactAlarms() == true
+                            } else {
+                                true
+                            }
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose {
+                        lifecycleOwner.lifecycle.removeObserver(observer)
+                    }
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !canScheduleExact && !isExpired) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(RadiusCard))
+                            .testTag("timer_exact_alarm_warning_card"),
+                        shape = RoundedCornerShape(RadiusCard),
+                        colors = CardDefaults.cardColors(containerColor = BentoWhite),
+                        border = BorderStroke(1.dp, CurbError),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Text(
+                                text = "Precise Notifications Disabled",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CurbError
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Curb needs permission to schedule precise parking alerts so you don't get ticketed. Tap below to enable them in settings.",
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                color = BentoTextSecondary
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            CurbPrimaryButton(
+                                text = "ENABLE PRECISE ALERTS",
+                                onClick = {
+                                    try {
+                                        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                            data = Uri.parse("package:" + context.packageName)
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {
+                                        try {
+                                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                data = Uri.parse("package:" + context.packageName)
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {}
+                                    }
+                                },
+                                backgroundColor = CurbError,
+                                testTag = "timer_enable_exact_alarms_button"
+                            )
+                        }
+                    }
+                }
+
+                // Pre-calculated timer state
                 val totalSeconds = (remaining / 1000).coerceAtLeast(0L)
                 val hours = totalSeconds / 3600
                 val minutes = (totalSeconds % 3600) / 60
@@ -564,7 +656,9 @@ fun ParkingTimerScreen(
 
                         // Row 2: Reminder
                         val currentReminderMins = effectiveSession.reminderMinutesBefore
-                        val reminderText = if (currentReminderMins > 0) {
+                        val reminderText = if (isExpired) {
+                            "No reminder"
+                        } else if (currentReminderMins > 0) {
                             "$currentReminderMins min before expiry"
                         } else {
                             "Disabled"
@@ -574,15 +668,17 @@ fun ParkingTimerScreen(
                             icon = Icons.Default.NotificationsNone,
                             title = "Notification Reminder",
                             subtitle = reminderText,
-                            isClickable = true,
-                            onClick = { showReminderSheet = true },
+                            isClickable = !isExpired,
+                            onClick = { if (!isExpired) showReminderSheet = true },
                             trailingContent = {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                    contentDescription = "Edit reminder",
-                                    tint = BentoTextSecondary,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                if (!isExpired) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                        contentDescription = "Edit reminder",
+                                        tint = BentoTextSecondary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
                         )
 
@@ -615,30 +711,32 @@ fun ParkingTimerScreen(
             }
 
             // STICKY BOTTOM ACTIONS FOR ACTIVE SESSION
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(BentoCanvas)
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // LEFT BUTTON: "Add time"
-                CurbSecondaryButton(
-                    text = "Add time",
-                    onClick = { showAddTimeSheet = true },
-                    modifier = Modifier.weight(1f),
-                    testTag = "add_time_button"
-                )
+            if (!isExpired) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(BentoCanvas)
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // LEFT BUTTON: "Add time"
+                    CurbSecondaryButton(
+                        text = "Add time",
+                        onClick = { showAddTimeSheet = true },
+                        modifier = Modifier.weight(1f),
+                        testTag = "add_time_button"
+                    )
 
-                // RIGHT BUTTON: "End parking session"
-                CurbPrimaryButton(
-                    text = "End session",
-                    onClick = { onEndSession(effectiveSession.id) },
-                    modifier = Modifier.weight(1.25f),
-                    backgroundColor = CurbError,
-                    testTag = "end_parking_session_button"
-                )
+                    // RIGHT BUTTON: "End parking session"
+                    CurbPrimaryButton(
+                        text = "End session",
+                        onClick = { onEndSession(effectiveSession.id) },
+                        modifier = Modifier.weight(1.25f),
+                        backgroundColor = CurbError,
+                        testTag = "end_parking_session_button"
+                    )
+                }
             }
         } else {
             // ==========================================
