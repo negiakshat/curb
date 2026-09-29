@@ -17,6 +17,12 @@ import java.util.Locale
  */
 object EvidenceAnchoringValidator {
 
+    private fun logDowngrade(stepName: String, before: ScanVerdict, after: ScanVerdict) {
+        if (before != ScanVerdict.AMBIGUOUS && after == ScanVerdict.AMBIGUOUS) {
+            android.util.Log.w("CurbScanDiag", "CurbScanDiag: Validator Downgrade - stepName=$stepName changed verdict from $before to AMBIGUOUS")
+        }
+    }
+
     /**
      * Anchors and validates a ScanResult against the list of validated LocalSignCrop evidence.
      */
@@ -28,6 +34,8 @@ object EvidenceAnchoringValidator {
         if (rawScanResult.isDemo) {
             return rawScanResult
         }
+
+        android.util.Log.d("CurbScanDiag", "CurbScanDiag: GEMINI_SUCCESS INITIAL_VERDICT=${rawScanResult.verdict} LOCAL_DETECTIONS=${validDetections.size} GEMINI_SIGNS=${rawScanResult.detectedSigns.size}")
 
         // When local OCR detections are empty, check if Gemini provided valid visual sign evidence
         if (!ParkingAuthority.hasVerifiedSignEvidence(validDetections)) {
@@ -56,12 +64,22 @@ object EvidenceAnchoringValidator {
                     parkingRules = cleanRules.ifEmpty { rawScanResult.parkingRules.filter { it.isNotBlank() } },
                     explanation = cleanExp
                 )
+                logDowngrade("EvidenceAnchoringValidator(preserve)", rawScanResult.verdict, preservedResult.verdict)
 
                 val semanticallyConsistent = SemanticConsistencyValidator.enforceSemanticConsistency(preservedResult, emptyList())
-                return ParkingAuthority.sanitizeAndEnforceAuthority(semanticallyConsistent, emptyList(), isLiveScanPipeline = false)
+                logDowngrade("SemanticConsistencyValidator(preserve)", preservedResult.verdict, semanticallyConsistent.verdict)
+
+                val finalResult = ParkingAuthority.sanitizeAndEnforceAuthority(semanticallyConsistent, emptyList(), isLiveScanPipeline = false)
+                logDowngrade("ParkingAuthority(preserve)", semanticallyConsistent.verdict, finalResult.verdict)
+
+                android.util.Log.d("CurbScanDiag", "CurbScanDiag: GEMINI_SUCCESS COMPLETE FINAL_VERDICT=${finalResult.verdict} LOCAL_DETECTIONS=0 GEMINI_SIGNS=${finalResult.detectedSigns.size}")
+                return finalResult
             }
 
-            return ParkingAuthority.sanitizeAndEnforceAuthority(rawScanResult, validDetections, isLiveScanPipeline = true)
+            val finalResult = ParkingAuthority.sanitizeAndEnforceAuthority(rawScanResult, validDetections, isLiveScanPipeline = true)
+            logDowngrade("ParkingAuthority(no_evidence)", rawScanResult.verdict, finalResult.verdict)
+            android.util.Log.d("CurbScanDiag", "CurbScanDiag: GEMINI_SUCCESS COMPLETE FINAL_VERDICT=${finalResult.verdict} LOCAL_DETECTIONS=${validDetections.size} GEMINI_SIGNS=${finalResult.detectedSigns.size}")
+            return finalResult
         }
 
         val combinedOcrText = validDetections.joinToString(" ") { it.ocrText }.uppercase(Locale.US)
@@ -146,11 +164,18 @@ object EvidenceAnchoringValidator {
             vehicleApplicability = SignCandidateValidator.sanitizeText(filterVehicleApplicability(rawScanResult.vehicleApplicability, combinedOcrText), "")
         )
 
+        logDowngrade("EvidenceAnchoringValidator", rawScanResult.verdict, anchoredResult.verdict)
+
         // Pass anchored result through SemanticConsistencyValidator
         val semanticallyConsistentResult = SemanticConsistencyValidator.enforceSemanticConsistency(anchoredResult, validDetections)
+        logDowngrade("SemanticConsistencyValidator", anchoredResult.verdict, semanticallyConsistentResult.verdict)
 
         // Run through ParkingAuthority for final location vs sign authority check
-        return ParkingAuthority.sanitizeAndEnforceAuthority(semanticallyConsistentResult, validDetections, isLiveScanPipeline = true)
+        val finalResult = ParkingAuthority.sanitizeAndEnforceAuthority(semanticallyConsistentResult, validDetections, isLiveScanPipeline = true)
+        logDowngrade("ParkingAuthority", semanticallyConsistentResult.verdict, finalResult.verdict)
+
+        android.util.Log.d("CurbScanDiag", "CurbScanDiag: GEMINI_SUCCESS COMPLETE FINAL_VERDICT=${finalResult.verdict} LOCAL_DETECTIONS=${validDetections.size} GEMINI_SIGNS=${finalResult.detectedSigns.size}")
+        return finalResult
     }
 
     private fun anchorSignToCrop(candidateSign: DetectedSign?, crop: LocalSignCrop): DetectedSign {

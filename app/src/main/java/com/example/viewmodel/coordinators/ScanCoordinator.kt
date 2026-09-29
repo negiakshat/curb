@@ -106,30 +106,28 @@ class ScanCoordinator(
                 _processingStage.value = ScanProcessingStage.LOCAL_DETECTION
                 _processingStatusText.value = ScanProcessingStage.LOCAL_DETECTION.statusText
 
-                // Step 1: Initiate Location Resolution concurrently
-                val locationDeferred = async {
-                    if (!explicitLocationName.isNullOrBlank()) {
-                        Triple(explicitLocationName, explicitCityState ?: "", true)
+                // Step 1: Derive best currently-known location synchronously
+                val currentLoc = if (!explicitLocationName.isNullOrBlank()) {
+                    Triple(explicitLocationName, explicitCityState ?: "", true)
+                } else {
+                    val userLoc = userLocationState.value
+                    if (userLoc is UserLocationResult.Success) {
+                        Triple(userLoc.locationName, userLoc.cityState, true)
                     } else {
-                        val currentLoc = if (userLocationState.value !is UserLocationResult.Success && locationService.hasLocationPermission()) {
-                            locationService.fetchCurrentLocation()
-                        } else {
-                            userLocationState.value
-                        }
-
-                        when (currentLoc) {
-                            is UserLocationResult.Success -> {
-                                Triple(currentLoc.locationName, currentLoc.cityState, true)
-                            }
-                            is UserLocationResult.PermissionRequired -> {
-                                Triple("Location access needed", "", false)
-                            }
-                            is UserLocationResult.Unavailable -> {
-                                Triple("Location unavailable", "", false)
+                        // Launch location refresh independently in background
+                        coroutineScope.launch {
+                            if (locationService.hasLocationPermission()) {
+                                try {
+                                    locationService.fetchCurrentLocation()
+                                } catch (e: Exception) {
+                                    Log.w("CurbLocation", "Background location refresh failed", e)
+                                }
                             }
                         }
+                        Triple("Location unavailable", "", false)
                     }
                 }
+                val (resolvedLocName, resolvedCityState, isKnown) = currentLoc
 
                 // Step 2: Initiate Local OCR / Crop Detection concurrently
                 val detectionDeferred = async {
@@ -147,13 +145,11 @@ class ScanCoordinator(
                     }
                 }
 
-                // Step 3: Initiate Gemini analysis immediately with captured bitmap
+                // Step 3: Initiate Gemini analysis immediately with captured bitmap (no waiting for location resolution)
                 _processingStage.value = ScanProcessingStage.GEMINI_REQUEST
                 _processingStatusText.value = ScanProcessingStage.GEMINI_REQUEST.statusText
 
                 val geminiDeferred = async {
-                    val (resolvedLocName, resolvedCityState, isKnown) = locationDeferred.await()
-
                     GeminiService.analyzeParkingSigns(
                         bitmap = bitmap,
                         locationName = resolvedLocName,

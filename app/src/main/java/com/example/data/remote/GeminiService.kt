@@ -28,6 +28,20 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+enum class GeminiFailureClassification {
+    MISSING_API_KEY,
+    PREFLIGHT_NO_IMAGE,
+    IMAGE_ENCODING_FAILURE,
+    NETWORK_IO,
+    HTTP_408,
+    HTTP_429,
+    HTTP_5XX,
+    HTTP_OTHER,
+    EMPTY_RESPONSE,
+    MALFORMED_RESPONSE,
+    INVALID_MODEL_RESULT
+}
+
 object GeminiService {
     private const val MODEL_NAME = "gemini-3.5-flash-lite"
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -114,11 +128,18 @@ object GeminiService {
             ((crop.bitmap != null && !crop.bitmap.isRecycled) || (crop.fileUri.isNotBlank() && java.io.File(crop.fileUri).let { it.exists() && it.length() > 0 }))
         }
 
+        val hasBitmap = bitmap != null
+        val isNotRecycled = bitmap?.isRecycled == false
+        val bmpWidth = bitmap?.width ?: 0
+        val bmpHeight = bitmap?.height ?: 0
+
+        android.util.Log.d("CurbGeminiDiag", "Pre-request validation: bitmapExists=$hasBitmap, isNotRecycled=$isNotRecycled, width=$bmpWidth, height=$bmpHeight, localDetectionsCount=${validDetections.size}")
+
         // PREFLIGHT GATE BEFORE GEMINI:
         // Only skip Gemini if BOTH local sign crops AND the captured camera image bitmap are missing/invalid.
         if (validDetections.isEmpty() && !isBitmapValid) {
             val totalTime = System.currentTimeMillis() - totalScanStartTime
-            android.util.Log.d("CurbTiming", "PREFLIGHT GATE: Gemini SKIPPED! Zero valid sign candidates and no valid bitmap. Total scan time: ${totalTime} ms")
+            android.util.Log.e("CurbGeminiDiag", "CurbGeminiDiag: FINAL_FAILURE type=PREFLIGHT_NO_IMAGE reachedHttpLayer=false fullBitmapExists=$isBitmapValid bitmapWidth=$bmpWidth bitmapHeight=$bmpHeight localDetectionsCount=${validDetections.size} totalDuration=${totalTime}ms")
 
             val neutralExplanation = if (isLocationKnown && locationName.isNotBlank() && locationName != "Location unavailable" && locationName != "Location access needed") {
                 "No distinct parking signs were resolved in the image at $locationName. Parking rules could not be determined from verified sign evidence."
@@ -144,6 +165,13 @@ object GeminiService {
             return@withContext EvidenceAnchoringValidator.sanitizeAndAnchorResult(unanchoredResult, emptyList())
         }
 
+        // Validate API Key pre-flight
+        if (apiKey.isNullOrBlank() || apiKey == "MY_GEMINI_API_KEY") {
+            val totalTime = System.currentTimeMillis() - totalScanStartTime
+            android.util.Log.e("CurbGeminiDiag", "CurbGeminiDiag: FINAL_FAILURE type=MISSING_API_KEY reachedHttpLayer=false fullBitmapExists=$isBitmapValid bitmapWidth=$bmpWidth bitmapHeight=$bmpHeight localDetectionsCount=${validDetections.size} totalDuration=${totalTime}ms")
+            return@withContext createFailureResult(locationName, cityState, "API key is missing or invalid. Please check your configuration.")
+        }
+
         android.util.Log.d("CurbTiming", "PREFLIGHT GATE: Passed. Proceeding to Gemini request (crops=${validDetections.size}, hasBitmap=$isBitmapValid).")
 
         val signContextText = if (validDetections.isNotEmpty()) {
@@ -158,12 +186,6 @@ object GeminiService {
             """.trimIndent()
         } else {
             "SCANNED PARKING SIGNS: Local OCR candidates were incomplete or unavailable. Inspect the physical parking sign image directly to read all posted rules and schedules."
-        }
-
-        // Validate API Key pre-flight
-        if (apiKey.isNullOrBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            android.util.Log.e("CurbGeminiRetry", "NON-RETRYABLE FAILURE: Missing/invalid Gemini API Key.")
-            return@withContext createFailureResult(locationName, cityState, "API key is missing or invalid. Please check your configuration.")
         }
 
         val encodeStartTime = System.currentTimeMillis()
@@ -229,6 +251,9 @@ object GeminiService {
         val partsArray = JSONArray()
         partsArray.put(JSONObject().apply { put("text", prompt) })
 
+        var base64Succeeded = false
+        var imagePartsCount = 0
+
         // 1. Add real cropped sign images if available (supporting visual evidence)
         for (crop in validDetections) {
             val cropBmp = if (crop.bitmap != null && !crop.bitmap.isRecycled && crop.bitmap.width > 0) {
@@ -242,6 +267,8 @@ object GeminiService {
 
             val b64 = cropBmp?.toOptimizedBase64(maxDimension = 800, quality = 80)
             if (!b64.isNullOrBlank()) {
+                base64Succeeded = true
+                imagePartsCount++
                 partsArray.put(JSONObject().apply {
                     put("inlineData", JSONObject().apply {
                         put("mimeType", "image/jpeg")
@@ -255,6 +282,8 @@ object GeminiService {
         if (isBitmapValid) {
             val fullB64 = bitmap.toOptimizedBase64(maxDimension = 1280, quality = 85)
             if (!fullB64.isNullOrBlank()) {
+                base64Succeeded = true
+                imagePartsCount++
                 partsArray.put(JSONObject().apply {
                     put("inlineData", JSONObject().apply {
                         put("mimeType", "image/jpeg")
@@ -264,7 +293,14 @@ object GeminiService {
             }
         }
 
-        android.util.Log.d("CurbTiming", "Image payload encoding completed in ${System.currentTimeMillis() - encodeStartTime} ms (crops=${validDetections.size}, fullPhoto=$isBitmapValid)")
+        android.util.Log.d("CurbGeminiDiag", "Encoding: duration=${System.currentTimeMillis() - encodeStartTime}ms, base64Succeeded=$base64Succeeded, imagePartsCount=$imagePartsCount")
+
+        // IMAGE_ENCODING_FAILURE check
+        if (imagePartsCount == 0) {
+            val totalTime = System.currentTimeMillis() - totalScanStartTime
+            android.util.Log.e("CurbGeminiDiag", "CurbGeminiDiag: FINAL_FAILURE type=IMAGE_ENCODING_FAILURE reachedHttpLayer=false fullBitmapExists=$isBitmapValid bitmapWidth=$bmpWidth bitmapHeight=$bmpHeight localDetectionsCount=${validDetections.size} totalDuration=${totalTime}ms")
+            return@withContext createFailureResult(locationName, cityState, "AI analysis failed due to an image processing issue (IMAGE_ENCODING_FAILURE).")
+        }
 
         val jsonBody = JSONObject().apply {
             val contentsArray = JSONArray().apply {
@@ -289,15 +325,18 @@ object GeminiService {
 
         var lastException: Exception? = null
         var lastResponseCode = -1
+        var reachedHttpLayer = false
+        var finalClassification: GeminiFailureClassification? = null
+        var finalErrorDetail = ""
 
         for (attempt in 1..3) {
             val geminiRequestStart = System.currentTimeMillis()
-            android.util.Log.d("CurbGeminiRetry", "Gemini API request started (attempt $attempt/3)")
+            android.util.Log.d("CurbGeminiDiag", "CurbGeminiDiag: Starting attempt $attempt/3")
             try {
+                reachedHttpLayer = true
                 val response = client.newCall(request).execute()
                 lastResponseCode = response.code
                 val geminiDuration = System.currentTimeMillis() - geminiRequestStart
-                android.util.Log.d("CurbTiming", "Gemini API request completed in ${geminiDuration} ms with HTTP ${response.code} (attempt $attempt/3)")
 
                 val responseString = try {
                     response.body?.string() ?: ""
@@ -307,8 +346,10 @@ object GeminiService {
 
                 if (response.isSuccessful) {
                     if (responseString.isEmpty()) {
-                        android.util.Log.e("CurbGeminiRetry", "NON-RETRYABLE FAILURE: Successful Gemini HTTP response but empty response payload on attempt $attempt/3.")
-                        return@withContext createFailureResult(locationName, cityState, "Gemini returned HTTP success but an empty response payload.")
+                        finalClassification = GeminiFailureClassification.EMPTY_RESPONSE
+                        finalErrorDetail = "Successful HTTP but empty response body"
+                        android.util.Log.e("CurbGeminiDiag", "CurbGeminiDiag: attempt=$attempt code=${response.code} classification=EMPTY_RESPONSE duration=${geminiDuration}ms")
+                        break
                     }
 
                     try {
@@ -320,14 +361,34 @@ object GeminiService {
                         val parts = content?.optJSONArray("parts")
                         val text = parts?.optJSONObject(0)?.optString("text") ?: ""
 
+                        if (text.isBlank()) {
+                            finalClassification = GeminiFailureClassification.INVALID_MODEL_RESULT
+                            finalErrorDetail = "Response candidate content text is empty or blank"
+                            android.util.Log.e("CurbGeminiDiag", "CurbGeminiDiag: attempt=$attempt code=${response.code} classification=INVALID_MODEL_RESULT duration=${geminiDuration}ms")
+                            break
+                        }
+
                         val cleanJsonStr = text.replace("```json", "").replace("```", "").trim()
                         val parsed = JSONObject(cleanJsonStr)
 
-                        val verdictStr = parsed.optString("verdict", "AMBIGUOUS").uppercase()
+                        val verdictStr = parsed.optString("verdict", "").uppercase()
+                        if (verdictStr.isBlank()) {
+                            finalClassification = GeminiFailureClassification.INVALID_MODEL_RESULT
+                            finalErrorDetail = "No verdict found in model JSON output"
+                            android.util.Log.e("CurbGeminiDiag", "CurbGeminiDiag: attempt=$attempt code=${response.code} classification=INVALID_MODEL_RESULT duration=${geminiDuration}ms")
+                            break
+                        }
+
                         val verdict = when {
                             verdictStr.contains("RESTRICT") -> ScanVerdict.RESTRICTED
                             verdictStr.contains("ALLOW") || verdictStr == "YES" || verdictStr == "PERMITTED" -> ScanVerdict.ALLOWED
-                            else -> ScanVerdict.AMBIGUOUS
+                            verdictStr.contains("AMBIGUOUS") || verdictStr == "UNCLEAR" -> ScanVerdict.AMBIGUOUS
+                            else -> {
+                                finalClassification = GeminiFailureClassification.INVALID_MODEL_RESULT
+                                finalErrorDetail = "Invalid verdict value '$verdictStr'"
+                                android.util.Log.e("CurbGeminiDiag", "CurbGeminiDiag: attempt=$attempt code=${response.code} classification=INVALID_MODEL_RESULT duration=${geminiDuration}ms")
+                                break
+                            }
                         }
 
                         val rulesList = mutableListOf<String>()
@@ -444,47 +505,81 @@ object GeminiService {
 
                         return@withContext EvidenceAnchoringValidator.sanitizeAndAnchorResult(parsedResult, validDetections)
                     } catch (e: Exception) {
-                        android.util.Log.e("CurbGeminiRetry", "NON-RETRYABLE FAILURE: Gemini parsing / malformed JSON error on attempt $attempt/3: ${e.message}", e)
-                        return@withContext createFailureResult(locationName, cityState, "AI analysis succeeded but the response was malformed. Please try scanning again.")
+                        finalClassification = if (e is org.json.JSONException) GeminiFailureClassification.MALFORMED_RESPONSE else GeminiFailureClassification.INVALID_MODEL_RESULT
+                        finalErrorDetail = "Parsing failed: ${e.message}"
+                        val geminiDuration = System.currentTimeMillis() - geminiRequestStart
+                        android.util.Log.e("CurbGeminiDiag", "CurbGeminiDiag: attempt=$attempt code=${response.code} classification=$finalClassification duration=${geminiDuration}ms errorDetail='${finalErrorDetail.take(120)}'")
+                        break
                     }
                 } else {
+                    val classification = when (response.code) {
+                        408 -> GeminiFailureClassification.HTTP_408
+                        429 -> GeminiFailureClassification.HTTP_429
+                        in 500..599 -> GeminiFailureClassification.HTTP_5XX
+                        else -> GeminiFailureClassification.HTTP_OTHER
+                    }
+                    finalClassification = classification
+                    val errorBody = extractApiError(responseString)
+                    finalErrorDetail = "HTTP ${response.code}: $errorBody"
+                    android.util.Log.e("CurbGeminiDiag", "CurbGeminiDiag: attempt=$attempt code=${response.code} classification=$classification duration=${geminiDuration}ms errorDetail='${errorBody.take(120)}'")
+
                     val isRetryable = isRetryableHttpCode(response.code)
-                    android.util.Log.w("CurbGeminiRetry", "Gemini request failure with HTTP ${response.code} (isRetryable=$isRetryable) on attempt $attempt/3")
-                    
                     if (!isRetryable || attempt == 3) {
-                        android.util.Log.e("CurbGeminiRetry", "FINAL FAILURE: non-retryable status or maximum attempts exhausted on attempt $attempt/3.")
-                        return@withContext createFailureResult(locationName, cityState, "AI parking analysis is temporarily unavailable (HTTP ${response.code}). Please verify posted signage manually.")
+                        break
                     }
 
-                    // Respect Retry-After for HTTP 429
-                    var backoffDelay = if (attempt == 1) 500L else 1500L
-                    if (response.code == 429) {
-                        val retryAfterHeader = response.header("Retry-After")
-                        val retryAfterSecs = retryAfterHeader?.toLongOrNull()
-                        if (retryAfterSecs != null) {
-                            backoffDelay = (retryAfterSecs * 1000L).coerceIn(500L, 3000L)
-                            android.util.Log.d("CurbGeminiRetry", "HTTP 429 encountered. Respecting Retry-After: ${retryAfterSecs}s (using delay of ${backoffDelay}ms)")
-                        }
-                    }
-
-                    android.util.Log.d("CurbGeminiRetry", "Waiting ${backoffDelay}ms before retry attempt ${attempt + 1}")
+                    val backoffDelay = if (attempt == 1) 500L else 1500L
                     delay(backoffDelay)
                 }
             } catch (e: java.io.IOException) {
                 lastException = e
-                android.util.Log.w("CurbGeminiRetry", "Gemini request network IOException on attempt $attempt/3: ${e.message}")
+                finalClassification = GeminiFailureClassification.NETWORK_IO
+                finalErrorDetail = "IOException: ${e.message}"
+                val geminiDuration = System.currentTimeMillis() - geminiRequestStart
+                android.util.Log.e("CurbGeminiDiag", "CurbGeminiDiag: attempt=$attempt classification=NETWORK_IO duration=${geminiDuration}ms errorDetail='${finalErrorDetail.take(120)}'")
+
                 if (attempt == 3) {
-                    android.util.Log.e("CurbGeminiRetry", "FINAL FAILURE: Maximum attempts exhausted after IOException on attempt $attempt/3.")
                     break
                 }
                 val backoffDelay = if (attempt == 1) 500L else 1500L
-                android.util.Log.d("CurbGeminiRetry", "Waiting ${backoffDelay}ms before retry attempt ${attempt + 1} after IOException")
                 delay(backoffDelay)
             }
         }
 
+        val totalTime = System.currentTimeMillis() - totalScanStartTime
+        val finalClass = finalClassification ?: GeminiFailureClassification.NETWORK_IO
+        android.util.Log.e("CurbGeminiDiag", """
+            CurbGeminiDiag: FINAL_FAILURE
+            - type: $finalClass
+            - status: ${finalErrorDetail.take(120)}
+            - reachedHttpLayer: $reachedHttpLayer
+            - fullBitmapExists: $isBitmapValid
+            - bitmapWidth: ${bitmap?.width ?: 0}
+            - bitmapHeight: ${bitmap?.height ?: 0}
+            - localDetectionsCount: ${validDetections.size}
+            - totalDuration: ${totalTime}ms
+        """.trimIndent())
+
         val errorDesc = if (lastException != null) "Network connection error: ${lastException.message}" else "HTTP error code $lastResponseCode"
         return@withContext createFailureResult(locationName, cityState, "AI parking analysis is temporarily unavailable ($errorDesc). Please verify posted signage manually.")
+    }
+
+    fun extractApiError(responseBody: String?): String {
+        if (responseBody.isNullOrBlank()) return "Unknown Error"
+        return try {
+            val json = JSONObject(responseBody)
+            val errorObj = json.optJSONObject("error")
+            if (errorObj != null) {
+                val message = errorObj.optString("message", "")
+                val status = errorObj.optString("status", "")
+                val code = errorObj.optInt("code", -1)
+                "code=$code status=$status message=${message.take(120)}"
+            } else {
+                responseBody.take(120)
+            }
+        } catch (e: Exception) {
+            responseBody.take(120)
+        }
     }
 
     fun hasVerifiedPhysicalSignEvidence(validDetections: List<LocalSignCrop>): Boolean {
