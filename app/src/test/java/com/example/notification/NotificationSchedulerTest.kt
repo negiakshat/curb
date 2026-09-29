@@ -219,20 +219,20 @@ class NotificationSchedulerTest {
 
     @Test
     fun testVersionedNotificationChannelDetails() {
-        ParkingNotificationScheduler.createNotificationChannel(context)
+        ParkingNotificationChannel.createNotificationChannel(context)
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         val shadowNM = shadowOf(notificationManager)
         
         val channels = shadowNM.notificationChannels
-        val channel = channels.find { it.id == "curb_parking_alerts_v2" }
+        val channel = channels.find { it.id == ParkingNotificationChannel.CHANNEL_ID }
         assertNotNull(channel)
         val nonNullChannel = channel!!
         assertEquals(android.app.NotificationManager.IMPORTANCE_HIGH, nonNullChannel.importance)
         assertNotNull(nonNullChannel.sound)
-        val hasIntendedSound = nonNullChannel.sound.toString().contains("hatching") || 
-                nonNullChannel.sound.toString().contains("notification") ||
+        val hasIntendedSound = nonNullChannel.sound.toString().contains("notification") ||
                 nonNullChannel.sound.toString().contains("default") ||
-                nonNullChannel.sound.toString().contains("android")
+                nonNullChannel.sound.toString().contains("android") ||
+                nonNullChannel.sound.toString().contains("system")
         assertTrue(hasIntendedSound)
     }
 

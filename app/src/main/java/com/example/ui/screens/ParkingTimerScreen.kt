@@ -142,10 +142,19 @@ fun ParkingTimerScreen(
     }
 
     // Live update ticker for smooth countdown
-    LaunchedEffect(Unit) {
-        while (true) {
-            currentTimeMillis = System.currentTimeMillis()
-            delay(1000)
+    LaunchedEffect(effectiveSession?.endTime, effectiveSession?.isActive) {
+        if (effectiveSession != null && effectiveSession.isActive) {
+            while (true) {
+                val now = System.currentTimeMillis()
+                currentTimeMillis = now
+                val remaining = effectiveSession.endTime - now
+                if (remaining <= 0) {
+                    break
+                }
+                // Update frequency: if < 10 mins (600000ms), update every 1 second (1000ms), else every 10 seconds (10000ms) to save battery and prevent leaks
+                val delayTime = if (remaining < 600000L) 1000L else 10000L
+                delay(delayTime)
+            }
         }
     }
 
@@ -407,7 +416,7 @@ fun ParkingTimerScreen(
                         // Large Remaining Time Display (Hero Information)
                         Column {
                             Text(
-                                text = if (isExpired) "Expired" else if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m",
+                                text = if (isExpired) "Expired" else com.example.util.ParkingTimerFormatter.formatRemainingTime(remaining),
                                 fontSize = 38.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isExpired) CurbError else BentoTextPrimary,

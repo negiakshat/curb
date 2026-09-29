@@ -139,16 +139,9 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
         )
 
         // 7. BUILD AND POST NATIVE NOTIFICATION
-        ParkingNotificationScheduler.createNotificationChannel(context)
+        ParkingNotificationChannel.createNotificationChannel(context)
 
-        val resId = context.resources.getIdentifier("hatching", "raw", context.packageName)
-        val soundUri = if (resId != 0) {
-            android.net.Uri.parse("android.resource://${context.packageName}/$resId")
-        } else {
-            android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-        }
-
-        val notification = NotificationCompat.Builder(context, ParkingNotificationScheduler.CUSTOM_SOUND_CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, ParkingNotificationChannel.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(notificationText.title)
             .setContentText(notificationText.body)
@@ -156,8 +149,6 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setSound(soundUri)
-            .setVibrate(longArrayOf(0, 250, 250, 250))
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
             .build()
@@ -214,16 +205,9 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        ParkingNotificationScheduler.createNotificationChannel(context)
+        ParkingNotificationChannel.createNotificationChannel(context)
 
-        val resId = context.resources.getIdentifier("hatching", "raw", context.packageName)
-        val soundUri = if (resId != 0) {
-            android.net.Uri.parse("android.resource://${context.packageName}/$resId")
-        } else {
-            android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-        }
-
-        val notification = NotificationCompat.Builder(context, ParkingNotificationScheduler.CUSTOM_SOUND_CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, ParkingNotificationChannel.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(notificationText.title)
             .setContentText(notificationText.body)
@@ -231,8 +215,6 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setSound(soundUri)
-            .setVibrate(longArrayOf(0, 250, 250, 250))
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
             .build()

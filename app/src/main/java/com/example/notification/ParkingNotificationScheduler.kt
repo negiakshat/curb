@@ -11,9 +11,9 @@ import com.example.data.local.ParkingSessionEntity
 
 object ParkingNotificationScheduler {
 
-    const val CHANNEL_ID = "curb_parking_channel"
-    const val CUSTOM_SOUND_CHANNEL_ID = "curb_parking_alerts_v2"
-    const val CHANNEL_NAME = "Parking Alerts"
+    const val CHANNEL_ID = ParkingNotificationChannel.CHANNEL_ID
+    const val CUSTOM_SOUND_CHANNEL_ID = ParkingNotificationChannel.CHANNEL_ID
+    const val CHANNEL_NAME = ParkingNotificationChannel.CHANNEL_NAME
 
     const val EXTRA_SESSION_ID = "extra_session_id"
     const val EXTRA_SAVED_PLACE_ID = "extra_saved_place_id"
@@ -23,50 +23,7 @@ object ParkingNotificationScheduler {
     const val EXTRA_NAVIGATE_ROUTE = "navigate_route"
 
     fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-
-                // Create original channel for backwards compatibility
-                val channel = NotificationChannel(
-                    CHANNEL_ID,
-                    CHANNEL_NAME,
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "Reminders and alerts for active parking sessions"
-                    enableVibration(true)
-                }
-                manager?.createNotificationChannel(channel)
-
-                // Create new channel with custom hatching.mp3 sound
-                val resId = context.resources.getIdentifier("hatching", "raw", context.packageName)
-                val soundUri = if (resId != 0) {
-                    android.net.Uri.parse("android.resource://${context.packageName}/$resId")
-                } else {
-                    android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                }
-
-                val audioAttributes = android.media.AudioAttributes.Builder()
-                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
-                    .build()
-
-                val customChannel = NotificationChannel(
-                    CUSTOM_SOUND_CHANNEL_ID,
-                    "Curb Parking Alerts",
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "Reminders and alerts with custom Curb sound"
-                    enableVibration(true)
-                    vibrationPattern = longArrayOf(0, 250, 250, 250)
-                    setSound(soundUri, audioAttributes)
-                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-                }
-                manager?.createNotificationChannel(customChannel)
-            } catch (_: Throwable) {
-                // Ignore channel creation exceptions on custom OEM ROMs
-            }
-        }
+        ParkingNotificationChannel.createNotificationChannel(context)
     }
 
     fun scheduleSessionNotifications(context: Context, session: ParkingSessionEntity) {

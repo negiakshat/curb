@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
-            com.example.notification.ParkingNotificationScheduler.createNotificationChannel(applicationContext)
+            com.example.notification.ParkingNotificationChannel.createNotificationChannel(applicationContext)
         } catch (_: Throwable) {}
         enableEdgeToEdge()
         setContent {
