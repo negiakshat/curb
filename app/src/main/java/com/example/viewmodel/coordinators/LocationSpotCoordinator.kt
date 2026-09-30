@@ -91,14 +91,14 @@ class LocationSpotCoordinator(
         }
     }
 
-    fun startLiveLocationUpdates() {
+    fun startLiveLocationUpdates(intervalMs: Long = 5000L) {
         stopLiveLocationUpdates()
         liveLocationJob = coroutineScope.launch {
             if (!locationService.hasLocationPermission()) {
                 _userLocationState.value = UserLocationResult.PermissionRequired()
                 return@launch
             }
-            locationService.getLocationUpdates(intervalMs = 5000L).collect { result ->
+            locationService.getLocationUpdates(intervalMs = intervalMs).collect { result ->
                 if (result is UserLocationResult.Success) {
                     _userLocationState.value = result
                 } else {

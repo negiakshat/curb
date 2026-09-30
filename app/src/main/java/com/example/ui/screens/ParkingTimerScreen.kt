@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -664,23 +665,31 @@ fun ParkingTimerScreen(
                         )
 
                         // Row 2: Reminder
+                        val sessionDurationMins = ((effectiveSession.endTime - effectiveSession.startTime) / 60000L).toInt()
+                        val presets = com.example.util.ParkingTimerFormatter.getValidReminderPresets(sessionDurationMins)
+                        val hasPresets = presets.isNotEmpty()
+
                         val currentReminderMins = effectiveSession.reminderMinutesBefore
                         val reminderText = if (isExpired) {
                             "No reminder"
-                        } else if (currentReminderMins > 0) {
+                        } else if (!hasPresets) {
+                            "No reminder available"
+                        } else if (currentReminderMins > 0 && currentReminderMins < sessionDurationMins) {
                             "$currentReminderMins min before expiry"
                         } else {
                             "Disabled"
                         }
 
+                        val canEditReminder = !isExpired && hasPresets
+
                         TimerDetailRow(
                             icon = Icons.Default.NotificationsNone,
                             title = "Notification Reminder",
                             subtitle = reminderText,
-                            isClickable = !isExpired,
-                            onClick = { if (!isExpired) showReminderSheet = true },
+                            isClickable = canEditReminder,
+                            onClick = { if (canEditReminder) showReminderSheet = true },
                             trailingContent = {
-                                if (!isExpired) {
+                                if (canEditReminder) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                         contentDescription = "Edit reminder",
@@ -920,7 +929,7 @@ fun ParkingTimerScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 val sessionDurationMins = ((effectiveSession.endTime - effectiveSession.startTime) / 60000L).toInt()
-                val presets = listOf(5, 10, 15, 30).filter { it < sessionDurationMins }
+                val presets = com.example.util.ParkingTimerFormatter.getValidReminderPresets(sessionDurationMins)
                 val reminderOptions = presets.map { mins ->
                     val label = when (mins) {
                         15 -> "15 minutes before (Recommended)"
@@ -1234,7 +1243,9 @@ private fun TimerDetailRow(
 
         // Right Content (No-wrap, maintains full size, never squeezed)
         Box(
-            modifier = Modifier.wrapContentWidth(Alignment.End),
+            modifier = Modifier
+                .wrapContentWidth(Alignment.End)
+                .width(IntrinsicSize.Max),
             contentAlignment = Alignment.CenterEnd
         ) {
             trailingContent()

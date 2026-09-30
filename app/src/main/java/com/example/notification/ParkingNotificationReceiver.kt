@@ -141,11 +141,23 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
         // 7. BUILD AND POST NATIVE NOTIFICATION
         ParkingNotificationChannel.createNotificationChannel(context)
 
+        val collapsedViews = android.widget.RemoteViews(context.packageName, R.layout.notification_custom_collapsed).apply {
+            setTextViewText(R.id.notification_title, notificationText.title)
+            setTextViewText(R.id.notification_body, notificationText.body)
+        }
+
+        val expandedViews = android.widget.RemoteViews(context.packageName, R.layout.notification_custom_expanded).apply {
+            setTextViewText(R.id.notification_title_expanded, notificationText.title)
+            setTextViewText(R.id.notification_body_expanded, notificationText.body)
+        }
+
         val notification = NotificationCompat.Builder(context, ParkingNotificationChannel.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_curb_notification)
             .setContentTitle(notificationText.title)
             .setContentText(notificationText.body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(notificationText.body))
+            .setCustomContentView(collapsedViews)
+            .setCustomBigContentView(expandedViews)
+            .setStyle(androidx.core.app.NotificationCompat.DecoratedCustomViewStyle())
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -207,11 +219,23 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
 
         ParkingNotificationChannel.createNotificationChannel(context)
 
+        val collapsedViews = android.widget.RemoteViews(context.packageName, R.layout.notification_custom_collapsed).apply {
+            setTextViewText(R.id.notification_title, notificationText.title)
+            setTextViewText(R.id.notification_body, notificationText.body)
+        }
+
+        val expandedViews = android.widget.RemoteViews(context.packageName, R.layout.notification_custom_expanded).apply {
+            setTextViewText(R.id.notification_title_expanded, notificationText.title)
+            setTextViewText(R.id.notification_body_expanded, notificationText.body)
+        }
+
         val notification = NotificationCompat.Builder(context, ParkingNotificationChannel.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_curb_notification)
             .setContentTitle(notificationText.title)
             .setContentText(notificationText.body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(notificationText.body))
+            .setCustomContentView(collapsedViews)
+            .setCustomBigContentView(expandedViews)
+            .setStyle(androidx.core.app.NotificationCompat.DecoratedCustomViewStyle())
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

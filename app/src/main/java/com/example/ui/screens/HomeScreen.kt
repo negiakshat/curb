@@ -151,14 +151,7 @@ fun HomeScreen(
 
     val liveRemainingFormatted = remember(nowMillis, activeSession) {
         if (activeSession != null && activeSession.isActive) {
-            val totalSeconds = liveRemainingMillis / 1000
-            val hours = totalSeconds / 3600
-            val minutes = (totalSeconds % 3600) / 60
-            if (hours > 0) {
-                "${hours}h ${minutes}m remaining"
-            } else {
-                "${minutes}m remaining"
-            }
+            com.example.util.ParkingTimerFormatter.formatRemainingTime(liveRemainingMillis)
         } else {
             ""
         }

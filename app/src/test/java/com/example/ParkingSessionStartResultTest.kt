@@ -32,6 +32,7 @@ class ParkingSessionStartResultTest {
 
     private lateinit var app: Application
     private lateinit var repository: CurbRepository
+    private var viewModel: CurbViewModel? = null
     private val testDispatcher = UnconfinedTestDispatcher()
 
     @Before
@@ -46,6 +47,14 @@ class ParkingSessionStartResultTest {
 
     @After
     fun tearDown() {
+        viewModel?.let { vm ->
+            try {
+                val method = androidx.lifecycle.ViewModel::class.java.getDeclaredMethod("onCleared")
+                method.isAccessible = true
+                method.invoke(vm)
+            } catch (_: Throwable) {}
+        }
+        viewModel = null
         Dispatchers.resetMain()
     }
 
@@ -121,10 +130,10 @@ class ParkingSessionStartResultTest {
 
     @Test
     fun `ViewModel callback receives negative ID when repository rejects session`() = runBlocking {
-        val viewModel = CurbViewModel(app)
+        viewModel = CurbViewModel(app)
         val deferredId = kotlinx.coroutines.CompletableDeferred<Long>()
 
-        viewModel.startParkingSession(
+        viewModel?.startParkingSession(
             durationMinutes = 30,
             onResult = { id -> deferredId.complete(id) }
         )
@@ -147,10 +156,10 @@ class ParkingSessionStartResultTest {
         )
         val scanId = repository.saveScan(validScan)
 
-        val viewModel = CurbViewModel(app)
+        viewModel = CurbViewModel(app)
         val deferredId = kotlinx.coroutines.CompletableDeferred<Long>()
 
-        viewModel.startParkingSession(
+        viewModel?.startParkingSession(
             scanResultId = scanId,
             scanResult = validScan,
             locationName = "1 Hour Spot",
@@ -166,8 +175,8 @@ class ParkingSessionStartResultTest {
     @Test
     fun `ViewModel callback defaults to identity when no onResult provided`() = runBlocking {
         // Verify the function doesn't crash when called without onResult
-        val viewModel = CurbViewModel(app)
-        viewModel.startParkingSession(
+        viewModel = CurbViewModel(app)
+        viewModel?.startParkingSession(
             durationMinutes = 30
         )
         shadowOf(Looper.getMainLooper()).idle()

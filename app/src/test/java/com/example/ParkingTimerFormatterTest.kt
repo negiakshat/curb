@@ -1,8 +1,10 @@
 package com.example
 
 import com.example.util.ParkingTimerFormatter.formatRemainingTime
+import com.example.util.ParkingTimerFormatter.getValidReminderPresets
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ParkingTimerFormatterTest {
@@ -54,5 +56,36 @@ class ParkingTimerFormatterTest {
         val formatted1Min = formatRemainingTime(60000L)
         assertNotEquals("0m", formatted1Min)
         assertEquals("1m 00s", formatted1Min)
+    }
+
+    @Test
+    fun testUnificationAndPresets_regression() {
+        // A. 1-minute active session with 29 seconds remaining:
+        // Parking Timer = "29s", Home = "29s"
+        assertEquals("29s", formatRemainingTime(29000L))
+
+        // B. 9m 59s:
+        assertEquals("9m 59s", formatRemainingTime(599000L))
+
+        // C. 59 seconds:
+        assertEquals("59s", formatRemainingTime(59000L))
+
+        // D. 9 seconds:
+        assertEquals("09s", formatRemainingTime(9000L))
+
+        // E. 0:
+        assertEquals("0m", formatRemainingTime(0L))
+
+        // F. 1-minute parking duration (valid presets should be empty)
+        val presets1m = getValidReminderPresets(1)
+        assertTrue(presets1m.isEmpty())
+
+        // G. 30-minute parking duration: valid presets = 5, 10, 15
+        val presets30m = getValidReminderPresets(30)
+        assertEquals(listOf(5, 10, 15), presets30m)
+
+        // H. 1-hour parking duration: valid presets = 5, 10, 15, 30
+        val presets1h = getValidReminderPresets(60)
+        assertEquals(listOf(5, 10, 15, 30), presets1h)
     }
 }

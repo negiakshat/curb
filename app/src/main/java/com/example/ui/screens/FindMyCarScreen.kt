@@ -295,6 +295,37 @@ fun FindMyCarScreen(
             // Extract success user location if available
             val successUserLoc = userLocationState as? UserLocationResult.Success
 
+            // Smoothed user position using custom animation / interpolation
+            var interpolatedUserGeoPoint by remember { mutableStateOf<GeoPoint?>(null) }
+
+            val targetUserGeoPoint = remember(successUserLoc) {
+                if (successUserLoc != null) GeoPoint(successUserLoc.latitude, successUserLoc.longitude) else null
+            }
+
+            LaunchedEffect(targetUserGeoPoint) {
+                val target = targetUserGeoPoint
+                if (target != null) {
+                    val start = interpolatedUserGeoPoint
+                    if (start == null) {
+                        interpolatedUserGeoPoint = target
+                    } else {
+                        val durationMs = 800L
+                        val startTime = System.currentTimeMillis()
+                        while (true) {
+                            val elapsed = System.currentTimeMillis() - startTime
+                            val fraction = (elapsed.toFloat() / durationMs).coerceIn(0f, 1f)
+                            val lat = start.latitude + (target.latitude - start.latitude) * fraction
+                            val lng = start.longitude + (target.longitude - start.longitude) * fraction
+                            interpolatedUserGeoPoint = GeoPoint(lat, lng)
+                            if (fraction >= 1f) break
+                            kotlinx.coroutines.delay(16)
+                        }
+                    }
+                } else {
+                    interpolatedUserGeoPoint = null
+                }
+            }
+
             // Trigger walking route fetch/update when user position or car spot changes
             LaunchedEffect(savedParkingSpot, successUserLoc) {
                 if (savedParkingSpot != null && successUserLoc != null) {
@@ -307,7 +338,7 @@ fun FindMyCarScreen(
                 }
             }
 
-            // Calculate distance & walking time
+            // Calculate distance & walking time (using raw GPS and accuracy-aware proximity)
             val distanceAndWalk = remember(savedParkingSpot, successUserLoc, walkingRoute) {
                 if (savedParkingSpot != null && successUserLoc != null) {
                     val meters = walkingRoute?.distanceMeters ?: run {
@@ -324,7 +355,11 @@ fun FindMyCarScreen(
                     val feet = (meters * 3.28084).toInt()
                     val miles = meters / 1609.34
 
-                    if (meters < 6.0 || feet < 20) {
+                    // Accuracy-aware check: Low GPS accuracy must prevent confidently showing "You're at your car"
+                    val gpsAccuracy = successUserLoc.accuracy ?: 0f
+                    val isConfidenceLow = gpsAccuracy > 15f && gpsAccuracy > meters.toFloat() * 1.2f
+
+                    if ((meters < 6.0 || feet < 20) && !isConfidenceLow) {
                         // User is effectively at their car
                         Triple("You're at your car", null, false)
                     } else {
@@ -351,6 +386,11 @@ fun FindMyCarScreen(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
+                // Map overlay references kept across recompositions to prevent recreating overlays
+                var rememberedUserMarker by remember { mutableStateOf<Marker?>(null) }
+                var rememberedCarMarker by remember { mutableStateOf<Marker?>(null) }
+                var rememberedPolyline by remember { mutableStateOf<Polyline?>(null) }
+
                 // REAL MAP CANVAS (OsmDroid MapView)
                 AndroidView(
                     factory = { ctx ->
@@ -368,44 +408,62 @@ fun FindMyCarScreen(
                         }
                     },
                     update = { mapView ->
-                        mapView.overlays.clear()
+                        val polyline = rememberedPolyline ?: Polyline(mapView).apply {
+                            outlinePaint.color = android.graphics.Color.parseColor("#2563EB") // High-contrast Blue
+                            outlinePaint.strokeWidth = 14f
+                            outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                            outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                            outlinePaint.isAntiAlias = true
+                            rememberedPolyline = this
+                        }
+
+                        val carMarker = rememberedCarMarker ?: Marker(mapView).apply {
+                            title = "Car Location"
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            icon = ContextCompat.getDrawable(context, R.drawable.ic_car_pin)
+                            rememberedCarMarker = this
+                        }
+
+                        val userMarker = rememberedUserMarker ?: Marker(mapView).apply {
+                            title = "YOU"
+                            snippet = "Your Current Location"
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                            icon = ContextCompat.getDrawable(context, R.drawable.ic_user_pin)
+                            rememberedUserMarker = this
+                        }
+
+                        // Ensure overlays are added once
+                        if (!mapView.overlays.contains(polyline)) {
+                            mapView.overlays.add(polyline)
+                        }
+                        if (!mapView.overlays.contains(carMarker)) {
+                            mapView.overlays.add(carMarker)
+                        }
 
                         // 0. WALKING ROUTE POLYLINE (Drawn under markers)
                         val currentRoute = walkingRoute
                         if (currentRoute != null && currentRoute.points.size >= 2) {
-                            val polyline = Polyline(mapView).apply {
-                                setPoints(currentRoute.points)
-                                outlinePaint.color = android.graphics.Color.parseColor("#2563EB") // High-contrast Blue
-                                outlinePaint.strokeWidth = 14f
-                                outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
-                                outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
-                                outlinePaint.isAntiAlias = true
-                            }
-                            mapView.overlays.add(polyline)
+                            polyline.setPoints(currentRoute.points)
+                            polyline.isEnabled = true
+                        } else {
+                            polyline.isEnabled = false
                         }
 
                         // 1. CAR MARKER (Fixed at saved parking coordinates)
                         val carPoint = GeoPoint(savedParkingSpot.latitude, savedParkingSpot.longitude)
-                        val carMarker = Marker(mapView).apply {
-                            position = carPoint
-                            title = "Car Location"
-                            snippet = if (savedParkingSpot.locationName.isNotBlank()) savedParkingSpot.locationName else "Saved Parking Spot"
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            icon = ContextCompat.getDrawable(context, R.drawable.ic_car_pin)
-                        }
-                        mapView.overlays.add(carMarker)
+                        carMarker.position = carPoint
+                        carMarker.snippet = if (savedParkingSpot.locationName.isNotBlank()) savedParkingSpot.locationName else "Saved Parking Spot"
 
-                        // 2. YOU MARKER (Dynamically updated with user real-time location)
-                        if (successUserLoc != null) {
-                            val userPoint = GeoPoint(successUserLoc.latitude, successUserLoc.longitude)
-                            val userMarker = Marker(mapView).apply {
-                                position = userPoint
-                                title = "YOU"
-                                snippet = "Your Current Location"
-                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                                icon = ContextCompat.getDrawable(context, R.drawable.ic_user_pin)
+                        // 2. YOU MARKER (Dynamically updated with interpolated real-time location)
+                        val interpolatedPoint = interpolatedUserGeoPoint
+                        if (interpolatedPoint != null) {
+                            if (!mapView.overlays.contains(userMarker)) {
+                                mapView.overlays.add(userMarker)
                             }
-                            mapView.overlays.add(userMarker)
+                            userMarker.position = interpolatedPoint
+                            userMarker.isEnabled = true
+                        } else {
+                            userMarker.isEnabled = false
                         }
 
                         mapView.invalidate()

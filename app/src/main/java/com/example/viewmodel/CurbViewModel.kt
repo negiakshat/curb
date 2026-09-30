@@ -196,7 +196,7 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     // Location & Spot Methods
     fun refreshLocation() = locationSpotCoordinator.refreshLocation()
     fun refreshCurrentLocation(onResult: (UserLocationResult) -> Unit = {}) = locationSpotCoordinator.refreshCurrentLocation(onResult)
-    fun startLiveLocationUpdates() = locationSpotCoordinator.startLiveLocationUpdates()
+    fun startLiveLocationUpdates(intervalMs: Long = 5000L) = locationSpotCoordinator.startLiveLocationUpdates(intervalMs)
     fun stopLiveLocationUpdates() = locationSpotCoordinator.stopLiveLocationUpdates()
     fun updateWalkingRouteIfNeeded(userLat: Double, userLng: Double, carLat: Double, carLng: Double) =
         locationSpotCoordinator.updateWalkingRouteIfNeeded(userLat, userLng, carLat, carLng)

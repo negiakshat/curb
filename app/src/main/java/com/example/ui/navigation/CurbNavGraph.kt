@@ -727,7 +727,7 @@ fun CurbNavGraph(
                     viewModel.refreshLocation()
                 },
                 onStartLiveTracking = {
-                    viewModel.startLiveLocationUpdates()
+                    viewModel.startLiveLocationUpdates(1000L)
                 },
                 onStopLiveTracking = {
                     viewModel.stopLiveLocationUpdates()

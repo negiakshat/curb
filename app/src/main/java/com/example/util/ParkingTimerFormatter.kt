@@ -30,4 +30,8 @@ object ParkingTimerFormatter {
             String.format(java.util.Locale.US, "%02ds", totalSecs)
         }
     }
+
+    fun getValidReminderPresets(durationMinutes: Int): List<Int> {
+        return listOf(5, 10, 15, 30).filter { it < durationMinutes }
+    }
 }

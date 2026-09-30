@@ -98,17 +98,44 @@ class LocationService(private val context: Context) {
         cachedGeocodedTriple = triple
     }
 
-    fun getLocationUpdates(intervalMs: Long = 5000L): Flow<UserLocationResult> = callbackFlow {
+    private fun isValidFix(loc: Location?): Boolean {
+        if (loc == null) return false
+        val isStale = if (loc.time > 0) (System.currentTimeMillis() - loc.time > 15000L) else false
+        if (isStale) {
+            Log.d("LocationService", "Fix rejected: stale (age = ${System.currentTimeMillis() - loc.time}ms)")
+            return false
+        }
+        if (loc.latitude == 0.0 && loc.longitude == 0.0) {
+            Log.d("LocationService", "Fix rejected: zero coordinates (Null Island)")
+            return false
+        }
+        if (loc.latitude !in -90.0..90.0 || loc.longitude !in -180.0..180.0) {
+            Log.d("LocationService", "Fix rejected: coordinates out of range (${loc.latitude}, ${loc.longitude})")
+            return false
+        }
+        return true
+    }
+
+    fun getLocationUpdates(intervalMs: Long = 1000L): Flow<UserLocationResult> = callbackFlow {
         if (!hasLocationPermission()) {
             trySend(UserLocationResult.PermissionRequired())
             close()
             return@callbackFlow
         }
 
-        // Emit initial location fix immediately if available
+        // Emit initial location fix immediately if available only if it is not severely stale
         try {
             val initialRes = fetchCurrentLocation()
-            trySend(initialRes)
+            if (initialRes is UserLocationResult.Success) {
+                val age = System.currentTimeMillis() - initialRes.timestamp
+                if (age <= 15000L) {
+                    trySend(initialRes)
+                } else {
+                    Log.d("LocationService", "Initial fetch returned stale location (age = ${age}ms); skipping emission for live tracking.")
+                }
+            } else {
+                trySend(initialRes)
+            }
         } catch (e: Exception) {
             // Ignore failure on initial fetch
         }
@@ -116,6 +143,7 @@ class LocationService(private val context: Context) {
         val locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val loc = result.lastLocation ?: return
+                if (!isValidFix(loc)) return
                 launch {
                     processAndEmitLocation(loc, "FUSED")
                 }
@@ -167,6 +195,7 @@ class LocationService(private val context: Context) {
                 val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
                 if (locationManager != null && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                     val listener = LocationListener { loc ->
+                        if (!isValidFix(loc)) return@LocationListener
                         launch {
                             val lat = loc.latitude
                             val lng = loc.longitude
