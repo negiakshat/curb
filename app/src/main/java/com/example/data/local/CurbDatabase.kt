@@ -12,10 +12,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ScanResultEntity::class,
         ParkingSessionEntity::class,
         SavedPlaceEntity::class,
-        CurbNoteEntity::class,
-        ParkingSpotEntity::class
+        CurbNoteEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class CurbDatabase : RoomDatabase() {
@@ -23,7 +22,6 @@ abstract class CurbDatabase : RoomDatabase() {
     abstract fun parkingSessionDao(): ParkingSessionDao
     abstract fun savedPlaceDao(): SavedPlaceDao
     abstract fun noteDao(): NoteDao
-    abstract fun parkingSpotDao(): ParkingSpotDao
 
     companion object {
         @Volatile
@@ -136,6 +134,15 @@ abstract class CurbDatabase : RoomDatabase() {
             }
         }
 
+        // v9 -> v10: The dedicated "Find My Car" feature (and its parking_spots table) was
+        // removed. Drop the table only; all other user data is untouched. Historical note:
+        // this migration intentionally references the legacy table name for upgrade paths.
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS parking_spots")
+            }
+        }
+
         fun getDatabase(context: Context): CurbDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -151,7 +158,8 @@ abstract class CurbDatabase : RoomDatabase() {
                         MIGRATION_5_6,
                         MIGRATION_6_7,
                         MIGRATION_7_8,
-                        MIGRATION_8_9
+                        MIGRATION_8_9,
+                        MIGRATION_9_10
                     )
                     .build()
                 INSTANCE = instance

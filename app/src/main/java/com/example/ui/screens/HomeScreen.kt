@@ -100,13 +100,11 @@ fun HomeScreen(
     userProfile: UserProfile,
     isPro: Boolean = userProfile.isPro,
     activeSession: ActiveParkingSession?,
-    savedParkingSpot: com.example.data.model.ParkingSpot? = null,
     recentScans: List<ScanResult>,
     usageInfo: ScanUsageInfo = ScanUsageInfo(0),
     userLocationResult: com.example.data.location.UserLocationResult = com.example.data.location.UserLocationResult.Unavailable("Checking location…"),
     onScanClicked: () -> Unit,
     onParkingTimerClicked: () -> Unit,
-    onFindMyCarClicked: () -> Unit = {},
     onSavedPlacesClicked: () -> Unit,
     onActivityClicked: () -> Unit,
     onAskCurbClicked: () -> Unit = {},
@@ -464,80 +462,26 @@ fun HomeScreen(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            if (savedParkingSpot != null) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(38.dp)
+                                    .clip(RoundedCornerShape(RadiusChip))
+                                    .clickable { onParkingTimerClicked() },
+                                shape = RoundedCornerShape(RadiusChip),
+                                color = BentoPeach
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Surface(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(38.dp)
-                                            .clip(RoundedCornerShape(RadiusChip))
-                                            .clickable { onParkingTimerClicked() },
-                                        shape = RoundedCornerShape(RadiusChip),
-                                        color = BentoPeach
-                                    ) {
-                                        Box(
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = "VIEW TIMER",
-                                                color = BentoPrimaryDark,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                letterSpacing = 0.5.sp
-                                            )
-                                        }
-                                    }
-
-                                    Surface(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(38.dp)
-                                            .clip(RoundedCornerShape(RadiusChip))
-                                            .clickable { onFindMyCarClicked() },
-                                        shape = RoundedCornerShape(RadiusChip),
-                                        color = BentoWhite.copy(alpha = 0.2f)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = "FIND CAR",
-                                                color = BentoWhite,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                letterSpacing = 0.5.sp
-                                            )
-                                        }
-                                    }
-                                }
-                            } else {
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(38.dp)
-                                        .clip(RoundedCornerShape(RadiusChip))
-                                        .clickable { onParkingTimerClicked() },
-                                    shape = RoundedCornerShape(RadiusChip),
-                                    color = BentoPeach
-                                ) {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "VIEW TIMER",
-                                            color = BentoPrimaryDark,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.5.sp
-                                        )
-                                    }
+                                    Text(
+                                        text = "VIEW TIMER",
+                                        color = BentoPrimaryDark,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
                                 }
                             }
                         }
@@ -546,7 +490,7 @@ fun HomeScreen(
             }
         }
 
-        // SECONDARY BENTO GRID (2x2 MATRIX): SAVED SPOTS, ASK CURB AI, TIMER, FIND CAR / HISTORY
+        // SECONDARY BENTO GRID: SAVED SPOTS, ASK CURB AI, TIMER, HISTORY
         item {
             Column(
                 modifier = Modifier
@@ -674,72 +618,15 @@ fun HomeScreen(
                     }
                 }
 
-                // ROW 2: Find My Car + Activity
+                // ROW 2: Activity History
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Tile 3: Find My Car
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(112.dp)
-                            .clip(RoundedCornerShape(RadiusCard))
-                            .clickable { onFindMyCarClicked() }
-                            .testTag("bento_find_my_car_tile"),
-                        shape = RoundedCornerShape(RadiusCard),
-                        colors = CardDefaults.cardColors(containerColor = BentoSand),
-                        border = BorderStroke(1.dp, BentoBorder),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(14.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(BentoWhite),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Place,
-                                    contentDescription = null,
-                                    tint = BentoPrimaryDark,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-
-                            Column {
-                                Text(
-                                    text = "Find My Car",
-                                    fontSize = 14.sp,
-                                    lineHeight = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BentoTextPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = if (savedParkingSpot != null) "Parked location" else "Save & locate",
-                                    fontSize = 11.sp,
-                                    lineHeight = 14.sp,
-                                    color = BentoTextSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-
                     // Tile 4: Activity History
                     Card(
                         modifier = Modifier
-                            .weight(1f)
+                            .fillMaxWidth()
                             .height(112.dp)
                             .clip(RoundedCornerShape(RadiusCard))
                             .clickable { onActivityClicked() }

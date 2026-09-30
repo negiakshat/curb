@@ -4,13 +4,11 @@ import android.content.Context
 import com.example.data.local.CurbDatabase
 import com.example.data.local.CurbNoteEntity
 import com.example.data.local.ParkingSessionEntity
-import com.example.data.local.ParkingSpotEntity
 import com.example.data.local.SavedPlaceEntity
 import com.example.data.local.ScanResultEntity
 import com.example.data.model.ActiveParkingSession
 import com.example.data.model.CurbNote
 import com.example.data.model.DetectedSign
-import com.example.data.model.ParkingSpot
 import com.example.data.model.SavedPlace
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
@@ -37,7 +35,6 @@ class CurbRepository(context: Context) {
     private val parkingSessionDao = database.parkingSessionDao()
     private val savedPlaceDao = database.savedPlaceDao()
     private val noteDao = database.noteDao()
-    private val parkingSpotDao = database.parkingSpotDao()
 
     private val moshi: Moshi by lazy {
         try {
@@ -62,14 +59,6 @@ class CurbRepository(context: Context) {
     val allSessions: Flow<List<ActiveParkingSession>> = parkingSessionDao.getAllSessions().map { entities ->
         entities.map { entityToParkingSession(it) }
     }.catch { emit(emptyList()) }
-
-    val savedParkingSpot: Flow<ParkingSpot?> = parkingSpotDao.getActiveParkingSpot().map { entity ->
-        entity?.let { entityToParkingSpot(it) }
-    }.catch { emit(null) }
-
-    val demoSavedParkingSpot: Flow<ParkingSpot?> = parkingSpotDao.getDemoActiveParkingSpot().map { entity ->
-        entity?.let { entityToParkingSpot(it) }
-    }.catch { emit(null) }
 
     val savedPlaces: Flow<List<SavedPlace>> = savedPlaceDao.getAllSavedPlaces().map { entities ->
         entities.map { entityToSavedPlace(it) }
@@ -376,50 +365,6 @@ class CurbRepository(context: Context) {
         return entity?.let { entityToParkingSession(it) }
     }
 
-    suspend fun saveParkingSpot(
-        latitude: Double,
-        longitude: Double,
-        accuracy: Float? = null,
-        timestamp: Long = System.currentTimeMillis(),
-        locationName: String = "",
-        sessionId: Long? = null,
-        isDemo: Boolean = false
-    ): Long {
-        if (isDemo) {
-            parkingSpotDao.clearActiveDemoSpots()
-        } else {
-            parkingSpotDao.clearActiveRealSpots()
-        }
-        val entity = ParkingSpotEntity(
-            latitude = latitude,
-            longitude = longitude,
-            accuracy = accuracy,
-            timestamp = timestamp,
-            locationName = locationName,
-            sessionId = sessionId,
-            isActive = true,
-            isDemo = isDemo
-        )
-        return parkingSpotDao.insertParkingSpot(entity)
-    }
-
-    suspend fun clearActiveParkingSpots(isDemo: Boolean = false) {
-        if (isDemo) {
-            parkingSpotDao.clearActiveDemoSpots()
-        } else {
-            parkingSpotDao.clearActiveRealSpots()
-        }
-    }
-
-    suspend fun getActiveParkingSpotDirect(isDemo: Boolean = false): ParkingSpot? {
-        val entity = if (isDemo) {
-            parkingSpotDao.getDemoActiveParkingSpotDirect()
-        } else {
-            parkingSpotDao.getActiveParkingSpotDirect()
-        }
-        return entity?.let { entityToParkingSpot(it) }
-    }
-
     suspend fun clearAllData() {
         val activeSession = parkingSessionDao.getActiveSessionDirect()
         if (activeSession != null) {
@@ -429,7 +374,6 @@ class CurbRepository(context: Context) {
         parkingSessionDao.clearAllSessions()
         savedPlaceDao.clearAllSavedPlaces()
         noteDao.clearAllNotes()
-        parkingSpotDao.clearAllSpots()
     }
 
     private fun entityToScanResult(entity: ScanResultEntity): ScanResult {
@@ -570,20 +514,6 @@ class CurbRepository(context: Context) {
             text = entity.text,
             createdAt = entity.createdAt,
             updatedAt = entity.updatedAt
-        )
-    }
-
-    private fun entityToParkingSpot(entity: ParkingSpotEntity): ParkingSpot {
-        return ParkingSpot(
-            id = entity.id,
-            latitude = entity.latitude,
-            longitude = entity.longitude,
-            timestamp = entity.timestamp,
-            accuracy = entity.accuracy,
-            locationName = entity.locationName,
-            sessionId = entity.sessionId,
-            isActive = entity.isActive,
-            isDemo = entity.isDemo
         )
     }
 }

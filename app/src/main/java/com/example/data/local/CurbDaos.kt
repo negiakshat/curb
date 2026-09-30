@@ -127,39 +127,3 @@ interface NoteDao {
     suspend fun clearAllNotes()
 }
 
-@Dao
-interface ParkingSpotDao {
-    @Query("SELECT * FROM parking_spots WHERE isActive = 1 AND isDemo = 0 ORDER BY timestamp DESC LIMIT 1")
-    fun getActiveParkingSpot(): Flow<ParkingSpotEntity?>
-
-    @Query("SELECT * FROM parking_spots WHERE isActive = 1 AND isDemo = 0 ORDER BY timestamp DESC LIMIT 1")
-    suspend fun getActiveParkingSpotDirect(): ParkingSpotEntity?
-
-    @Query("SELECT * FROM parking_spots WHERE isActive = 1 AND isDemo = 1 ORDER BY timestamp DESC LIMIT 1")
-    fun getDemoActiveParkingSpot(): Flow<ParkingSpotEntity?>
-
-    @Query("SELECT * FROM parking_spots WHERE isActive = 1 AND isDemo = 1 ORDER BY timestamp DESC LIMIT 1")
-    suspend fun getDemoActiveParkingSpotDirect(): ParkingSpotEntity?
-
-    @Query("SELECT * FROM parking_spots WHERE sessionId = :sessionId AND isActive = 1 LIMIT 1")
-    fun getParkingSpotForSession(sessionId: Long): Flow<ParkingSpotEntity?>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertParkingSpot(spot: ParkingSpotEntity): Long
-
-    @Query("UPDATE parking_spots SET isActive = 0 WHERE isDemo = 0")
-    suspend fun clearActiveRealSpots()
-
-    @Query("UPDATE parking_spots SET isActive = 0 WHERE isDemo = 1")
-    suspend fun clearActiveDemoSpots()
-
-    @Query("UPDATE parking_spots SET isActive = 0")
-    suspend fun clearActiveSpots()
-
-    @Query("DELETE FROM parking_spots WHERE isDemo = 1")
-    suspend fun clearDemoSpots()
-
-    @Query("DELETE FROM parking_spots")
-    suspend fun clearAllSpots()
-}
-

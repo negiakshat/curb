@@ -99,7 +99,6 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  implementation(libs.osmdroid.android)
   implementation(libs.play.services.location)
   implementation(libs.revenuecat.purchases)
   implementation(libs.retrofit)

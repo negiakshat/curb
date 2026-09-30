@@ -16,12 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
@@ -95,13 +93,6 @@ sealed class BottomNavItem(
         unselectedIcon = Icons.Outlined.CameraAlt,
         testTag = "nav_tab_scan"
     )
-    object Find : BottomNavItem(
-        route = Routes.FIND_MY_CAR,
-        label = "Find",
-        selectedIcon = Icons.Filled.DirectionsCar,
-        unselectedIcon = Icons.Outlined.DirectionsCar,
-        testTag = "nav_tab_find"
-    )
     object You : BottomNavItem(
         route = Routes.YOU,
         label = "You",
@@ -146,7 +137,6 @@ fun CurbApp(
     val bottomNavItems = listOf(
         BottomNavItem.Home,
         BottomNavItem.Scan,
-        BottomNavItem.Find,
         BottomNavItem.You
     )
 
@@ -155,7 +145,6 @@ fun CurbApp(
     val showBottomBar = (currentRoute in listOf(
         Routes.HOME,
         Routes.SCAN,
-        Routes.FIND_MY_CAR,
         Routes.YOU
     )) && !isImeVisible
 

@@ -1,20 +1,16 @@
 package com.example.ui.screens
 
-import android.Manifest
 import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,21 +38,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material.icons.filled.NotificationsNone
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
@@ -80,9 +71,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import com.example.data.model.ActiveParkingSession
-import com.example.data.model.ParkingSpot
 import com.example.ui.components.CurbPrimaryButton
 import com.example.ui.components.CurbSecondaryButton
 import com.example.ui.theme.BentoBeige
@@ -114,11 +103,6 @@ import java.util.Locale
 fun ParkingTimerScreen(
     activeSession: ActiveParkingSession?,
     targetSession: ActiveParkingSession? = null,
-    savedParkingSpot: ParkingSpot? = null,
-    isSavingParkingSpot: Boolean = false,
-    parkingSpotSaveError: String? = null,
-    onSaveParkingSpot: () -> Unit = {},
-    onNavigateToFindMyCar: () -> Unit = {},
     onStartQuickTimer: (Int, String) -> Unit,
     canStartQuickTimer: Boolean = false,
     onEndSession: (Long) -> Unit,
@@ -129,18 +113,6 @@ fun ParkingTimerScreen(
     val effectiveSession = targetSession ?: activeSession
     val context = LocalContext.current
     var currentTimeMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
-
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val isGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (isGranted) {
-            onSaveParkingSpot()
-        } else {
-            Toast.makeText(context, "Location permission is required to save your spot", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     // Live update ticker for smooth countdown
     LaunchedEffect(effectiveSession?.endTime, effectiveSession?.isActive) {
@@ -163,7 +135,6 @@ fun ParkingTimerScreen(
     var showAddTimeSheet by remember { mutableStateOf(false) }
     var showReminderSheet by remember { mutableStateOf(false) }
     var showRulesSheet by remember { mutableStateOf(false) }
-    var showMapSheet by remember { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
 
@@ -512,111 +483,55 @@ fun ParkingTimerScreen(
                 }
 
                 // ==========================================
-                // 3. UNIFIED PARKING LOCATION & SPOT CARD
+                // 3. SESSION LOCATION CARD
                 // ==========================================
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(RadiusCard))
-                        .testTag(if (savedParkingSpot != null) "saved_parking_spot_card" else "timer_location_bar"),
+                        .testTag("timer_location_bar"),
                     shape = RoundedCornerShape(RadiusCard),
                     colors = CardDefaults.cardColors(containerColor = BentoWhite),
                     border = BorderStroke(1.dp, BentoBorder),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
-                    Column(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(BentoSand),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(if (savedParkingSpot != null) CurbSuccessContainer else BentoSand),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (savedParkingSpot != null) Icons.Default.CheckCircle else Icons.Default.Place,
-                                    contentDescription = null,
-                                    tint = if (savedParkingSpot != null) CurbSuccess else BentoPrimaryDark,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = effectiveSession.locationName,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BentoTextPrimary,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = if (savedParkingSpot != null) "Parking spot saved" else "Spot location recorded",
-                                    fontSize = 12.sp,
-                                    color = if (savedParkingSpot != null) CurbSuccess else BentoTextSecondary,
-                                    fontWeight = if (savedParkingSpot != null) FontWeight.SemiBold else FontWeight.Normal
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.LocalParking,
+                                contentDescription = null,
+                                tint = BentoPrimaryDark,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        if (savedParkingSpot != null) {
-                            CurbPrimaryButton(
-                                text = "FIND MY CAR",
-                                onClick = onNavigateToFindMyCar,
-                                leadingIcon = Icons.Default.Place,
-                                backgroundColor = BentoPrimaryDark,
-                                testTag = "find_my_car_button"
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = effectiveSession.locationName,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BentoTextPrimary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        } else {
-                            CurbSecondaryButton(
-                                text = if (isSavingParkingSpot) "Saving parking spot…" else "SAVE MY PARKING SPOT",
-                                onClick = {
-                                    val hasPermission = ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.ACCESS_FINE_LOCATION
-                                    ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    ) == PackageManager.PERMISSION_GRANTED
-
-                                    if (hasPermission) {
-                                        onSaveParkingSpot()
-                                    } else {
-                                        locationPermissionLauncher.launch(
-                                            arrayOf(
-                                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                                Manifest.permission.ACCESS_COARSE_LOCATION
-                                            )
-                                        )
-                                    }
-                                },
-                                enabled = !isSavingParkingSpot,
-                                leadingIcon = Icons.Default.Place,
-                                testTag = "save_parking_spot_button"
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Spot location recorded",
+                                fontSize = 12.sp,
+                                color = BentoTextSecondary
                             )
-
-                            if (!parkingSpotSaveError.isNullOrBlank()) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = parkingSpotSaveError,
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier
-                                        .padding(horizontal = 4.dp)
-                                        .testTag("parking_spot_save_error")
-                                )
-                            }
                         }
                     }
                 }
@@ -1061,123 +976,7 @@ fun ParkingTimerScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
         }
-    }
-
-    // ==========================================
-    // BOTTOM SHEET 4: INTERACTIVE MAP & PIN
-    // ==========================================
-    if (showMapSheet && effectiveSession?.isActive == true) {
-        val sheetState = rememberModalBottomSheetState()
-        ModalBottomSheet(
-            onDismissRequest = { showMapSheet = false },
-            sheetState = sheetState,
-            containerColor = BentoWhite,
-            shape = RoundedCornerShape(topStart = RadiusHero, topEnd = RadiusHero)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 12.dp)
-                    .navigationBarsPadding(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Parked Location",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = BentoTextPrimary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = if (effectiveSession.notes.isNotBlank()) "${effectiveSession.locationName} • ${effectiveSession.notes}" else effectiveSession.locationName,
-                    fontSize = 13.sp,
-                    color = BentoTextSecondary,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Map Placeholder Card
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp),
-                    shape = RoundedCornerShape(RadiusCard),
-                    color = BentoSand,
-                    border = BorderStroke(1.dp, BentoBorder)
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(BentoPrimaryDark),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Place,
-                                    contentDescription = null,
-                                    tint = BentoWhite,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = savedParkingSpot?.let { spot ->
-                                    "Spot GPS: " + String.format(Locale.US, "%.5f°, %.5f°", spot.latitude, spot.longitude)
-                                } ?: "Location unavailable",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BentoTextPrimary
-                            )
-                            Text(
-                                text = "Walking distance unavailable",
-                                fontSize = 11.sp,
-                                color = BentoTextSecondary
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    CurbSecondaryButton(
-                        text = "Copy Address",
-                        onClick = {
-                            Toast.makeText(context, "Location copied to clipboard", Toast.LENGTH_SHORT).show()
-                            showMapSheet = false
-                        },
-                        modifier = Modifier.weight(1f),
-                        testTag = "copy_address_button"
-                    )
-
-                    CurbPrimaryButton(
-                        text = "Navigate",
-                        onClick = {
-                            Toast.makeText(context, "Opening walking directions...", Toast.LENGTH_SHORT).show()
-                            showMapSheet = false
-                        },
-                        leadingIcon = Icons.Default.Directions,
-                        backgroundColor = BentoPrimaryDark,
-                        contentColor = BentoWhite,
-                        modifier = Modifier.weight(1f),
-                        testTag = "navigate_walking_button"
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
-    }
-}
+    }}
 
 // -------------------------------------------------------------------------------------
 // HELPER COMPOSABLES

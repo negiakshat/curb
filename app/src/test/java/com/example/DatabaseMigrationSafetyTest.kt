@@ -123,7 +123,7 @@ class DatabaseMigrationSafetyTest {
             val oldDb = helperFactory.create(configuration).writableDatabase
             oldDb.close()
 
-            // Open database via Room applying all migrations (1..9) without destructive fallback
+            // Open database via Room applying all migrations (1..10) without destructive fallback
             val migratedDb = Room.databaseBuilder(context, CurbDatabase::class.java, dbName)
                 .addMigrations(
                     CurbDatabase.MIGRATION_1_2,
@@ -133,7 +133,8 @@ class DatabaseMigrationSafetyTest {
                     CurbDatabase.MIGRATION_5_6,
                     CurbDatabase.MIGRATION_6_7,
                     CurbDatabase.MIGRATION_7_8,
-                    CurbDatabase.MIGRATION_8_9
+                    CurbDatabase.MIGRATION_8_9,
+                    CurbDatabase.MIGRATION_9_10
                 )
                 .allowMainThreadQueries()
                 .build()
@@ -214,9 +215,7 @@ class DatabaseMigrationSafetyTest {
         assertNull(columnDefault(db, "scan_results", "isDemo"))
         assertNull(columnDefault(db, "parking_sessions", "timerMode"))
         assertNull(columnDefault(db, "parking_sessions", "isDemo"))
-        assertNull(columnDefault(db, "parking_spots", "locationName"))
-        assertNull(columnDefault(db, "parking_spots", "isActive"))
-        assertNull(columnDefault(db, "parking_spots", "isDemo"))
+        assertFalse(tableExists(db, "parking_spots"))
         assertEquals(listOf("targetType", "targetId"), uniqueIndexColumns(db, "curb_notes"))
         freshDb.close()
     }
@@ -264,6 +263,9 @@ class DatabaseMigrationSafetyTest {
         CurbDatabase.MIGRATION_8_9.migrate(db)
         assertTrue(hasColumn(db, "saved_places", "parkingRuleSummary"))
         assertTrue(hasColumn(db, "saved_places", "lastCheckedAt"))
+
+        CurbDatabase.MIGRATION_9_10.migrate(db)
+        assertFalse(tableExists(db, "parking_spots"))
         helper.close()
         context.deleteDatabase(stepDbName)
     }

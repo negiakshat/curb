@@ -15,7 +15,6 @@ import com.example.data.repository.CurbRepository
 import com.example.viewmodel.CurbViewModel
 import com.example.viewmodel.PromoCodeResult
 import com.example.viewmodel.coordinators.ChatCoordinator
-import com.example.viewmodel.coordinators.LocationSpotCoordinator
 import com.example.viewmodel.coordinators.NotificationCoordinator
 import com.example.viewmodel.coordinators.ProfileCoordinator
 import com.example.viewmodel.coordinators.ScanCoordinator
@@ -213,33 +212,6 @@ class ViewModelDecompositionTest {
 
         assertTrue(coordinator.chatMessages.value.size > initialCount)
         assertEquals("Can I park here on Sundays?", coordinator.chatMessages.value[initialCount].text)
-    }
-
-    @Test
-    fun `verify LocationSpotCoordinator error handling when permissions missing`() = testScope.runTest {
-        val coordinator = LocationSpotCoordinator(
-            repository = repository,
-            locationService = locationService,
-            coroutineScope = this
-        )
-
-        var errorResultMsg: String? = null
-        var successFlag = true
-
-        coordinator.saveCurrentParkingSpot(
-            sessionId = null,
-            isDemo = false,
-            onResult = { success, msg ->
-                successFlag = success
-                errorResultMsg = msg
-            }
-        )
-
-        assertFalse(successFlag)
-        assertNotNull(errorResultMsg)
-
-        coordinator.clearParkingSpotSaveError()
-        assertNull(coordinator.parkingSpotSaveError.value)
     }
 
     @Test

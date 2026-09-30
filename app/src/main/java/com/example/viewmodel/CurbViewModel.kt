@@ -17,7 +17,6 @@ import com.example.data.model.ActiveParkingSession
 import com.example.data.model.ChatMessage
 import com.example.data.model.CurbNote
 import com.example.data.model.InAppNotification
-import com.example.data.model.ParkingSpot
 import com.example.data.model.SampleSignPreset
 import com.example.data.model.SavedPlace
 import com.example.data.model.ScanResult
@@ -26,7 +25,6 @@ import com.example.data.model.UserProfile
 import com.example.data.remote.SubscriptionPackageInfo
 import com.example.data.remote.SubscriptionService
 import com.example.data.remote.SubscriptionUiState
-import com.example.data.remote.WalkingRoute
 import com.example.data.repository.CurbRepository
 import com.example.data.repository.SavePlaceResult
 import com.example.viewmodel.coordinators.ChatCoordinator
@@ -118,9 +116,6 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     val inAppNotifications: StateFlow<List<InAppNotification>> = notificationCoordinator.inAppNotifications
     val hasUnreadNotifications: StateFlow<Boolean> = notificationCoordinator.hasUnreadNotifications
     val showNotificationDialog: StateFlow<Boolean> = notificationCoordinator.showNotificationDialog
-    val isSavingParkingSpot: StateFlow<Boolean> = locationSpotCoordinator.isSavingParkingSpot
-    val parkingSpotSaveError: StateFlow<String?> = locationSpotCoordinator.parkingSpotSaveError
-    val walkingRouteState: StateFlow<WalkingRoute?> = locationSpotCoordinator.walkingRouteState
 
     val userProfile: StateFlow<UserProfile> = profileCoordinator.userProfile
     val isJudgeProActive: StateFlow<Boolean> = profileCoordinator.isJudgeProActive
@@ -138,12 +133,6 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
 
     val chatMessages: StateFlow<List<ChatMessage>> = chatCoordinator.chatMessages
     val isChatLoading: StateFlow<Boolean> = chatCoordinator.isChatLoading
-
-    val savedParkingSpot: StateFlow<ParkingSpot?> = repository.savedParkingSpot
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    val demoSavedParkingSpot: StateFlow<ParkingSpot?> = repository.demoSavedParkingSpot
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val savedPlaces: StateFlow<List<SavedPlace>> = repository.savedPlaces
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -193,17 +182,9 @@ class CurbViewModel(application: Application) : AndroidViewModel(application) {
     fun markNotificationsAsRead() = notificationCoordinator.markNotificationsAsRead()
     fun setShowNotificationDialog(show: Boolean) = notificationCoordinator.setShowNotificationDialog(show)
 
-    // Location & Spot Methods
+    // Location Methods
     fun refreshLocation() = locationSpotCoordinator.refreshLocation()
     fun refreshCurrentLocation(onResult: (UserLocationResult) -> Unit = {}) = locationSpotCoordinator.refreshCurrentLocation(onResult)
-    fun startLiveLocationUpdates(intervalMs: Long = 5000L) = locationSpotCoordinator.startLiveLocationUpdates(intervalMs)
-    fun stopLiveLocationUpdates() = locationSpotCoordinator.stopLiveLocationUpdates()
-    fun updateWalkingRouteIfNeeded(userLat: Double, userLng: Double, carLat: Double, carLng: Double) =
-        locationSpotCoordinator.updateWalkingRouteIfNeeded(userLat, userLng, carLat, carLng)
-    fun saveCurrentParkingSpot(sessionId: Long? = null, isDemo: Boolean? = null, onResult: (Boolean, String?) -> Unit = { _, _ -> }) =
-        locationSpotCoordinator.saveCurrentParkingSpot(sessionId, isDemo, onResult)
-    fun clearParkingSpotSaveError() = locationSpotCoordinator.clearParkingSpotSaveError()
-    fun clearSavedParkingSpot(isDemo: Boolean = false) = locationSpotCoordinator.clearSavedParkingSpot(isDemo)
 
     // Profile & Account Methods
     fun setUserName(name: String) = profileCoordinator.setUserName(name)

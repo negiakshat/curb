@@ -19,7 +19,6 @@ import com.example.ui.screens.AccountInfoScreen
 import com.example.ui.screens.ActivityScreen
 import com.example.ui.screens.ContextualCopilotScreen
 import com.example.ui.screens.CurbProPaywallScreen
-import com.example.ui.screens.FindMyCarScreen
 import com.example.ui.screens.HelpSupportScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.NameSetupScreen
@@ -59,10 +58,6 @@ fun CurbNavGraph(
     val targetSession by viewModel.targetSession.collectAsStateWithLifecycle()
     val inAppNotifications by viewModel.inAppNotifications.collectAsStateWithLifecycle()
     val hasUnreadNotifications by viewModel.hasUnreadNotifications.collectAsStateWithLifecycle()
-    val savedParkingSpot by viewModel.savedParkingSpot.collectAsStateWithLifecycle()
-    val demoSavedParkingSpot by viewModel.demoSavedParkingSpot.collectAsStateWithLifecycle()
-    val isSavingParkingSpot by viewModel.isSavingParkingSpot.collectAsStateWithLifecycle()
-    val parkingSpotSaveError by viewModel.parkingSpotSaveError.collectAsStateWithLifecycle()
     val userLocationState by viewModel.userLocationState.collectAsStateWithLifecycle()
     val recentScans by viewModel.allScans.collectAsStateWithLifecycle()
     val savedPlaces by viewModel.savedPlaces.collectAsStateWithLifecycle()
@@ -77,7 +72,6 @@ fun CurbNavGraph(
     val isJudgeProActive by viewModel.isJudgeProActive.collectAsStateWithLifecycle()
     val scanUsageInfo by viewModel.scanUsageInfo.collectAsStateWithLifecycle()
     val chatUsageInfo by viewModel.chatUsageInfo.collectAsStateWithLifecycle()
-    val walkingRoute by viewModel.walkingRouteState.collectAsStateWithLifecycle()
     val isUserPro by viewModel.isUserPro.collectAsStateWithLifecycle()
     val rescanTargetPlace by viewModel.rescanTargetPlace.collectAsStateWithLifecycle()
 
@@ -154,12 +148,10 @@ fun CurbNavGraph(
 
         // 05. HOME
         composable(Routes.HOME) {
-            val effectiveSpotForHome = if (activeSession?.isDemo == true) demoSavedParkingSpot else savedParkingSpot
             HomeScreen(
                 userProfile = userProfile,
                 isPro = isUserPro,
                 activeSession = activeSession,
-                savedParkingSpot = effectiveSpotForHome,
                 recentScans = recentScans,
                 usageInfo = scanUsageInfo,
                 userLocationResult = userLocationState,
@@ -168,11 +160,6 @@ fun CurbNavGraph(
                 },
                 onParkingTimerClicked = {
                     navController.navigate(Routes.PARKING_TIMER) {
-                        launchSingleTop = true
-                    }
-                },
-                onFindMyCarClicked = {
-                    navController.navigate(Routes.FIND_MY_CAR) {
                         launchSingleTop = true
                     }
                 },
@@ -647,7 +634,6 @@ fun CurbNavGraph(
 
         // 21. PARKING TIMER
         composable(Routes.PARKING_TIMER) {
-            val effectiveSpotForTimer = if (activeSession?.isDemo == true) demoSavedParkingSpot else savedParkingSpot
             // Quick-start requires the same authorization the repository enforces: a valid scan
             // result with timer authority and a verified time limit.
             val canQuickStart = ParkingAuthority.canAuthorizeTimer(currentScanResult) &&
@@ -655,23 +641,6 @@ fun CurbNavGraph(
             ParkingTimerScreen(
                 activeSession = activeSession,
                 targetSession = targetSession,
-                savedParkingSpot = effectiveSpotForTimer,
-                isSavingParkingSpot = isSavingParkingSpot,
-                parkingSpotSaveError = parkingSpotSaveError,
-                onSaveParkingSpot = {
-                    viewModel.saveCurrentParkingSpot(sessionId = activeSession?.id) { success, error ->
-                        if (success) {
-                            Toast.makeText(context, "Parking spot saved", Toast.LENGTH_SHORT).show()
-                        } else if (!error.isNullOrBlank()) {
-                            Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                },
-                onNavigateToFindMyCar = {
-                    navController.navigate(Routes.FIND_MY_CAR) {
-                        launchSingleTop = true
-                    }
-                },
                 onStartQuickTimer = { minutes, limitText ->
                     val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
                     val allowedTime = sdf.format(Date(System.currentTimeMillis() + (minutes * 60 * 1000L)))
@@ -704,40 +673,6 @@ fun CurbNavGraph(
                         navController.navigate(Routes.HOME) {
                             popUpTo(Routes.HOME) { inclusive = true }
                         }
-                    }
-                }
-            )
-        }
-
-        // 22. FIND MY CAR
-        composable(Routes.FIND_MY_CAR) {
-            val effectiveSpotForFind = if (activeSession?.isDemo == true) demoSavedParkingSpot else savedParkingSpot
-            FindMyCarScreen(
-                savedParkingSpot = effectiveSpotForFind,
-                userLocationState = userLocationState,
-                walkingRoute = walkingRoute,
-                onNavigateBack = {
-                    if (!navController.popBackStack()) {
-                        navController.navigate(Routes.HOME) {
-                            popUpTo(Routes.HOME) { inclusive = true }
-                        }
-                    }
-                },
-                onRefreshLocation = {
-                    viewModel.refreshLocation()
-                },
-                onStartLiveTracking = {
-                    viewModel.startLiveLocationUpdates(1000L)
-                },
-                onStopLiveTracking = {
-                    viewModel.stopLiveLocationUpdates()
-                },
-                onUpdateWalkingRoute = { uLat, uLng, cLat, cLng ->
-                    viewModel.updateWalkingRouteIfNeeded(uLat, uLng, cLat, cLng)
-                },
-                onNavigateToParkingTimer = {
-                    navController.navigate(Routes.PARKING_TIMER) {
-                        launchSingleTop = true
                     }
                 }
             )
