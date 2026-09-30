@@ -188,7 +188,13 @@ object ParkingAuthority {
                     (scanResult.detectedSigns.isEmpty() && scanResult.parkingRules.any { rule ->
                         val upper = rule.uppercase(java.util.Locale.US)
                         upper.contains("PARK") || upper.contains("LIMIT") || upper.contains("HOUR") || upper.contains("MIN")
-                    })
+                    }) ||
+                    // P0 SCAN RELIABILITY FIX: when every detected sign is uncertain
+                    // (weak local OCR), authorization falls back to OBJECTIVE evidence —
+                    // a deterministically parsed MAXIMUM STAY from the coherent Gemini
+                    // interpretation. Weak OCR alone cannot veto a verified limit.
+                    (scanResult.detectedSigns.isNotEmpty() &&
+                            SemanticConsistencyValidator.hasMaxStayEvidence(scanResult))
             return hasSignEvidence
         }
 

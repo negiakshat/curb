@@ -23,7 +23,118 @@ import java.util.Locale
  * - vehicleApplicability
  * - timer eligibility
  */
+/**
+ * P0 SCAN RELIABILITY FIX: Deterministic, LLM-independent extraction of objective
+ * parking time evidence (maximum stay, clock cutoff, applicable days) from any text.
+ *
+ * Used to decide whether a Gemini ALLOWED result is objectively time-anchored
+ * (real sign data) versus fragile prose. Weak/uncertain local OCR is SUPPORTING
+ * evidence and must not veto a coherent Gemini interpretation that carries this
+ * objective evidence.
+ */
+data class ObjectiveTimeEvidence(
+    val maxStayMinutes: Int? = null,
+    val cutoffTime: String? = null,
+    val applicableDays: List<String> = emptyList()
+)
+
 object SemanticConsistencyValidator {
+
+    private val DAY_KEYWORDS = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN", "DAILY", "WEEKDAY", "WEEKEND")
+
+    /**
+     * Extracts objective time evidence deterministically:
+     * - maximum stay (e.g. "2 HOUR PARKING" -> 120 minutes)
+     * - cutoff time (e.g. "8AM-6PM" -> "6PM", last clock time in the text)
+     * - applicable days (e.g. "EXCEPT SAT & SUN" -> [SAT, SUN])
+     */
+    fun extractObjectiveTimeEvidence(text: String): ObjectiveTimeEvidence {
+        if (text.isBlank()) return ObjectiveTimeEvidence()
+        val upper = text.uppercase(Locale.US)
+
+        val maxStayMinutes = Regex("""(\d+)\s*(HOUR|HR|HRS|MIN|MINUTE|MINS)""").find(upper)?.let { match ->
+            val value = match.groupValues[1].toIntOrNull() ?: return@let null
+            val unit = match.groupValues[2]
+            when {
+                unit.startsWith("H") -> value * 60
+                unit.startsWith("MIN") -> value
+                unit == "MINS" -> value
+                else -> null
+            }
+        }
+
+        val cutoffTime = Regex("""\d{1,2}(?::\d{2})?\s*(?:AM|PM|A\.M\.|P\.M\.)""")
+            .findAll(upper)
+            .lastOrNull()
+            ?.value
+            ?.replace(".", "")
+            ?.replace(Regex("""\s+"""), "")
+            ?.trim()
+
+        val applicableDays = DAY_KEYWORDS.filter { upper.contains(it) }
+
+        return ObjectiveTimeEvidence(
+            maxStayMinutes = maxStayMinutes,
+            cutoffTime = cutoffTime,
+            applicableDays = applicableDays
+        )
+    }
+
+    /**
+     * True when the given text contains objective, deterministic time evidence
+     * (a parsed maximum stay or a clock cutoff). Pure prose without any time
+     * anchor returns false.
+     */
+    fun hasObjectiveTimeEvidence(text: String): Boolean {
+        val evidence = extractObjectiveTimeEvidence(text)
+        return evidence.maxStayMinutes != null || evidence.cutoffTime != null
+    }
+
+    /**
+     * Strongest objective anchor: a deterministic parsed MAXIMUM STAY
+     * (e.g. "2 HOUR PARKING" -> 120 minutes). Used to authorize overriding the
+     * uncertain-crop veto — a bare clock time in prose is not sufficient, because
+     * it can be invented, while a posted duration is the core limit a timer needs.
+     */
+    fun hasMaxStayEvidence(text: String): Boolean {
+        return extractObjectiveTimeEvidence(text).maxStayMinutes != null
+    }
+
+    private fun geminiObjectiveTimeText(rawResult: ScanResult): String {
+        return buildString {
+            append(rawResult.allowedUntilTime).append(" ")
+            append(rawResult.timeRemaining).append(" ")
+            rawResult.parkingRules.forEach { append(it).append(" ") }
+            rawResult.detectedSigns.forEach {
+                append(it.title).append(" ")
+                append(it.subtitle).append(" ")
+                append(it.applicableDaysHours).append(" ")
+                append(it.exceptions).append(" ")
+                append(it.restrictions).append(" ")
+                append(it.ruleText).append(" ")
+            }
+        }
+    }
+
+    /**
+     * Scan-level objective time evidence: deterministic time anchors across the
+     * Gemini visual interpretation fields (rules, allowed-until, sign text).
+     * Used when every local crop is uncertain and a coherent Gemini ALLOWED
+     * result must be judged on objective evidence rather than crop quality.
+     */
+    private fun scanObjectiveTimeText(scanResult: ScanResult): String {
+        return buildString {
+            append(geminiObjectiveTimeText(scanResult))
+            scanResult.detectedSigns.forEach {
+                append(" ").append(it.title).append(" ").append(it.restrictions).append(" ").append(it.ruleText)
+            }
+        }
+    }
+
+    /** Scan-level overload of [hasMaxStayEvidence]. */
+    fun hasMaxStayEvidence(scanResult: ScanResult): Boolean {
+        return hasMaxStayEvidence(scanObjectiveTimeText(scanResult))
+    }
 
     fun enforceSemanticConsistency(
         rawResult: ScanResult,
@@ -52,7 +163,22 @@ object SemanticConsistencyValidator {
         var finalVerdict = rawResult.verdict
 
         if (hasUncertainSign || hasMultipleSignsWithConflict) {
-            finalVerdict = ScanVerdict.AMBIGUOUS
+            // P0 SCAN RELIABILITY FIX: Weak/uncertain local OCR is SUPPORTING evidence,
+            // not an automatic veto. A coherent Gemini ALLOWED result anchored by
+            // OBJECTIVE evidence (deterministically parsed maximum stay) survives.
+            // Genuine restrictions still downgrade to RESTRICTED, conflicting signs
+            // remain AMBIGUOUS, and prose without a parsed max stay stays AMBIGUOUS.
+            finalVerdict = when {
+                rawResult.verdict == ScanVerdict.RESTRICTED && (ocrHasRestricting || rulesHasRestricting) ->
+                    ScanVerdict.RESTRICTED
+                (ocrHasRestricting || rulesHasRestricting) && !ocrHasPermission && !ocrHasExemption ->
+                    ScanVerdict.RESTRICTED
+                hasMultipleSignsWithConflict ->
+                    ScanVerdict.AMBIGUOUS
+                rawResult.verdict == ScanVerdict.ALLOWED && hasMaxStayEvidence(geminiObjectiveTimeText(rawResult)) ->
+                    ScanVerdict.ALLOWED
+                else -> ScanVerdict.AMBIGUOUS
+            }
         } else if (rawResult.verdict == ScanVerdict.RESTRICTED && (ocrHasRestricting || rulesHasRestricting)) {
             // Respect RESTRICTED verdict if supported by restriction OCR or rules
             finalVerdict = ScanVerdict.RESTRICTED
@@ -191,7 +317,16 @@ object SemanticConsistencyValidator {
         }
 
         if (scanResult.detectedSigns.any { it.isUncertain || (it.isRestrictingNow && isHardProhibition(it)) }) {
-            return false
+            // Hard prohibitions on restricting signs remain an absolute block.
+            if (scanResult.detectedSigns.any { it.isRestrictingNow && isHardProhibition(it) }) {
+                return false
+            }
+            // P0 SCAN RELIABILITY FIX: uncertain signs are supporting evidence, not a
+            // veto — authorization is still granted when a deterministic MAXIMUM STAY
+            // (objective evidence) anchors the coherent ALLOWED result.
+            if (!hasMaxStayEvidence(scanResult)) {
+                return false
+            }
         }
 
         return scanResult.parkingRules.isNotEmpty() &&

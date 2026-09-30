@@ -81,10 +81,13 @@ object ParkingTimeEvidenceBuilder {
         }
 
         // 2. Fallback to STRUCTURED GEMINI VISUAL EVIDENCE
-        // Only allow if verdict is ALLOWED and signs are not marked uncertain
+        // Only allow if verdict is ALLOWED and signs are not actively restricting.
+        // P0 SCAN RELIABILITY FIX: an UNCERTAIN sign no longer blocks Gemini visual
+        // evidence by itself — uncertain crops are supporting evidence. Gemini's own
+        // sign text must still anchor the time rule, and vague LLM prose is rejected.
         val canUseGemini = scanResult.verdict == ScanVerdict.ALLOWED &&
                 scanResult.detectedSigns.none { sign ->
-                    sign.isUncertain || (sign.isRestrictingNow && ParkingTimerCalculator.isHardProhibition(sign))
+                    (sign.isRestrictingNow && ParkingTimerCalculator.isHardProhibition(sign))
                 }
 
         if (canUseGemini) {
@@ -100,6 +103,19 @@ object ParkingTimeEvidenceBuilder {
                     geminiText.contains("standard parking") ||
                     geminiText.contains("assumed") ||
                     geminiText.contains("derived")
+
+            // P0 SCAN RELIABILITY FIX: when every detected sign is uncertain, require the
+            // Gemini-only evidence itself to carry a deterministically parsed MAXIMUM
+            // STAY — not just prose. Weak local OCR cannot veto a verified posted limit.
+            if (!hasVaguePhrases && scanResult.detectedSigns.isNotEmpty() &&
+                scanResult.detectedSigns.all { it.isUncertain } &&
+                !SemanticConsistencyValidator.hasMaxStayEvidence(geminiText)
+            ) {
+                return NormalizedTimeEvidence(
+                    type = ParkingTimeEvidenceType.UNKNOWN,
+                    source = "UNKNOWN"
+                )
+            }
 
             if (!hasVaguePhrases) {
                 val duration = parsePostedDurationLimitMinutes(geminiText)
@@ -146,6 +162,8 @@ object ParkingTimeEvidenceBuilder {
         val lower = text.lowercase(Locale.US)
         var lowestMinutes: Int? = null
 
+        // P0 SCAN RELIABILITY FIX: allow optional whitespace between the number and the
+        // unit ("2HOUR", "2 HOUR", "2HRS") so weak-but-real OCR still parses.
         val hourMatcher = Pattern.compile("(\\d+)\\s*(?:-?\\s*hour|hr|hrs|h|\\-hour)").matcher(lower)
         while (hourMatcher.find()) {
             val hrs = hourMatcher.group(1)?.toIntOrNull()
@@ -215,13 +233,15 @@ object ParkingTimeEvidenceBuilder {
                 targetCal.set(Calendar.SECOND, 0)
                 targetCal.set(Calendar.MILLISECOND, 0)
 
-                if (targetCal.timeInMillis <= currentTimeMillis - 1800000L) {
+                // P0 SCAN RELIABILITY FIX: deterministic cutoff normalization — ANY
+                // cutoff already in the past rolls to tomorrow (previously only >30min
+                // past rolled, leaving a 0-30min dead zone that returned null and
+                // degraded BOTH evidence to POSTED_DURATION depending on time of day).
+                if (targetCal.timeInMillis <= currentTimeMillis) {
                     targetCal.add(Calendar.DAY_OF_YEAR, 1)
                 }
 
-                if (targetCal.timeInMillis > currentTimeMillis) {
-                    return targetCal.timeInMillis
-                }
+                return targetCal.timeInMillis
             }
         }
 
@@ -347,12 +367,20 @@ object ParkingTimerCalculator {
         }
 
         // 2. If AMBIGUOUS or any detected sign is uncertain -> No timer allowed
+        // P0 SCAN RELIABILITY FIX: uncertain local OCR is SUPPORTING evidence, not a veto.
+        // A coherent ALLOWED scan anchored by a deterministic maximum stay (parsed from
+        // the verified sign/Gemini interpretation) may still start a timer. Hard
+        // prohibitions and AMBIGUOUS verdicts remain absolute blocks.
         val hasUncertainty = scanResult.verdict == ScanVerdict.AMBIGUOUS ||
                 scanResult.detectedSigns.any { sign ->
-                    sign.isUncertain || (sign.isRestrictingNow && isHardProhibition(sign))
+                    sign.isRestrictingNow && isHardProhibition(sign)
                 }
 
-        if (hasUncertainty) {
+        val hasUncertainSign = scanResult.detectedSigns.any { it.isUncertain }
+        if (hasUncertainty || (hasUncertainSign &&
+                    !(scanResult.verdict == ScanVerdict.ALLOWED &&
+                            SemanticConsistencyValidator.hasMaxStayEvidence(scanResult)))
+        ) {
             return ParkingTimerConfig(
                 canStart = false,
                 mode = TimerSemanticMode.AMBIGUOUS_OR_RESTRICTED,

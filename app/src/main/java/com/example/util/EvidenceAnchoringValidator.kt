@@ -295,10 +295,13 @@ object EvidenceAnchoringValidator {
         }
 
         // CRITICAL ISSUE 4: Verify claimed duration limits are in OCR
+        // P0 SCAN RELIABILITY FIX: compare whitespace-normalized text so weak-but-real
+        // OCR spacing ("2HOUR" vs claimed "2 HOUR") does not discard a genuine schedule.
         val claimedDurationMatches = Regex("(\\d+)\\s*(?:HOUR|HR|HRS|MIN|MINUTE|MINS)").findAll(upperSchedule).toList()
         if (claimedDurationMatches.isNotEmpty()) {
+            val normalizedOcr = cropOcrUpper.replace(Regex("""\s+"""), "")
             for (match in claimedDurationMatches) {
-                if (!cropOcrUpper.contains(match.value.trim())) {
+                if (!normalizedOcr.contains(match.value.replace(Regex("""\s+"""), ""))) {
                     return false // Gemini invented a duration not present in OCR
                 }
             }
