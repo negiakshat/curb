@@ -227,6 +227,17 @@ abstract class CurbDatabase : RoomDatabase() {
         }
 
         private fun rebuildParkingSessions(db: SupportSQLiteDatabase) {
+            // The data-copy INSERT ... SELECT below references every current
+            // parking_sessions column. Devices can arrive at a rebuild with any
+            // subset missing (e.g. a released v7 schema predating
+            // maxAllowedEndTimeMillis), which previously crashed the migration
+            // with "no such column: maxAllowedEndTimeMillis". Ensure every
+            // copied column exists with entity-matching type/nullability/default
+            // before compiling the INSERT. No-ops when the column already exists;
+            // missing values copy as the entity's own defaults (NULL / 0 / '').
+            addColumnIfNotExists(db, "parking_sessions", "maxAllowedEndTimeMillis", "INTEGER")
+            addColumnIfNotExists(db, "parking_sessions", "timerMode", "TEXT NOT NULL DEFAULT 'TIMED_LIMIT'")
+            addColumnIfNotExists(db, "parking_sessions", "isDemo", "INTEGER NOT NULL DEFAULT 0")
             addColumnIfNotExists(db, "parking_sessions", "timerBasis", "TEXT NOT NULL DEFAULT ''")
             addColumnIfNotExists(db, "parking_sessions", "parkingRuleSummary", "TEXT NOT NULL DEFAULT ''")
             db.execSQL(

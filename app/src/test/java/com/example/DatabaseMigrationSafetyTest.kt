@@ -436,6 +436,200 @@ class DatabaseMigrationSafetyTest {
         }
     }
 
+    @Test
+    fun testMigrateV7WithoutMaxAllowedEndTimeMillis_preservesRowsAndAllowsInserts() = runBlocking {
+        // Regression for the production crash:
+        // "SQLiteException: no such column: maxAllowedEndTimeMillis
+        //  while compiling INSERT INTO parking_sessions_new"
+        // A released v7 schema predates maxAllowedEndTimeMillis/timerMode/isDemo;
+        // the 7_8 rebuild's data-copy SELECT referenced those columns unconditionally.
+        val helperFactory = FrameworkSQLiteOpenHelperFactory()
+        val dbName = "test_curb_v7_without_maxallowed.db"
+        context.deleteDatabase(dbName)
+        val configuration = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(dbName)
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(7) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    // Released v7 scan_results shape (result of MIGRATION_1_2's rebuild)
+                    db.execSQL(
+                        """
+                        CREATE TABLE scan_results (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            timestamp INTEGER NOT NULL,
+                            locationName TEXT NOT NULL,
+                            cityState TEXT NOT NULL,
+                            verdict TEXT NOT NULL,
+                            statusChipText TEXT NOT NULL,
+                            allowedUntilTime TEXT NOT NULL,
+                            timeRemaining TEXT NOT NULL,
+                            parkingRulesJson TEXT NOT NULL,
+                            explanation TEXT NOT NULL,
+                            detectedSignsJson TEXT NOT NULL,
+                            zoneType TEXT NOT NULL,
+                            paymentInfo TEXT NOT NULL,
+                            vehicleApplicability TEXT NOT NULL,
+                            imageUri TEXT,
+                            isDemo INTEGER NOT NULL
+                        )
+                        """.trimIndent()
+                    )
+                    // Released v7 parking_sessions shape: no maxAllowedEndTimeMillis,
+                    // no timerMode, no isDemo (timerBasis already present).
+                    db.execSQL(
+                        """
+                        CREATE TABLE parking_sessions (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            scanResultId INTEGER NOT NULL DEFAULT 0,
+                            locationName TEXT NOT NULL,
+                            startTime INTEGER NOT NULL,
+                            endTime INTEGER NOT NULL,
+                            allowedUntilTime TEXT NOT NULL,
+                            reminderMinutesBefore INTEGER NOT NULL DEFAULT 15,
+                            notes TEXT NOT NULL DEFAULT '',
+                            timerBasis TEXT NOT NULL DEFAULT '',
+                            isActive INTEGER NOT NULL DEFAULT 1
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        INSERT INTO parking_sessions (
+                            scanResultId, locationName, startTime, endTime,
+                            allowedUntilTime, reminderMinutesBefore, notes, timerBasis, isActive
+                        ) VALUES (
+                            7, 'Legacy St', 1000, 9000, '17:00', 15, 'old row', '2 Hour Limit', 1
+                        )
+                        """.trimIndent()
+                    )
+
+                    // A real v7 device also carries the tables created by migrations 3..6
+                    db.execSQL(
+                        """
+                        CREATE TABLE saved_places (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            name TEXT NOT NULL,
+                            address TEXT NOT NULL,
+                            parkingNote TEXT NOT NULL,
+                            timestamp INTEGER NOT NULL
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        "INSERT INTO saved_places (name, address, parkingNote, timestamp) VALUES ('Office', '500 Howard St', 'garage', 1000)"
+                    )
+                    db.execSQL(
+                        """
+                        CREATE TABLE curb_notes (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            targetType TEXT NOT NULL,
+                            targetId INTEGER NOT NULL,
+                            text TEXT NOT NULL,
+                            createdAt INTEGER NOT NULL,
+                            updatedAt INTEGER NOT NULL
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        "CREATE UNIQUE INDEX index_curb_notes_targetType_targetId ON curb_notes (targetType, targetId)"
+                    )
+                    db.execSQL(
+                        """
+                        CREATE TABLE parking_spots (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            latitude REAL NOT NULL,
+                            longitude REAL NOT NULL,
+                            timestamp INTEGER NOT NULL,
+                            accuracy REAL,
+                            locationName TEXT NOT NULL,
+                            sessionId INTEGER,
+                            isActive INTEGER NOT NULL,
+                            isDemo INTEGER NOT NULL DEFAULT 0
+                        )
+                        """.trimIndent()
+                    )
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+
+        val legacyHelper = helperFactory.create(configuration)
+        val legacyDb = legacyHelper.writableDatabase
+        // Preconditions mirroring the crashing device
+        assertFalse(hasColumn(legacyDb, "parking_sessions", "maxAllowedEndTimeMillis"))
+        assertFalse(hasColumn(legacyDb, "parking_sessions", "timerMode"))
+        assertFalse(hasColumn(legacyDb, "parking_sessions", "isDemo"))
+        legacyHelper.close()
+
+        // Open through Room's real migration chain (1..10). This previously threw
+        // SQLiteException inside MIGRATION_7_8's rebuildParkingSessions INSERT.
+        val migratedDb = Room.databaseBuilder(context, CurbDatabase::class.java, dbName)
+            .addMigrations(
+                CurbDatabase.MIGRATION_1_2,
+                CurbDatabase.MIGRATION_2_3,
+                CurbDatabase.MIGRATION_3_4,
+                CurbDatabase.MIGRATION_4_5,
+                CurbDatabase.MIGRATION_5_6,
+                CurbDatabase.MIGRATION_6_7,
+                CurbDatabase.MIGRATION_7_8,
+                CurbDatabase.MIGRATION_8_9,
+                CurbDatabase.MIGRATION_9_10
+            )
+            .allowMainThreadQueries()
+            .build()
+
+        // 1. Rebuilt table contains the new column with entity-matching nullability
+        val db = migratedDb.openHelper.writableDatabase
+        assertTrue(hasColumn(db, "parking_sessions", "maxAllowedEndTimeMillis"))
+        assertTrue(hasColumn(db, "parking_sessions", "timerMode"))
+        assertTrue(hasColumn(db, "parking_sessions", "isDemo"))
+        assertNull(columnDefault(db, "parking_sessions", "maxAllowedEndTimeMillis"))
+
+        // 2. Existing row survived the rebuild with its data intact
+        val legacyRow = migratedDb.parkingSessionDao().getSessionById(1L)
+        assertNotNull(legacyRow)
+        assertEquals("Legacy St", legacyRow?.locationName)
+        assertEquals("2 Hour Limit", legacyRow?.timerBasis)
+        assertEquals("TIMED_LIMIT", legacyRow?.timerMode)
+        assertNull(legacyRow?.maxAllowedEndTimeMillis)
+        assertFalse(legacyRow?.isDemo ?: true)
+        assertTrue(legacyRow?.isActive ?: false)
+
+        // 3. Inserting a NEW parking session succeeds (Room validates the schema here)
+        val newEntity = com.example.data.local.ParkingSessionEntity(
+            scanResultId = 42L,
+            locationName = "New Session St",
+            startTime = 100000L,
+            endTime = 200000L,
+            allowedUntilTime = "6:00 PM",
+            maxAllowedEndTimeMillis = 200000L
+        )
+        val newId = migratedDb.parkingSessionDao().insertSession(newEntity)
+        assertTrue(newId > 0L)
+
+        // 4. Reading the new session back succeeds with correct values
+        val readBack = migratedDb.parkingSessionDao().getSessionById(newId)
+        assertNotNull(readBack)
+        assertEquals("New Session St", readBack?.locationName)
+        assertEquals(200000L, readBack?.maxAllowedEndTimeMillis)
+        assertEquals("TIMED_LIMIT", readBack?.timerMode)
+
+        migratedDb.close()
+        context.deleteDatabase(dbName)
+        Unit
+    }
+
+    @Test
+    fun testFreshDatabaseHasMaxAllowedEndTimeMillisColumn() {
+        val freshDb = Room.inMemoryDatabaseBuilder(context, CurbDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val db = freshDb.openHelper.writableDatabase
+        assertTrue(hasColumn(db, "parking_sessions", "maxAllowedEndTimeMillis"))
+        assertNull(columnDefault(db, "parking_sessions", "maxAllowedEndTimeMillis"))
+        freshDb.close()
+    }
+
     private fun hasColumn(db: SupportSQLiteDatabase, table: String, column: String): Boolean {
         db.query("PRAGMA table_info(`$table`)").use { cursor ->
             val nameIndex = cursor.getColumnIndexOrThrow("name")
