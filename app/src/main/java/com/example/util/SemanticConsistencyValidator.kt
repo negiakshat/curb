@@ -4,6 +4,8 @@ import com.example.data.detection.LocalSignCrop
 import com.example.data.model.DetectedSign
 import com.example.data.model.ScanResult
 import com.example.data.model.ScanVerdict
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 /**
@@ -138,7 +140,8 @@ object SemanticConsistencyValidator {
 
     fun enforceSemanticConsistency(
         rawResult: ScanResult,
-        validDetections: List<LocalSignCrop> = emptyList()
+        validDetections: List<LocalSignCrop> = emptyList(),
+        currentTimeMillis: Long = System.currentTimeMillis()
     ): ScanResult {
         // Demo scans remain untouched in their isolated demo path
         if (rawResult.isDemo) {
@@ -161,6 +164,36 @@ object SemanticConsistencyValidator {
 
         // 1. Determine Verdict
         var finalVerdict = rawResult.verdict
+
+        // Code-level guard: prevent RESTRICTED when objective timed-parking evidence + active schedule exists
+        val hasTimedParkingEvidence = EXPLICIT_TIMED_PARKING_REGEX.containsMatchIn(combinedOcrText)
+        val activeSchedule = if (signs.isNotEmpty()) {
+            signs.any { sign ->
+                val schedText = sign.applicableDaysHours.ifBlank { sign.subtitle }
+                val signText = (sign.title + " " + sign.restrictions + " " + sign.rawText).uppercase(Locale.US)
+                EXPLICIT_TIMED_PARKING_REGEX.containsMatchIn(signText) && isTimeWithinSchedule(schedText, currentTimeMillis)
+            }
+        } else {
+            validDetections.any { crop ->
+                val ocrUpper = crop.ocrText.uppercase(Locale.US)
+                val matchDays = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN", "DAILY").filter { ocrUpper.contains(it) }
+                val matchTimes = Regex("\\d{1,2}(?::\\d{2})?\\s*(?:AM|PM)", RegexOption.IGNORE_CASE).findAll(crop.ocrText).map { it.value }.toList()
+                val schedText = when {
+                    matchDays.isNotEmpty() && matchTimes.isNotEmpty() -> "${matchDays.joinToString("-")} ${matchTimes.joinToString(" to ")}"
+                    matchDays.isNotEmpty() -> matchDays.joinToString(", ")
+                    matchTimes.isNotEmpty() -> matchTimes.joinToString(" - ")
+                    else -> ""
+                }
+                EXPLICIT_TIMED_PARKING_REGEX.containsMatchIn(ocrUpper) && isTimeWithinSchedule(schedText, currentTimeMillis)
+            }
+        }
+        val hasActiveHardRestriction = ocrHasRestricting || rulesHasRestricting || signs.any { sign ->
+            sign.isRestrictingNow && isHardProhibition(sign)
+        }
+
+        if (rawResult.verdict == ScanVerdict.RESTRICTED && hasTimedParkingEvidence && activeSchedule && !hasActiveHardRestriction && !hasMultipleSignsWithConflict) {
+            finalVerdict = ScanVerdict.ALLOWED
+        }
 
         if (hasUncertainSign || hasMultipleSignsWithConflict) {
             // P0 SCAN RELIABILITY FIX: Weak/uncertain local OCR is SUPPORTING evidence,
@@ -188,7 +221,7 @@ object SemanticConsistencyValidator {
         } else if (rawResult.verdict == ScanVerdict.ALLOWED && ocrHasRestricting && !ocrHasExemption) {
             // Verdict claims ALLOWED but physical sign has active restriction -> RESTRICTED
             finalVerdict = ScanVerdict.RESTRICTED
-        } else if (ocrHasPermission && !ocrHasRestricting && finalVerdict != ScanVerdict.AMBIGUOUS) {
+        } else if (ocrHasPermission && !ocrHasRestricting && finalVerdict == ScanVerdict.ALLOWED) {
             // CRITICAL ISSUE 5 FIX: "PERMIT" alone is NOT permission — it requires
             // either a time-based permission pattern (e.g., "2 HOUR PARKING")
             // or explicit parking permission keywords (e.g., "PARKING PERMITTED").
@@ -408,6 +441,8 @@ object SemanticConsistencyValidator {
         return null
     }
 
+    private val EXPLICIT_TIMED_PARKING_REGEX = Regex("""\d+\s*(?:MINUTE|MINUTES|HOUR|HOURS)\s+PARKING""")
+
     private fun isRestrictingText(upperText: String): Boolean {
         val restrictingKeywords = listOf(
             "NO PARK", "NO STOP", "TOW AWAY", "TOW-AWAY", "STREET CLEAN",
@@ -422,7 +457,84 @@ object SemanticConsistencyValidator {
             "PERMIT PARKING", "PAY AT METER", "METERED PARKING", "LIMIT",
             "PERMIT", "RESIDENT"
         )
-        return permissionKeywords.any { upperText.contains(it) }
+        return permissionKeywords.any { upperText.contains(it) } || EXPLICIT_TIMED_PARKING_REGEX.containsMatchIn(upperText)
+    }
+
+    fun isTimeWithinSchedule(scheduleText: String, currentTimeMillis: Long = System.currentTimeMillis()): Boolean {
+        if (scheduleText.isBlank()) return true
+        val lower = scheduleText.lowercase(Locale.US)
+        
+        val nowCal = Calendar.getInstance().apply { timeInMillis = currentTimeMillis }
+        val today = nowCal.get(Calendar.DAY_OF_WEEK)
+        
+        val containsDays = lower.contains("mon") || lower.contains("tue") || 
+                           lower.contains("wed") || lower.contains("thu") || 
+                           lower.contains("fri") || lower.contains("sat") || 
+                           lower.contains("sun") || lower.contains("daily") ||
+                           lower.contains("all days") || lower.contains("every day") ||
+                           lower.contains("weekday") || lower.contains("weekend")
+                           
+        if (containsDays) {
+            var isDayValid = false
+            if (lower.contains("daily") || lower.contains("all days") || lower.contains("every day")) {
+                isDayValid = true
+            } else if (lower.contains("weekday")) {
+                isDayValid = today in Calendar.MONDAY..Calendar.FRIDAY
+            } else if (lower.contains("weekend")) {
+                isDayValid = today == Calendar.SATURDAY || today == Calendar.SUNDAY
+            } else {
+                val monToFri = lower.contains("mon-fri") || lower.contains("mon to fri") || lower.contains("mon–fri")
+                val monToSat = lower.contains("mon-sat") || lower.contains("mon to sat") || lower.contains("mon–sat")
+                if (monToFri && today in Calendar.MONDAY..Calendar.FRIDAY) {
+                    isDayValid = true
+                } else if (monToSat && today in Calendar.MONDAY..Calendar.SATURDAY) {
+                    isDayValid = true
+                } else {
+                    if (lower.contains("mon") && today == Calendar.MONDAY) isDayValid = true
+                    if (lower.contains("tue") && today == Calendar.TUESDAY) isDayValid = true
+                    if (lower.contains("wed") && today == Calendar.WEDNESDAY) isDayValid = true
+                    if (lower.contains("thu") && today == Calendar.THURSDAY) isDayValid = true
+                    if (lower.contains("fri") && today == Calendar.FRIDAY) isDayValid = true
+                    if (lower.contains("sat") && today == Calendar.SATURDAY) isDayValid = true
+                    if (lower.contains("sun") && today == Calendar.SUNDAY) isDayValid = true
+                }
+            }
+            if (!isDayValid) return false
+        }
+        
+        val timeRegex = Regex("""(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*(?:-|to|–|—)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)""")
+        val match = timeRegex.find(lower)
+        if (match != null) {
+            val startHr = match.groupValues[1].toInt()
+            val startMin = match.groupValues[2].ifBlank { "0" }.toIntOrNull() ?: 0
+            val startAmPm = match.groupValues[3]
+            val endHr = match.groupValues[4].toInt()
+            val endMin = match.groupValues[5].ifBlank { "0" }.toIntOrNull() ?: 0
+            val endAmPm = match.groupValues[6]
+            
+            var startHour = startHr
+            if (startAmPm == "pm" && startHour < 12) startHour += 12
+            if (startAmPm == "am" && startHour == 12) startHour = 0
+            
+            var endHour = endHr
+            if (endAmPm == "pm" && endHour < 12) endHour += 12
+            if (endAmPm == "am" && endHour == 12) endHour = 0
+            
+            val currentHour = nowCal.get(Calendar.HOUR_OF_DAY)
+            val currentMin = nowCal.get(Calendar.MINUTE)
+            
+            val startTotalMin = startHour * 60 + startMin
+            val endTotalMin = endHour * 60 + endMin
+            val currentTotalMin = currentHour * 60 + currentMin
+            
+            return if (startTotalMin <= endTotalMin) {
+                currentTotalMin in startTotalMin..endTotalMin
+            } else {
+                currentTotalMin >= startTotalMin || currentTotalMin <= endTotalMin
+            }
+        }
+        
+        return true
     }
 
     private fun isConfidentPermissionClaim(rule: String): Boolean {

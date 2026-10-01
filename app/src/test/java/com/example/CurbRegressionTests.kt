@@ -9,6 +9,7 @@ import com.example.data.model.SignBoundingBox
 import com.example.util.EvidenceAnchoringValidator
 import com.example.util.ParkingAuthority
 import com.example.util.ParkingTimerCalculator
+import com.example.util.SemanticConsistencyValidator
 import com.example.util.TimerSemanticMode
 import com.example.util.ParkingTimeEvidenceBuilder
 import com.example.util.ParkingTimeEvidenceType
@@ -258,6 +259,283 @@ class CurbRegressionTests {
         // - Reminder presets are separate: a 1-minute session must have NO early-reminder preset
         val presets = getPresetsForDuration(1)
         assertTrue(presets.isEmpty())
+    }
+
+    @Test
+    fun testRegression1MinuteLimitActiveStartsAsRestricted() {
+        // Test that 1-minute parking starting as RESTRICTED is successfully elevated/healed to ALLOWED inside active schedule
+        val ocrText = "1 MINUTE PARKING 5:30 PM TO 10:00 PM ALL DAYS"
+        val crop = LocalSignCrop(
+            id = "crop_1m",
+            normalizedBox = SignBoundingBox("crop_1m", 0.1f, 0.1f, 0.9f, 0.9f, "1 MINUTE PARKING", ocrText),
+            ocrText = ocrText,
+            fileUri = "file://test/crop_1m.png",
+            bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888),
+            isDemo = false,
+            isUncertain = false
+        )
+        val geminiSign = DetectedSign(
+            id = "crop_1m",
+            title = "1 MINUTE PARKING",
+            subtitle = "5:30 PM - 10:00 PM • All Days",
+            applicableDaysHours = "5:30 PM - 10:00 PM • All Days",
+            restrictions = "1 minute parking limit",
+            ruleText = "1 minute parking limit",
+            isRestrictingNow = true,
+            isUncertain = false,
+            rawText = ocrText
+        )
+        val rawResult = ScanResult(
+            verdict = ScanVerdict.RESTRICTED, // Starts as RESTRICTED from Gemini
+            locationName = "123 Test St",
+            allowedUntilTime = "1 Minute Parking",
+            timeRemaining = "--",
+            parkingRules = listOf("1 minute parking limit"),
+            explanation = "Extended parking is prohibited",
+            detectedSigns = listOf(geminiSign),
+            isDemo = false
+        )
+
+        // Deterministic test time at 5:45 PM (17:45) - inside schedule
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 17)
+            set(Calendar.MINUTE, 45)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val testTimeMillis = cal.timeInMillis
+
+        // Run through consistency gate passing custom current time
+        val normalizedResult = SemanticConsistencyValidator.enforceSemanticConsistency(rawResult, listOf(crop), testTimeMillis)
+
+        // It must be healed to ALLOWED
+        assertEquals(ScanVerdict.ALLOWED, normalizedResult.verdict)
+        assertEquals("Parking allowed", normalizedResult.statusChipText)
+
+        val config = ParkingTimerCalculator.calculateConfig(normalizedResult, testTimeMillis)
+        assertTrue(config.canStart)
+        assertEquals(1, config.calculatedMinutes)
+    }
+
+    @Test
+    fun testRegression5MinuteLimitActive() {
+        val ocrText = "5 MINUTE PARKING 8:00 AM TO 6:00 PM MON-FRI"
+        val crop = LocalSignCrop(
+            id = "crop_5m",
+            normalizedBox = SignBoundingBox("crop_5m", 0.1f, 0.1f, 0.9f, 0.9f, "5 MINUTE PARKING", ocrText),
+            ocrText = ocrText,
+            fileUri = "file://test/crop_5m.png",
+            bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888),
+            isDemo = false,
+            isUncertain = false
+        )
+        val geminiSign = DetectedSign(
+            id = "crop_5m",
+            title = "5 MINUTE PARKING",
+            subtitle = "8:00 AM - 6:00 PM • Mon-Fri",
+            applicableDaysHours = "8:00 AM - 6:00 PM • Mon-Fri",
+            restrictions = "5 minute parking limit",
+            ruleText = "5 minute parking limit",
+            isRestrictingNow = true,
+            isUncertain = false,
+            rawText = ocrText
+        )
+        val rawResult = ScanResult(
+            verdict = ScanVerdict.RESTRICTED, // Starts as RESTRICTED
+            locationName = "123 Test St",
+            allowedUntilTime = "5 Minute Parking",
+            timeRemaining = "--",
+            parkingRules = listOf("5 minute parking limit"),
+            explanation = "Extended parking is prohibited",
+            detectedSigns = listOf(geminiSign),
+            isDemo = false
+        )
+
+        // Deterministic test time at Wednesday 10:00 AM - inside schedule
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.WEDNESDAY)
+            set(Calendar.HOUR_OF_DAY, 10)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val testTimeMillis = cal.timeInMillis
+
+        val normalizedResult = SemanticConsistencyValidator.enforceSemanticConsistency(rawResult, listOf(crop), testTimeMillis)
+        assertEquals(ScanVerdict.ALLOWED, normalizedResult.verdict)
+
+        val config = ParkingTimerCalculator.calculateConfig(normalizedResult, testTimeMillis)
+        assertTrue(config.canStart)
+        assertEquals(5, config.calculatedMinutes)
+    }
+
+    @Test
+    fun testRegression2HourLimitActive() {
+        val ocrText = "2 HOUR PARKING 8:00 AM TO 6:00 PM MON-FRI"
+        val crop = LocalSignCrop(
+            id = "crop_2h",
+            normalizedBox = SignBoundingBox("crop_2h", 0.1f, 0.1f, 0.9f, 0.9f, "2 HOUR PARKING", ocrText),
+            ocrText = ocrText,
+            fileUri = "file://test/crop_2h.png",
+            bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888),
+            isDemo = false,
+            isUncertain = false
+        )
+        val geminiSign = DetectedSign(
+            id = "crop_2h",
+            title = "2 HOUR PARKING",
+            subtitle = "8:00 AM - 6:00 PM • Mon-Fri",
+            applicableDaysHours = "8:00 AM - 6:00 PM • Mon-Fri",
+            restrictions = "2 hour parking limit",
+            ruleText = "2 hour parking limit",
+            isRestrictingNow = true,
+            isUncertain = false,
+            rawText = ocrText
+        )
+        val rawResult = ScanResult(
+            verdict = ScanVerdict.RESTRICTED, // Starts as RESTRICTED
+            locationName = "123 Test St",
+            allowedUntilTime = "2 Hour Parking",
+            timeRemaining = "--",
+            parkingRules = listOf("2 hour parking limit"),
+            explanation = "Extended parking is prohibited",
+            detectedSigns = listOf(geminiSign),
+            isDemo = false
+        )
+
+        // Deterministic test time at Wednesday 10:00 AM - inside schedule
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.WEDNESDAY)
+            set(Calendar.HOUR_OF_DAY, 10)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val testTimeMillis = cal.timeInMillis
+
+        val normalizedResult = SemanticConsistencyValidator.enforceSemanticConsistency(rawResult, listOf(crop), testTimeMillis)
+        assertEquals(ScanVerdict.ALLOWED, normalizedResult.verdict)
+
+        val config = ParkingTimerCalculator.calculateConfig(normalizedResult, testTimeMillis)
+        assertTrue(config.canStart)
+        assertEquals(120, config.calculatedMinutes)
+    }
+
+    @Test
+    fun testRegressionNoParkingRemainsRestricted() {
+        val ocrText = "NO PARKING 8:00 AM TO 10:00 AM TUE"
+        val crop = LocalSignCrop(
+            id = "crop_nopark",
+            normalizedBox = SignBoundingBox("crop_nopark", 0.1f, 0.1f, 0.9f, 0.9f, "NO PARKING", ocrText),
+            ocrText = ocrText,
+            fileUri = "file://test/crop_nopark.png",
+            bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888),
+            isDemo = false,
+            isUncertain = false
+        )
+        val geminiSign = DetectedSign(
+            id = "crop_nopark",
+            title = "NO PARKING",
+            subtitle = "8:00 AM - 10:00 AM • Tue",
+            applicableDaysHours = "8:00 AM - 10:00 AM • Tue",
+            restrictions = "No parking for street cleaning",
+            ruleText = "No parking for street cleaning",
+            isRestrictingNow = true,
+            isUncertain = false,
+            rawText = ocrText
+        )
+        val rawResult = ScanResult(
+            verdict = ScanVerdict.RESTRICTED,
+            locationName = "123 Test St",
+            allowedUntilTime = "No parking permitted",
+            timeRemaining = "--",
+            parkingRules = listOf("No parking for street cleaning"),
+            explanation = "Street cleaning is active now",
+            detectedSigns = listOf(geminiSign),
+            isDemo = false
+        )
+
+        // Deterministic test time at Tuesday 9:00 AM - inside schedule
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, Calendar.TUESDAY)
+            set(Calendar.HOUR_OF_DAY, 9)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val testTimeMillis = cal.timeInMillis
+
+        val normalizedResult = SemanticConsistencyValidator.enforceSemanticConsistency(rawResult, listOf(crop), testTimeMillis)
+        assertEquals(ScanVerdict.RESTRICTED, normalizedResult.verdict)
+    }
+
+    @Test
+    fun testIsTimeWithinSchedule() {
+        val validator = SemanticConsistencyValidator
+        // Inside schedule
+        val calInside = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 17)
+            set(Calendar.MINUTE, 45)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        assertTrue(validator.isTimeWithinSchedule("5:30 PM - 10:00 PM • All Days", calInside.timeInMillis))
+
+        // Outside schedule
+        val calOutside = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        assertFalse(validator.isTimeWithinSchedule("5:30 PM - 10:00 PM • All Days", calOutside.timeInMillis))
+    }
+
+    @Test
+    fun testRegressionTimedParkingOutsideScheduleIsRestricted() {
+        val ocrText = "1 MINUTE PARKING 5:30 PM TO 10:00 PM ALL DAYS"
+        val crop = LocalSignCrop(
+            id = "crop_1m",
+            normalizedBox = SignBoundingBox("crop_1m", 0.1f, 0.1f, 0.9f, 0.9f, "1 MINUTE PARKING", ocrText),
+            ocrText = ocrText,
+            fileUri = "file://test/crop_1m.png",
+            bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888),
+            isDemo = false,
+            isUncertain = false
+        )
+        val geminiSign = DetectedSign(
+            id = "crop_1m",
+            title = "1 MINUTE PARKING",
+            subtitle = "5:30 PM - 10:00 PM • All Days",
+            applicableDaysHours = "5:30 PM - 10:00 PM • All Days",
+            restrictions = "1 minute parking limit",
+            ruleText = "1 minute parking limit",
+            isRestrictingNow = true,
+            isUncertain = false,
+            rawText = ocrText
+        )
+        val rawResult = ScanResult(
+            verdict = ScanVerdict.RESTRICTED,
+            locationName = "123 Test St",
+            allowedUntilTime = "No parking permitted",
+            timeRemaining = "--",
+            parkingRules = listOf("1 minute parking limit"),
+            explanation = "Extended parking is prohibited",
+            detectedSigns = listOf(geminiSign),
+            isDemo = false
+        )
+
+        // Deterministic test time at 11:00 PM (23:00) - outside active schedule
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val testTimeMillis = cal.timeInMillis
+
+        val normalizedResult = SemanticConsistencyValidator.enforceSemanticConsistency(rawResult, listOf(crop), testTimeMillis)
+        assertEquals(ScanVerdict.RESTRICTED, normalizedResult.verdict)
     }
 
     private fun getPresetsForDuration(durationMins: Int): List<Int> {

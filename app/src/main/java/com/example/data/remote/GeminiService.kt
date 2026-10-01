@@ -219,6 +219,7 @@ object GeminiService {
             - Do NOT invent unreadable text or imagined rules.
             - If parking is prohibited right now, set verdict to "RESTRICTED".
             - If parking is permitted right now, set verdict to "ALLOWED".
+            - CRITICAL: Short-term timed parking limits (such as "1 MINUTE PARKING", "5 MINUTE PARKING", "15 MINUTE PARKING", or other explicit timed-parking limits) during their active schedules represent a PERMISSION to park up to that limit/duration, NOT a restriction or prohibition. If the current time is within the active schedule, the verdict must be "ALLOWED", not "RESTRICTED".
             
             Return a strict JSON object with this exact structure:
             {
