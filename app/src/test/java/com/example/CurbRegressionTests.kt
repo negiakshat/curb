@@ -538,6 +538,112 @@ class CurbRegressionTests {
         assertEquals(ScanVerdict.RESTRICTED, normalizedResult.verdict)
     }
 
+    @Test
+    fun testRegressionUnparseableTimedScheduleDoesNotPromote() {
+        val ocrText = "1 MINUTE PARKING 5:30? - 10:00? ALL DAYS" // Unparseable timed schedule
+        val crop = LocalSignCrop(
+            id = "crop_1m",
+            normalizedBox = SignBoundingBox("crop_1m", 0.1f, 0.1f, 0.9f, 0.9f, "1 MINUTE PARKING", ocrText),
+            ocrText = ocrText,
+            fileUri = "file://test/crop_1m.png",
+            bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888),
+            isDemo = false,
+            isUncertain = false
+        )
+        val geminiSign = DetectedSign(
+            id = "crop_1m",
+            title = "1 MINUTE PARKING",
+            subtitle = "5:30? - 10:00? • All Days",
+            applicableDaysHours = "5:30? - 10:00? • All Days",
+            restrictions = "1 minute parking limit",
+            ruleText = "1 minute parking limit",
+            isRestrictingNow = true,
+            isUncertain = false,
+            rawText = ocrText
+        )
+        val rawResult = ScanResult(
+            verdict = ScanVerdict.RESTRICTED,
+            locationName = "123 Test St",
+            allowedUntilTime = "No parking permitted",
+            timeRemaining = "--",
+            parkingRules = listOf("1 minute parking limit"),
+            explanation = "Extended parking is prohibited",
+            detectedSigns = listOf(geminiSign),
+            isDemo = false
+        )
+
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 17)
+            set(Calendar.MINUTE, 45)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val testTimeMillis = cal.timeInMillis
+
+        val normalizedResult = SemanticConsistencyValidator.enforceSemanticConsistency(rawResult, listOf(crop), testTimeMillis)
+        // Must remain RESTRICTED because the timed schedule is unparseable
+        assertEquals(ScanVerdict.RESTRICTED, normalizedResult.verdict)
+    }
+
+    @Test
+    fun testRegressionTimedParkingWithGenuineHardProhibitionRemainsRestricted() {
+        // A sign pole has "1 MINUTE PARKING" and an active "NO PARKING" (e.g. temporary construction)
+        val ocrText = "1 MINUTE PARKING 5:30 PM TO 10:00 PM ALL DAYS • NO PARKING TOW AWAY"
+        val crop = LocalSignCrop(
+            id = "crop_nopark_active",
+            normalizedBox = SignBoundingBox("crop_nopark_active", 0.1f, 0.1f, 0.9f, 0.9f, "NO PARKING", ocrText),
+            ocrText = ocrText,
+            fileUri = "file://test/crop_nopark_active.png",
+            bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888),
+            isDemo = false,
+            isUncertain = false
+        )
+        val geminiSign1 = DetectedSign(
+            id = "crop_1m",
+            title = "1 MINUTE PARKING",
+            subtitle = "5:30 PM - 10:00 PM • All Days",
+            applicableDaysHours = "5:30 PM - 10:00 PM • All Days",
+            restrictions = "1 minute parking limit",
+            ruleText = "1 minute parking limit",
+            isRestrictingNow = true,
+            isUncertain = false,
+            rawText = "1 MINUTE PARKING"
+        )
+        val geminiSign2 = DetectedSign(
+            id = "crop_nopark",
+            title = "NO PARKING",
+            subtitle = "Always",
+            applicableDaysHours = "Always",
+            restrictions = "No parking tow away",
+            ruleText = "No parking tow away",
+            isRestrictingNow = true, // Genuine prohibition is active!
+            isUncertain = false,
+            rawText = "NO PARKING TOW AWAY"
+        )
+        val rawResult = ScanResult(
+            verdict = ScanVerdict.RESTRICTED, // Genuinely restricted due to NO PARKING
+            locationName = "123 Test St",
+            allowedUntilTime = "No parking permitted",
+            timeRemaining = "--",
+            parkingRules = listOf("1 minute parking limit", "No parking tow away"),
+            explanation = "Parking is prohibited due to tow away zone.",
+            detectedSigns = listOf(geminiSign1, geminiSign2),
+            isDemo = false
+        )
+
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 17)
+            set(Calendar.MINUTE, 45)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val testTimeMillis = cal.timeInMillis
+
+        val normalizedResult = SemanticConsistencyValidator.enforceSemanticConsistency(rawResult, listOf(crop), testTimeMillis)
+        // Must remain RESTRICTED because of the active hard prohibition
+        assertEquals(ScanVerdict.RESTRICTED, normalizedResult.verdict)
+    }
+
     private fun getPresetsForDuration(durationMins: Int): List<Int> {
         val standardPresets = listOf(5, 10, 15, 30)
         return standardPresets.filter { it < durationMins }

@@ -503,6 +503,7 @@ object SemanticConsistencyValidator {
         }
         
         val timeRegex = Regex("""(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*(?:-|to|–|—)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)""")
+        val hasTimeIndicators = lower.contains("am") || lower.contains("pm") || lower.contains(":") || lower.contains("-") || lower.contains("to") || lower.contains("–") || lower.contains("—")
         val match = timeRegex.find(lower)
         if (match != null) {
             val startHr = match.groupValues[1].toInt()
@@ -532,6 +533,8 @@ object SemanticConsistencyValidator {
             } else {
                 currentTotalMin >= startTotalMin || currentTotalMin <= endTotalMin
             }
+        } else if (hasTimeIndicators) {
+            return false // Unparseable timed schedule
         }
         
         return true
