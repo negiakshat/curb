@@ -128,25 +128,26 @@ object ParkingNotificationScheduler {
         }
     }
 
+    /**
+     * User-facing time-critical parking expiry: must fire at exactly endTime.
+     * setAlarmClock is exact, Doze/idle-safe, and (unlike setExactAndAllowWhileIdle
+     * on API 31+) requires no SCHEDULE_EXACT_ALARM grant, so expiry alarms no
+     * longer fall back to batched inexact delivery (~seconds late).
+     */
     fun setAlarm(alarmManager: AlarmManager, triggerAtMillis: Long, pendingIntent: PendingIntent): Boolean {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                return if (exactAlarmPermissionChecker(alarmManager)) {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                    true
-                } else {
-                    alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                    false
-                }
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(triggerAtMillis, null),
+                    pendingIntent
+                )
                 return true
             } else {
                 alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
                 return true
             }
         } catch (_: Throwable) {
-            // Fallback for devices without exact alarm permission or security exceptions
+            // Fallback for devices rejecting exact scheduling (e.g. revoked alarm-clock usage)
             try {
                 alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
             } catch (_: Throwable) {}

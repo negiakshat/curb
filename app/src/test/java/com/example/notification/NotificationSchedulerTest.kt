@@ -12,6 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -199,22 +200,15 @@ class NotificationSchedulerTest {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Reset to default
-        val originalChecker = ParkingNotificationScheduler.exactAlarmPermissionChecker
-        try {
-            // Test with exact permission granted
-            ParkingNotificationScheduler.exactAlarmPermissionChecker = { true }
-            val isExact = ParkingNotificationScheduler.setAlarm(alarmManager, triggerTime, pendingIntent)
-            assertTrue(isExact)
-
-            // Test with exact permission denied
-            ParkingNotificationScheduler.exactAlarmPermissionChecker = { false }
-            val isExactFallback = ParkingNotificationScheduler.setAlarm(alarmManager, triggerTime, pendingIntent)
-            assertFalse(isExactFallback)
-        } finally {
-            // Restore original checker
-            ParkingNotificationScheduler.exactAlarmPermissionChecker = originalChecker
-        }
+        // Expiry alarms must always be scheduled via setAlarmClock (exact, permission-free,
+        // Doze-safe) - never the batched inexact set() path that delivered late.
+        val scheduled = ParkingNotificationScheduler.setAlarm(alarmManager, triggerTime, pendingIntent)
+        assertTrue(scheduled)
+        assertEquals(1, shadowAlarmManager.scheduledAlarms.size)
+        val alarm = shadowAlarmManager.scheduledAlarms.first()
+        assertEquals(triggerTime, alarm.getTriggerAtMs())
+        assertEquals(0L, alarm.getWindowLengthMs()) // exact, no drift window
+        assertNotNull(alarm.getAlarmClockInfo())    // setAlarmClock path
     }
 
     @Test
@@ -380,5 +374,90 @@ class NotificationSchedulerTest {
         }
 
         assertNotNull("Expiration notification should not be null", expirationNotification)
+    }
+
+    @Test
+    fun testExpiryAlarm_scheduledExactAtEndTime_viaSetAlarmClock() {
+        val shadowAlarmManager = shadowOf(alarmManager)
+        shadowAlarmManager.scheduledAlarms.clear()
+
+        val endTime = System.currentTimeMillis() + 30 * 60 * 1000L
+        val session = com.example.data.local.ParkingSessionEntity(
+            id = 901L,
+            locationName = "Expiry Exactness St",
+            startTime = System.currentTimeMillis(),
+            endTime = endTime,
+            allowedUntilTime = "6:00 PM",
+            isActive = true,
+            isDemo = false,
+            reminderMinutesBefore = 15
+        )
+
+        ParkingNotificationScheduler.scheduleSessionNotifications(context, session)
+
+        val expirationAlarms = shadowAlarmManager.scheduledAlarms.filter { it.getTriggerAtMs() == endTime }
+        assertTrue("Expiration alarm must exist", expirationAlarms.isNotEmpty())
+        val expirationAlarm = expirationAlarms.first()
+
+        // Time-critical: exact trigger, zero window, alarm-clock (permission-free) path
+        assertEquals(0L, expirationAlarm.getWindowLengthMs())
+        assertEquals(0L, expirationAlarm.getIntervalMs())
+        assertNotNull(expirationAlarm.getAlarmClockInfo())
+    }
+
+    @Test
+    fun testReceiverExpirationNotification_endsActiveSession_atomically() = org.robolectric.Robolectric.buildActivity(com.example.MainActivity::class.java).use { controller ->
+        val database = com.example.data.local.CurbDatabase.getDatabase(context)
+        val dao = database.parkingSessionDao()
+
+        val session = com.example.data.local.ParkingSessionEntity(
+            id = 902L,
+            locationName = "Auto Expire St",
+            startTime = System.currentTimeMillis() - 3600000L,
+            endTime = System.currentTimeMillis() + 60000L,
+            allowedUntilTime = "6:00 PM",
+            isActive = true,
+            isDemo = false,
+            reminderMinutesBefore = 15
+        )
+
+        kotlinx.coroutines.runBlocking {
+            // Isolate from sessions leaked by other tests sharing this DB
+            dao.clearAllSessions()
+            dao.insertSession(session)
+            assertEquals(902L, dao.getActiveSessionDirect()?.id)
+        }
+
+        val expirationIntent = Intent(context, ParkingNotificationReceiver::class.java).apply {
+            putExtra(ParkingNotificationScheduler.EXTRA_SESSION_ID, 902L)
+            putExtra(ParkingNotificationScheduler.EXTRA_NOTIFICATION_TYPE, NotificationType.EXPIRATION.name)
+            putExtra(ParkingNotificationScheduler.EXTRA_TARGET_END_TIME, session.endTime)
+        }
+
+        val receiver = ParkingNotificationReceiver()
+        receiver.onReceive(context, expirationIntent)
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val shadowNM = shadowOf(notificationManager)
+
+        var expirationNotification: android.app.Notification? = null
+        val startTime = System.currentTimeMillis()
+        while (expirationNotification == null && System.currentTimeMillis() - startTime < 3000L) {
+            Thread.sleep(50)
+            org.robolectric.shadows.ShadowLooper.runUiThreadTasksIncludingDelayedTasks()
+            expirationNotification = shadowNM.getNotification(ParkingNotificationScheduler.getExpirationRequestCode(902L))
+        }
+
+        // Expiry notification still posts ...
+        assertNotNull("Expiration notification should post", expirationNotification)
+
+        // ... and the session is atomically ended afterwards: Parking Timer's
+        // activeSession flow (isActive = 1) now returns null -> empty state.
+        kotlinx.coroutines.runBlocking {
+            val ended = dao.getSessionById(902L)
+            assertNotNull(ended)
+            assertFalse("Session must be deactivated after expiry notification", ended!!.isActive)
+            assertNull("No active session must remain for Parking Timer", dao.getActiveSessionDirect())
+        }
     }
 }

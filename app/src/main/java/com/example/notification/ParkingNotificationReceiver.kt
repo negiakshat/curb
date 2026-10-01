@@ -74,7 +74,8 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
 
         // 3. QUERY DATABASE FOR AUTHORITATIVE SESSION STATE
         val database = CurbDatabase.getDatabase(context)
-        val session = database.parkingSessionDao().getSessionById(sessionId) ?: return
+        val parkingSessionDao = database.parkingSessionDao()
+        val session = parkingSessionDao.getSessionById(sessionId) ?: return
 
         // 4. REAL STATE & DEMO ISOLATION VALIDATION
         if (session.isDemo) {
@@ -173,6 +174,14 @@ class ParkingNotificationReceiver : BroadcastReceiver() {
         }
 
         notificationManager?.notify(notificationId, notification)
+
+        // 8. EXPIRED SESSION STATE: after the expiry notification has posted, atomically
+        // end the session (isActive = 0) so the Parking Timer shows the empty state
+        // instead of a stale expired-session screen. Alarm bookkeeping is cleaned up too.
+        if (type == NotificationType.EXPIRATION) {
+            parkingSessionDao.endSession(sessionId)
+            ParkingNotificationScheduler.cancelSessionNotifications(context, sessionId)
+        }
     }
 
     private suspend fun processSavedPlaceNotification(
